@@ -1,0 +1,2042 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AP Operadora de Fondos — Sistema Financiero</title>
+<!-- Bug #41: Content Security Policy -->
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none';">
+<!-- Bug #42: Security headers via meta tags -->
+<meta http-equiv="X-Content-Type-Options" content="nosniff">
+<meta http-equiv="X-Frame-Options" content="DENY">
+<meta name="referrer" content="strict-origin-when-cross-origin">
+<!-- Bug #43: CDNs con crossorigin (SRI hashes se generan en producción con herramienta externa) -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js" crossorigin="anonymous"></script>
+<style>
+:root {
+  --navy: #1E3050;
+  --navy-dark: #152238;
+  --navy-light: #2B4570;
+  --red: #C8102E;
+  --red-dark: #A00D24;
+  --red-light: #E8304A;
+  --white: #FFFFFF;
+  --gray-50: #F8F9FC;
+  --gray-100: #EEF1F6;
+  --gray-200: #D8DDE6;
+  --gray-300: #B0B8C8;
+  --gray-400: #8892A4;
+  --gray-500: #6B7588;
+  --gray-600: #4A5468;
+  --green: #0D9F6E;
+  --green-light: #DEF7EC;
+  --yellow: #E3A008;
+  --yellow-light: #FDF6B2;
+  --orange: #FF6B35;
+  --blue-accent: #3B82F6;
+  --shadow: 0 1px 3px rgba(30,48,80,0.12), 0 1px 2px rgba(30,48,80,0.08);
+  --shadow-md: 0 4px 6px rgba(30,48,80,0.1), 0 2px 4px rgba(30,48,80,0.06);
+  --shadow-lg: 0 10px 15px rgba(30,48,80,0.1), 0 4px 6px rgba(30,48,80,0.05);
+  --radius: 8px;
+  --radius-lg: 12px;
+}
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--gray-50); color: var(--navy); min-height: 100vh; }
+.layout { display: flex; min-height: 100vh; }
+
+/* SIDEBAR */
+.sidebar { width: 260px; background: var(--navy-dark); color: var(--white); display: flex; flex-direction: column; position: fixed; top: 0; left: 0; height: 100vh; z-index: 100; transition: transform 0.3s; }
+.sidebar-header { padding: 20px 16px; display: flex; align-items: center; gap: 14px; border-bottom: 1px solid rgba(255,255,255,0.1); min-height: 90px; }
+.sidebar-header img { width: 56px; height: 56px; border-radius: 12px; background: white; padding: 4px; object-fit: contain; }
+.sidebar-header .brand { font-size: 14px; font-weight: 600; line-height: 1.3; }
+.sidebar-header .brand small { font-size: 11px; opacity: 0.7; font-weight: 400; display: block; }
+.sidebar-nav { flex: 1; padding: 12px 0; overflow-y: auto; }
+.nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 20px; cursor: pointer; transition: all 0.2s; font-size: 14px; color: rgba(255,255,255,0.75); border-left: 3px solid transparent; }
+.nav-item:hover { background: rgba(255,255,255,0.08); color: var(--white); }
+.nav-item.active { background: rgba(255,255,255,0.12); color: var(--white); border-left-color: var(--red); }
+.nav-item svg { width: 20px; height: 20px; flex-shrink: 0; }
+.sidebar-footer { padding: 16px 20px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 12px; opacity: 0.6; }
+
+/* MAIN */
+.main { flex: 1; margin-left: 260px; }
+.topbar { height: 60px; background: var(--white); border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; padding: 0 24px; position: sticky; top: 0; z-index: 50; }
+.topbar-title { font-size: 18px; font-weight: 600; }
+.topbar-right { display: flex; align-items: center; gap: 16px; font-size: 13px; color: var(--gray-500); }
+.topbar-user { display: flex; align-items: center; gap: 8px; padding: 6px 12px; background: var(--gray-100); border-radius: 20px; }
+.topbar-user .avatar { width: 28px; height: 28px; background: var(--navy); color: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; font-weight: 600; }
+.content { padding: 24px; }
+
+/* CARDS */
+.card { background: var(--white); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 20px; }
+.card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 16px; }
+.card-title { font-size: 16px; font-weight: 600; }
+
+/* KPI CARDS */
+.kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px; margin-bottom: 24px; }
+.kpi-card { background: var(--white); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: 20px; position: relative; overflow: hidden; }
+.kpi-card::before { content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; }
+.kpi-card.navy::before { background: var(--navy); }
+.kpi-card.red::before { background: var(--red); }
+.kpi-card.green::before { background: var(--green); }
+.kpi-card.blue::before { background: var(--blue-accent); }
+.kpi-card.yellow::before { background: var(--yellow); }
+.kpi-card.orange::before { background: var(--orange); }
+.kpi-label { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--gray-500); margin-bottom: 8px; }
+.kpi-value { font-size: 24px; font-weight: 700; color: var(--navy); }
+.kpi-sub { font-size: 12px; color: var(--gray-400); margin-top: 4px; }
+
+/* CHARTS */
+.charts-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 24px; }
+.chart-container { position: relative; height: 280px; }
+
+/* TABLES */
+.table-wrapper { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 13px; }
+thead th { background: var(--gray-50); padding: 10px 12px; text-align: left; font-weight: 600; color: var(--gray-600); border-bottom: 2px solid var(--gray-200); white-space: nowrap; }
+tbody td { padding: 10px 12px; border-bottom: 1px solid var(--gray-100); }
+tbody tr:hover { background: var(--gray-50); }
+
+/* BADGES */
+.badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 600; }
+.badge-green { background: var(--green-light); color: var(--green); }
+.badge-red { background: #FDE8E8; color: var(--red); }
+.badge-yellow { background: var(--yellow-light); color: #92400E; }
+.badge-blue { background: #DBEAFE; color: #1E40AF; }
+.badge-gray { background: var(--gray-100); color: var(--gray-500); }
+
+/* BUTTONS */
+.btn { display: inline-flex; align-items: center; gap: 6px; padding: 8px 16px; border: none; border-radius: var(--radius); font-size: 13px; font-weight: 500; cursor: pointer; transition: all 0.2s; }
+.btn-primary { background: var(--navy); color: white; }
+.btn-primary:hover { background: var(--navy-light); }
+.btn-red { background: var(--red); color: white; }
+.btn-red:hover { background: var(--red-dark); }
+.btn-outline { background: transparent; border: 1px solid var(--gray-200); color: var(--gray-600); }
+.btn-outline:hover { background: var(--gray-50); }
+.btn-sm { padding: 5px 10px; font-size: 12px; }
+.btn-success { background: var(--green); color: white; }
+.btn-success:hover { background: #0B8A5E; }
+
+/* FORMS */
+.form-group { margin-bottom: 16px; }
+.form-label { display: block; font-size: 13px; font-weight: 500; margin-bottom: 6px; color: var(--gray-600); }
+.form-input, .form-select, .form-textarea { width: 100%; padding: 9px 12px; border: 1px solid var(--gray-200); border-radius: var(--radius); font-size: 13px; font-family: inherit; transition: border-color 0.2s; background: white; }
+.form-input:focus, .form-select:focus, .form-textarea:focus { outline: none; border-color: var(--navy); box-shadow: 0 0 0 3px rgba(30,48,80,0.1); }
+.form-textarea { min-height: 80px; resize: vertical; }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+.form-row-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 16px; }
+
+/* MODAL */
+.modal-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 1000; align-items: center; justify-content: center; }
+.modal-overlay.active { display: flex; }
+.modal { background: white; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg); width: 90%; max-width: 700px; max-height: 90vh; overflow-y: auto; }
+.modal-header { padding: 20px 24px; border-bottom: 1px solid var(--gray-200); display: flex; align-items: center; justify-content: space-between; }
+.modal-header h3 { font-size: 18px; }
+.modal-close { background: none; border: none; font-size: 24px; cursor: pointer; color: var(--gray-400); padding: 4px; }
+.modal-body { padding: 24px; }
+.modal-footer { padding: 16px 24px; border-top: 1px solid var(--gray-200); display: flex; justify-content: flex-end; gap: 8px; }
+
+/* ALERTS */
+.alert-list { display: flex; flex-direction: column; gap: 8px; }
+.alert-item { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-radius: var(--radius); font-size: 13px; }
+.alert-item.warning { background: var(--yellow-light); color: #92400E; }
+.alert-item.danger { background: #FDE8E8; color: var(--red-dark); }
+.alert-item.info { background: #DBEAFE; color: #1E40AF; }
+
+/* TABS */
+.tabs { display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 20px; }
+.tab { padding: 10px 20px; cursor: pointer; font-size: 14px; font-weight: 500; color: var(--gray-500); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+.tab:hover { color: var(--navy); }
+.tab.active { color: var(--navy); border-bottom-color: var(--red); }
+
+/* SEARCH */
+.search-bar { display: flex; gap: 12px; margin-bottom: 20px; }
+.search-bar .form-input { max-width: 400px; }
+
+/* PAGE */
+.page { display: none; }
+.page.active { display: block; }
+
+/* AMORTIZATION TABLE HIGHLIGHT */
+.amort-table tbody tr.paid { background: var(--green-light); }
+.amort-table tbody tr.overdue { background: #FDE8E8; }
+
+/* PRINT */
+@media print {
+  .sidebar, .topbar { display: none !important; }
+  .main { margin-left: 0 !important; }
+}
+
+/* =============================================
+   SPRINT K — RESPONSIVE & MOBILE (Consolidado)
+   ============================================= */
+
+/* Hamburger button (mobile only) */
+.hamburger-btn { display:none; background:none; border:none; cursor:pointer; padding:6px; color:var(--navy); }
+.hamburger-btn svg { width:24px; height:24px; }
+body.dark-mode .hamburger-btn { color:var(--gray-500); }
+
+/* Sidebar overlay for mobile */
+.sidebar-backdrop { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.45); z-index:99; }
+.sidebar-backdrop.active { display:block; }
+
+/* TABLET: 769px — 1024px */
+@media (max-width: 1024px) {
+  .sidebar { width:220px; }
+  .main { margin-left:220px; }
+  .kpi-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
+  .topbar-right { gap:10px; }
+  #currentDate { display:none; }
+}
+
+/* MOBILE: ≤768px */
+@media (max-width: 768px) {
+  /* Sidebar off-canvas */
+  .sidebar { transform:translateX(-100%); width:280px; box-shadow:4px 0 20px rgba(0,0,0,0.15); }
+  .sidebar.open { transform:translateX(0); }
+  .main { margin-left:0; }
+  .hamburger-btn { display:block; }
+
+  /* Topbar */
+  .topbar { padding:0 12px; height:52px; }
+  .topbar-title { font-size:14px; max-width:140px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .topbar-right { gap:8px; }
+  #currentDate { display:none; }
+  #storageIndicator { display:none; }
+  .topbar-user span { display:none; }
+  .topbar-user small { display:none; }
+  .dark-toggle { padding:2px 6px; }
+
+  /* Content */
+  .content { padding:12px; }
+
+  /* KPI grid */
+  .kpi-grid { grid-template-columns:1fr 1fr; gap:10px; }
+  .kpi-card { padding:14px; }
+  .kpi-value { font-size:20px; }
+  .kpi-label { font-size:11px; }
+
+  /* Charts */
+  .charts-grid { grid-template-columns:1fr; }
+
+  /* Tables */
+  .table-wrapper { overflow-x:auto; -webkit-overflow-scrolling:touch; margin:0 -12px; padding:0 12px; }
+  table { min-width:600px; }
+
+  /* Forms */
+  .form-row, .form-row-3 { grid-template-columns:1fr; gap:12px; }
+  .form-input, .form-select, .form-textarea { padding:11px 14px; font-size:14px; }
+  .form-label { font-size:13px; }
+  .search-bar { flex-wrap:wrap; }
+  .search-bar .form-input { max-width:100%; flex:1 1 100%; }
+  .toolbar { flex-wrap:wrap; gap:8px; }
+
+  /* Modals → casi full-screen */
+  .modal { max-width:100%; width:100%; max-height:100vh; border-radius:12px 12px 0 0; margin:0; position:fixed; bottom:0; left:0; right:0; }
+  .modal-overlay.active { align-items:flex-end; }
+  .modal-body { padding:16px; max-height:calc(100vh - 140px); overflow-y:auto; }
+  .modal-header { padding:14px 16px; }
+  .modal-header h3 { font-size:16px; }
+  .modal-footer { padding:12px 16px; }
+  .confirm-box { max-width:95%; padding:20px; }
+  .prompt-box { max-width:95%; }
+
+  /* Buttons touch-friendly */
+  .btn { padding:10px 16px; font-size:14px; min-height:44px; }
+  .btn-sm { padding:8px 12px; font-size:12px; min-height:36px; }
+
+  /* Tabs scroll */
+  .tabs { overflow-x:auto; -webkit-overflow-scrolling:touch; flex-wrap:nowrap; }
+  .tab { white-space:nowrap; padding:10px 14px; font-size:13px; flex-shrink:0; }
+
+  /* Notification panel */
+  #notifPanel { position:fixed !important; top:auto !important; bottom:0 !important; left:0 !important; right:0 !important; width:100% !important; max-height:70vh !important; border-radius:16px 16px 0 0 !important; }
+
+  /* Search overlay */
+  .search-box { max-width:95%; margin:0 auto; }
+  .search-overlay { padding-top:60px; }
+
+  /* Keyboard help */
+  .kbd-help-box { max-width:95%; }
+
+  /* Breadcrumbs */
+  .breadcrumbs { font-size:12px; flex-wrap:wrap; }
+
+  /* Scroll top button */
+  .scroll-top-btn { bottom:16px; right:16px; width:36px; height:36px; }
+
+  /* Dashboard alerts link */
+  .dash-period { padding:4px 10px; font-size:11px; }
+}
+
+/* SMALL MOBILE: ≤480px */
+@media (max-width: 480px) {
+  .kpi-grid { grid-template-columns:1fr; }
+  .kpi-value { font-size:18px; }
+  .topbar-title { max-width:100px; font-size:13px; }
+  .btn { font-size:13px; }
+  .search-box-input input { font-size:14px; }
+  .modal-header h3 { font-size:15px; }
+  .modal-close { font-size:28px; padding:6px; }
+  .nav-item { padding:14px 20px; font-size:15px; }
+  .sidebar-header img { width:44px; height:44px; }
+}
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
+
+
+/* DOCUMENT UPLOAD */
+.doc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; margin-top: 12px; }
+.doc-card { border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 14px; display: flex; align-items: center; gap: 12px; transition: all 0.2s; }
+.doc-card:hover { border-color: var(--navy); background: var(--gray-50); }
+.doc-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 18px; flex-shrink: 0; }
+.doc-icon.pdf { background: #FDE8E8; color: var(--red); }
+.doc-icon.img { background: #DBEAFE; color: var(--blue-accent); }
+.doc-icon.doc { background: var(--green-light); color: var(--green); }
+.doc-info { flex: 1; min-width: 0; }
+.doc-info .doc-name { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.doc-info .doc-meta { font-size: 11px; color: var(--gray-400); margin-top: 2px; }
+.doc-actions { display: flex; gap: 4px; }
+.doc-upload-zone { border: 2px dashed var(--gray-300); border-radius: var(--radius); padding: 24px; text-align: center; cursor: pointer; transition: all 0.2s; margin-top: 12px; }
+.doc-upload-zone:hover { border-color: var(--navy); background: rgba(30,48,80,0.03); }
+.doc-upload-zone.dragover { border-color: var(--red); background: rgba(200,16,46,0.05); }
+.doc-upload-zone p { color: var(--gray-400); font-size: 13px; }
+.doc-upload-zone .upload-icon { font-size: 32px; margin-bottom: 8px; }
+.doc-type-tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 12px; }
+.doc-type-tag { padding: 4px 12px; border-radius: 16px; font-size: 11px; font-weight: 600; cursor: pointer; border: 1px solid var(--gray-200); color: var(--gray-500); transition: all 0.2s; }
+.doc-type-tag:hover, .doc-type-tag.selected { background: var(--navy); color: white; border-color: var(--navy); }
+
+/* EXPEDIENTE CHECKLIST */
+.exp-checklist { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; margin-bottom: 16px; }
+.exp-check-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius); font-size: 12px; border: 1px solid var(--gray-200); }
+.exp-check-item.ok { background: #F0FDF4; border-color: #BBF7D0; }
+.exp-check-item.missing { background: #FEF2F2; border-color: #FECACA; }
+.exp-check-item.expired { background: #FFFBEB; border-color: #FDE68A; }
+.exp-check-icon { width: 20px; text-align: center; }
+.exp-progress { height: 8px; background: var(--gray-200); border-radius: 4px; overflow: hidden; margin-bottom: 8px; }
+.exp-progress-bar { height: 100%; border-radius: 4px; transition: width 0.3s; }
+.doc-card-expanded { background: white; border: 1px solid var(--gray-200); border-radius: var(--radius); padding: 16px; margin-bottom: 12px; }
+.doc-preview-inline { max-width: 100%; max-height: 400px; border-radius: var(--radius); margin-top: 12px; box-shadow: var(--shadow); }
+.doc-note { font-size: 12px; color: var(--gray-500); margin-top: 8px; padding: 8px; background: var(--gray-50); border-radius: var(--radius); }
+.doc-venc { font-size: 11px; font-weight: 600; margin-left: 8px; }
+.doc-venc.vigente { color: var(--green); }
+.doc-venc.proximo { color: var(--orange); }
+.doc-venc.vencido { color: var(--red); }
+
+/* TOAST NOTIFICATIONS */
+.toast-container { position: fixed; top: 70px; right: 24px; z-index: 2000; display: flex; flex-direction: column; gap: 8px; }
+.toast { padding: 14px 20px; border-radius: var(--radius); color: white; font-size: 13px; font-weight: 500; box-shadow: var(--shadow-lg); display: flex; align-items: center; gap: 10px; animation: toastIn 0.3s ease-out; min-width: 280px; max-width: 420px; }
+.toast.success { background: var(--green); }
+.toast.error { background: var(--red); }
+.toast.warning { background: var(--yellow); color: #1a1a1a; }
+.toast.info { background: var(--navy); }
+.toast .toast-close { margin-left: auto; cursor: pointer; opacity: 0.7; background: none; border: none; color: inherit; font-size: 18px; }
+.toast .toast-close:hover { opacity: 1; }
+@keyframes toastIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+@keyframes toastOut { from { transform: translateX(0); opacity: 1; } to { transform: translateX(100%); opacity: 0; } }
+
+/* CONFIRM DIALOG */
+.confirm-overlay { display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.5); z-index: 3000; align-items: center; justify-content: center; }
+.confirm-overlay.active { display: flex; }
+.confirm-box { background: white; border-radius: var(--radius-lg); padding: 28px; max-width: 420px; width: 90%; box-shadow: var(--shadow-lg); text-align: center; }
+.confirm-box h4 { margin-bottom: 12px; font-size: 16px; }
+.confirm-box p { color: var(--gray-500); font-size: 14px; margin-bottom: 20px; }
+.confirm-box .confirm-actions { display: flex; gap: 10px; justify-content: center; }
+
+/* EXPEDIENTE TABS */
+.exp-tabs { display: flex; gap: 0; border-bottom: 2px solid var(--gray-200); margin-bottom: 16px; }
+.exp-tab { padding: 8px 16px; cursor: pointer; font-size: 13px; font-weight: 500; color: var(--gray-400); border-bottom: 2px solid transparent; margin-bottom: -2px; transition: all 0.2s; }
+.exp-tab:hover { color: var(--navy); }
+.exp-tab.active { color: var(--navy); border-bottom-color: var(--red); }
+.exp-content { display: none; }
+.exp-content.active { display: block; }
+
+/* DETAIL PANEL */
+.detail-panel { background: var(--white); border-radius: var(--radius-lg); box-shadow: var(--shadow-md); margin-top: 20px; overflow: hidden; }
+.detail-panel-header { background: var(--navy); color: white; padding: 16px 24px; display: flex; align-items: center; justify-content: space-between; }
+.detail-panel-header h3 { font-size: 16px; }
+.detail-panel-body { padding: 24px; }
+
+/* TOOLBAR */
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; }
+
+/* EMPTY STATE */
+.empty-state { text-align: center; padding: 40px 20px; color: var(--gray-400); }
+.empty-state svg { width: 48px; height: 48px; margin-bottom: 12px; opacity: 0.5; }
+.empty-state p { font-size: 14px; }
+
+/* STATUS DOT */
+.status-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+.status-dot.green { background: var(--green); }
+.status-dot.red { background: var(--red); }
+.status-dot.yellow { background: var(--yellow); }
+
+/* SPRINT 1: VALIDACIÓN DE CAMPOS */
+.field-error { display: block; color: var(--red); font-size: 11px; margin-top: 2px; font-weight: 500; }
+.form-input:focus:invalid, .form-select:focus:invalid { border-color: var(--red); }
+.form-input.valid { border-color: var(--green); }
+
+/* SPRINT 1: PAGINACIÓN */
+.pagination-bar { margin-top: 8px; }
+.btn[disabled] { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+/* SPRINT 3: DASHBOARD PERIODO */
+.dash-period.active { background: var(--navy); color: white; border-color: var(--navy); }
+.kpi-card .kpi-trend { font-size: 11px; margin-top: 2px; }
+.kpi-card .kpi-trend.up { color: var(--green); }
+.kpi-card .kpi-trend.down { color: var(--red); }
+
+/* Bug #24: LOADING SPINNER */
+.loading-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(255,255,255,0.7); z-index:4000; align-items:center; justify-content:center; flex-direction:column; gap:12px; }
+.loading-overlay.active { display:flex; }
+.spinner { width:40px; height:40px; border:4px solid var(--gray-200); border-top-color:var(--navy); border-radius:50%; animation:spin 0.7s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+.loading-text { font-size:14px; color:var(--gray-500); font-weight:500; }
+
+/* Bug #25: RESPONSIVE — consolidado en Sprint K arriba */
+
+/* Bug #28: BREADCRUMBS */
+.breadcrumbs { display:flex; align-items:center; gap:6px; font-size:13px; color:var(--gray-400); margin-bottom:12px; }
+.breadcrumbs a { color:var(--navy); text-decoration:none; cursor:pointer; }
+.breadcrumbs a:hover { text-decoration:underline; }
+.breadcrumbs .sep { color:var(--gray-300); }
+
+/* PROMPT MODAL (Bug #29) */
+.prompt-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.5); z-index:3500; align-items:center; justify-content:center; }
+.prompt-overlay.active { display:flex; }
+.prompt-box { background:white; border-radius:var(--radius-lg); padding:28px; max-width:440px; width:90%; box-shadow:var(--shadow-lg); }
+.prompt-box h4 { margin-bottom:8px; font-size:16px; }
+.prompt-box p { color:var(--gray-500); font-size:13px; margin-bottom:14px; }
+.prompt-box input { width:100%; margin-bottom:16px; }
+.prompt-box .prompt-actions { display:flex; gap:10px; justify-content:flex-end; }
+
+/* SPRINT J — BÚSQUEDA GLOBAL */
+.search-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.45); z-index:4000; align-items:flex-start; justify-content:center; padding-top:min(20vh,140px); }
+.search-overlay.active { display:flex; }
+.search-box { background:white; border-radius:var(--radius-lg); width:90%; max-width:560px; box-shadow:0 16px 48px rgba(0,0,0,0.2); overflow:hidden; }
+.search-box-input { display:flex; align-items:center; padding:14px 18px; gap:10px; border-bottom:1px solid var(--gray-200); }
+.search-box-input svg { width:20px; height:20px; color:var(--gray-400); flex-shrink:0; }
+.search-box-input input { border:none; outline:none; font-size:15px; flex:1; background:transparent; color:var(--navy); }
+.search-box-input kbd { font-size:11px; background:var(--gray-100); padding:2px 6px; border-radius:4px; color:var(--gray-400); border:1px solid var(--gray-200); }
+.search-results { max-height:340px; overflow-y:auto; }
+.search-result-item { display:flex; align-items:center; gap:12px; padding:10px 18px; cursor:pointer; transition:background 0.12s; }
+.search-result-item:hover, .search-result-item.selected { background:var(--gray-50); }
+.search-result-item .sr-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; flex-shrink:0; }
+.search-result-item .sr-info { flex:1; min-width:0; }
+.search-result-item .sr-title { font-size:13px; font-weight:600; color:var(--navy); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.search-result-item .sr-sub { font-size:11px; color:var(--gray-400); }
+.search-empty { padding:32px; text-align:center; color:var(--gray-400); font-size:13px; }
+.search-footer { padding:8px 18px; border-top:1px solid var(--gray-100); display:flex; gap:12px; justify-content:flex-end; }
+.search-footer kbd { font-size:10px; background:var(--gray-100); padding:1px 5px; border-radius:3px; color:var(--gray-500); border:1px solid var(--gray-200); }
+.search-footer span { font-size:11px; color:var(--gray-400); }
+
+/* SPRINT J — PAGE TRANSITIONS (override base .page) */
+.page { display:none; opacity:0; transform:translateY(8px); }
+.page.active { display:block; opacity:1; transform:translateY(0); animation:pageIn 0.25s ease forwards; }
+@keyframes pageIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
+
+/* SPRINT J — DARK MODE */
+body.dark-mode { --navy:#E2E8F0; --navy-dark:#0F172A; --navy-light:#94A3B8; --gray-50:#1E293B; --gray-100:#334155; --gray-200:#475569; --gray-300:#64748B; --gray-400:#94A3B8; --gray-500:#CBD5E1; --gray-600:#E2E8F0; --white:#0F172A; --shadow:0 1px 3px rgba(0,0,0,0.3); --shadow-md:0 4px 6px rgba(0,0,0,0.3); --shadow-lg:0 10px 15px rgba(0,0,0,0.3); }
+body.dark-mode { background:#0F172A; color:#E2E8F0; }
+body.dark-mode .sidebar { background:#0F172A; border-right:1px solid #1E293B; }
+body.dark-mode .topbar { background:#1E293B; border-bottom:1px solid #334155; }
+body.dark-mode .topbar-user { background:#334155; }
+body.dark-mode .card, body.dark-mode .modal, body.dark-mode .search-box, body.dark-mode #notifPanel { background:#1E293B; border-color:#334155; }
+body.dark-mode .form-input, body.dark-mode select, body.dark-mode textarea { background:#0F172A; border-color:#475569; color:#E2E8F0; }
+body.dark-mode .form-input:focus, body.dark-mode select:focus { border-color:var(--blue-accent); }
+body.dark-mode table th { background:#334155; color:#CBD5E1; }
+body.dark-mode table td { border-color:#334155; }
+body.dark-mode .btn-outline { border-color:#475569; color:#CBD5E1; }
+body.dark-mode .btn-outline:hover { background:#334155; }
+body.dark-mode .nav-item { color:#94A3B8; }
+body.dark-mode .nav-item:hover { background:rgba(255,255,255,0.05); color:#E2E8F0; }
+body.dark-mode .nav-item.active { background:rgba(200,16,46,0.15); color:#E8304A; }
+body.dark-mode .modal-overlay { background:rgba(0,0,0,0.7); }
+body.dark-mode .search-overlay { background:rgba(0,0,0,0.6); }
+body.dark-mode .search-result-item:hover, body.dark-mode .search-result-item.selected { background:#334155; }
+body.dark-mode .prompt-box, body.dark-mode .confirm-box { background:#1E293B; color:#E2E8F0; }
+body.dark-mode .tabs .tab { color:#94A3B8; }
+body.dark-mode .tabs .tab.active { color:var(--red); border-color:var(--red); }
+
+/* Dark mode toggle button */
+.dark-toggle { display:flex; align-items:center; gap:4px; cursor:pointer; padding:3px 8px; border-radius:16px; background:var(--gray-100); border:1px solid var(--gray-200); transition:all 0.2s; }
+.dark-toggle:hover { background:var(--gray-200); }
+.dark-toggle svg { width:14px; height:14px; }
+
+/* SPRINT J — KEYBOARD SHORTCUTS HELP */
+.kbd-help-overlay { display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:rgba(0,0,0,0.45); z-index:3800; align-items:center; justify-content:center; }
+.kbd-help-overlay.active { display:flex; }
+.kbd-help-box { background:white; border-radius:var(--radius-lg); padding:28px; max-width:480px; width:90%; box-shadow:var(--shadow-lg); }
+body.dark-mode .kbd-help-box { background:#1E293B; color:#E2E8F0; }
+.kbd-row { display:flex; justify-content:space-between; align-items:center; padding:6px 0; border-bottom:1px solid var(--gray-100); }
+.kbd-row:last-child { border:none; }
+.kbd-row kbd { font-size:12px; background:var(--gray-100); padding:3px 8px; border-radius:4px; border:1px solid var(--gray-200); font-family:monospace; }
+body.dark-mode .kbd-row { border-color:#334155; }
+
+/* SPRINT J — SCROLL TO TOP */
+.scroll-top-btn { position:fixed; bottom:24px; right:24px; width:40px; height:40px; border-radius:50%; background:var(--navy-dark); color:white; display:none; align-items:center; justify-content:center; cursor:pointer; box-shadow:var(--shadow-md); z-index:100; transition:all 0.2s; border:none; }
+.scroll-top-btn:hover { transform:scale(1.1); background:var(--red); }
+body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
+
+/* Sprint Q: Calendario */
+.cal-cell:hover { background:rgba(59,130,246,0.06) !important; }
+@media (max-width: 768px) {
+  #page-calendario > div:last-child { grid-template-columns:1fr !important; }
+  .cal-cell { min-height:60px !important; }
+}
+</style>
+</head>
+<body>
+<div class="layout">
+<!-- SIDEBAR -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <img id="sidebarLogo" src="data:image/png;base64,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" alt="AP Fondos">
+    <div class="brand">AP Operadora<br>de Fondos<small>Sistema Financiero</small></div>
+  </div>
+  <nav class="sidebar-nav">
+    <div class="nav-item active" onclick="showPage('dashboard')" data-page="dashboard">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+      Dashboard
+    </div>
+    <div class="nav-item" onclick="showPage('clientes')" data-page="clientes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+      Clientes
+    </div>
+    <div class="nav-item" onclick="showPage('creditos')" data-page="creditos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="1" y="4" width="22" height="16" rx="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+      Créditos
+    </div>
+    <div class="nav-item" onclick="showPage('pagos')" data-page="pagos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+      Pagos
+    </div>
+    <div class="nav-item" onclick="showPage('cotizador')" data-page="cotizador">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Cotizador
+    </div>
+    <div class="nav-item" onclick="showPage('fondeos')" data-page="fondeos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+      Fondeos
+    </div>
+    <div class="nav-item" onclick="showPage('contabilidad')" data-page="contabilidad">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+      Contabilidad
+    </div>
+    <div class="nav-item" onclick="showPage('reportes')" data-page="reportes">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+      Reportes
+    </div>
+    <div class="nav-item" onclick="showPage('calendario')" data-page="calendario">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+      Calendario
+    </div>
+    <div class="nav-item" onclick="showPage('aprobaciones')" data-page="aprobaciones">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+      Aprobaciones
+      <span id="approvalsBadge" style="margin-left:auto;background:var(--red);color:white;font-size:10px;font-weight:700;border-radius:10px;padding:1px 7px;display:none">0</span>
+    </div>
+    <div class="nav-item" onclick="showPage('conciliacion')" data-page="conciliacion">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
+      Conciliación
+    </div>
+    <div class="nav-item" onclick="showPage('pld')" data-page="pld">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+      PLD
+    </div>
+    <div class="nav-item" onclick="showPage('admin')" data-page="admin">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+      Administración
+    </div>
+  </nav>
+  <div class="sidebar-footer">v1.0 — Prototipo HTML<br>&copy; 2026 AP Operadora de Fondos</div>
+</aside>
+
+<!-- MAIN CONTENT -->
+<div class="main">
+  <!-- Sprint K: Sidebar backdrop for mobile -->
+  <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="closeSidebar()"></div>
+
+  <header class="topbar">
+    <div style="display:flex;align-items:center;gap:12px">
+      <button class="hamburger-btn" id="hamburgerBtn" onclick="toggleSidebar()" aria-label="Menú">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+      </button>
+      <img id="topbarLogo" src="data:image/png;base64,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" alt="AP" style="width:32px;height:32px;border-radius:6px;object-fit:contain"><div class="topbar-title" id="pageTitle">Dashboard</div></div>
+    <div class="topbar-right">
+      <span id="currentDate"></span>
+      <span id="storageIndicator" title="Uso de almacenamiento" style="font-size:11px;padding:2px 8px;border-radius:10px;background:var(--gray-100);cursor:help">--%</span>
+      <div class="dark-toggle" onclick="toggleDarkMode()" title="Cambiar tema (Ctrl+D)">
+        <svg id="darkIcon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </div>
+      <div style="position:relative;cursor:pointer" onclick="toggleNotifPanel()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="width:20px;height:20px"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+        <span id="notifBadge" style="position:absolute;top:-6px;right:-8px;background:var(--red);color:white;font-size:10px;font-weight:700;border-radius:50%;min-width:18px;height:18px;display:none;align-items:center;justify-content:center;line-height:1">0</span>
+      </div>
+      <div id="notifPanel" style="display:none;position:absolute;top:52px;right:80px;width:380px;max-height:480px;background:white;border:1px solid var(--gray-200);border-radius:12px;box-shadow:0 8px 30px rgba(0,0,0,0.15);z-index:200;overflow:hidden">
+        <div style="padding:12px 16px;border-bottom:1px solid var(--gray-200);display:flex;justify-content:space-between;align-items:center">
+          <strong style="font-size:14px">Notificaciones</strong>
+          <button class="btn btn-outline btn-sm" onclick="marcarNotifLeidas()" style="font-size:11px">Marcar leídas</button>
+        </div>
+        <div id="notifList" style="max-height:400px;overflow-y:auto;padding:8px"></div>
+      </div>
+      <div class="topbar-user" style="cursor:pointer" onclick="showLoginSelector()">
+        <div class="avatar" id="currentUserAvatar">AD</div>
+        <span id="currentUserName">Admin</span>
+        <small style="font-size:10px;color:var(--gray-400)">▼</small>
+      </div>
+    </div>
+  </header>
+
+  <div class="content">
+    <!-- ===================== DASHBOARD ===================== -->
+    <div class="page active" id="page-dashboard">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap">
+        <span style="font-size:13px;color:var(--gray-500);font-weight:600">Periodo:</span>
+        <button class="btn btn-sm btn-outline dash-period active" onclick="setDashPeriod(this,0)">Hoy</button>
+        <button class="btn btn-sm btn-outline dash-period" onclick="setDashPeriod(this,30)">30 días</button>
+        <button class="btn btn-sm btn-outline dash-period" onclick="setDashPeriod(this,90)">90 días</button>
+        <button class="btn btn-sm btn-outline dash-period" onclick="setDashPeriod(this,365)">1 año</button>
+        <button class="btn btn-sm btn-outline dash-period" onclick="setDashPeriod(this,-1)">Todo</button>
+        <span style="margin-left:auto;display:flex;align-items:center;gap:6px;font-size:13px;color:var(--gray-500)">
+          <span style="font-weight:600">Efectivo:</span>
+          <input type="text" class="form-input" id="dashEfectivo" value="500,000" inputmode="numeric" style="width:150px;padding:4px 8px;font-size:13px" oninput="formatMiles(this)" onchange="guardarEfectivo();renderDashboard()" onfocus="this.select()">
+        </span>
+      </div>
+      <div class="kpi-grid" id="dashKpis"></div>
+      <div class="kpi-grid" id="dashKpis2" style="margin-top:4px"></div>
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Composición de Cartera</span></div>
+          <div class="chart-container"><canvas id="chartCartera"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Ingresos Mensuales (Pagos Recibidos)</span></div>
+          <div class="chart-container"><canvas id="chartIngresosMensual"></canvas></div>
+        </div>
+      </div>
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Concentración por Cliente (Top 5)</span></div>
+          <div class="chart-container"><canvas id="chartConcentracion"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Cartera Vigente vs Vencida</span></div>
+          <div class="chart-container"><canvas id="chartVigVenc"></canvas></div>
+        </div>
+      </div>
+      <div class="charts-grid">
+        <div class="card">
+          <div class="card-header"><span class="card-title">Alertas y Avisos</span><span class="badge badge-red" id="alertCount" style="margin-left:8px">0</span></div>
+          <div class="alert-list" id="alertList" style="max-height:300px;overflow-y:auto"></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Detalle de Valuación</span></div>
+          <div id="valuacionDetalle"></div>
+        </div>
+      </div>
+      <!-- Sprint V: Actividad reciente -->
+      <div id="dashActividadReciente"></div>
+    </div>
+
+    <!-- ===================== CLIENTES ===================== -->
+    <div class="page" id="page-clientes">
+      <div class="search-bar">
+        <input type="text" class="form-input" placeholder="Buscar por nombre, RFC, email, teléfono..." id="searchClientes" oninput="pageState.clientes=1;renderClientes()" style="flex:1">
+        <select class="form-select" id="filterTipoCliente" onchange="pageState.clientes=1;renderClientes()" style="width:160px">
+          <option value="">Todos los tipos</option>
+          <option value="fisica">Persona Física</option>
+          <option value="moral">Persona Moral</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="exportarClientesExcel()" title="Exportar a Excel">📥 Excel</button>
+        <button class="btn btn-primary" onclick="nuevoCliente()">+ Nuevo Cliente</button>
+      </div>
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>ID</th><th>Nombre</th><th>RFC</th><th>Tipo</th><th>Teléfono</th><th>Email</th><th>Créditos</th><th>Expediente</th><th>Acciones</th></tr></thead>
+            <tbody id="tbClientes"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pagClientes"></div>
+      </div>
+    </div>
+
+    <!-- ===================== CRÉDITOS ===================== -->
+    <div class="page" id="page-creditos">
+      <div class="search-bar">
+        <input type="text" class="form-input" placeholder="Buscar crédito..." id="searchCreditos" oninput="renderCreditos()">
+        <select class="form-select" style="max-width:200px" id="filterTipoCredito" onchange="renderCreditos()">
+          <option value="">Todos los tipos</option>
+          <option value="credito_simple">Crédito Simple</option>
+          <option value="arrendamiento">Arrendamiento</option>
+          <option value="nomina">Nómina</option>
+          <option value="cuenta_corriente">Cuenta Corriente</option>
+        </select>
+        <select class="form-select" style="max-width:200px" id="filterEstadoCredito" onchange="renderCreditos()">
+          <option value="">Todos los estados</option>
+          <option value="vigente">Vigente</option>
+          <option value="vencido">Vencido</option>
+          <option value="liquidado">Liquidado</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="exportarCreditosExcel()" title="Exportar a Excel">📥 Excel</button>
+        <button class="btn btn-outline btn-sm" onclick="reporteCarteraVencida()" title="Reporte Cartera Vencida">📊 Cartera Vencida</button>
+        <button class="btn btn-primary" onclick="openModalCredito()">+ Nuevo Crédito</button>
+      </div>
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>No. Crédito</th><th>Cliente</th><th>Tipo</th><th>Monto</th><th>Tasa</th><th>Plazo</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="tbCreditos"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pagCreditos"></div>
+      </div>
+      <!-- Detalle de crédito -->
+      <div class="card" id="creditoDetalle" style="display:none;margin-top:20px">
+        <div class="card-header">
+          <span class="card-title" id="creditoDetalleTitulo">Detalle del Crédito</span>
+          <div style="display:flex;gap:8px">
+          <button class="btn btn-success btn-sm" onclick="irAPagar(parseInt(this.closest('.card').querySelector('[id]')?.id?.split('-')[1] || currentCreditoId))">💰 Registrar Pago</button>
+          <button class="btn btn-outline btn-sm" onclick="document.getElementById('creditoDetalle').style.display='none'">Cerrar ✕</button>
+        </div>
+        </div>
+        <div id="creditoDetalleBody"></div>
+      </div>
+    </div>
+
+    <!-- ===================== PAGOS ===================== -->
+    <div class="page" id="page-pagos">
+      <div class="search-bar">
+        <select class="form-select" style="max-width:300px" id="pagoCredito" onchange="renderPagosCredito()">
+          <option value="">Seleccionar crédito...</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="exportarPagosExcel()" title="Exportar a Excel">📥 Excel</button>
+        <button class="btn btn-outline btn-sm" onclick="reporteCobranza()" title="Reporte de Cobranza">📊 Cobranza</button>
+        <button class="btn btn-primary" onclick="openModalPago()" id="btnNuevoPago" disabled>+ Registrar Pago</button>
+      </div>
+      <div class="card" id="pagosInfo" style="display:none">
+        <div id="pagosInfoBody"></div>
+      </div>
+      <div class="card" style="margin-top:16px">
+        <div class="card-header"><span class="card-title">Historial de Pagos</span></div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Fecha</th><th>Crédito</th><th>Capital</th><th>Interés</th><th>Moratorio</th><th>Comisión</th><th>Total</th><th>Saldo Nuevo</th></tr></thead>
+            <tbody id="tbPagos"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pagPagos"></div>
+      </div>
+    </div>
+
+    <!-- ===================== COTIZADOR ===================== -->
+    <div class="page" id="page-cotizador">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Cotizador Financiero</span></div>
+        <div class="tabs">
+          <div class="tab active" onclick="setCotizadorTab('credito_simple')">Crédito Simple</div>
+          <div class="tab" onclick="setCotizadorTab('arrendamiento')">Arrendamiento</div>
+          <div class="tab" onclick="setCotizadorTab('nomina')">Crédito Nómina</div>
+          <div class="tab" onclick="setCotizadorTab('escenarios')" style="border-left:2px solid var(--border);margin-left:8px;padding-left:16px">📊 Simulador Escenarios</div>
+        </div>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">Monto ($)</label>
+            <input type="text" class="form-input" id="cotMonto" value="500,000" inputmode="numeric" oninput="formatMiles(this)" onfocus="this.select()">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Tasa Anual (%)</label>
+            <input type="number" class="form-input" id="cotTasa" value="24" min="0" step="0.5">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Plazo (meses)</label>
+            <input type="number" class="form-input" id="cotPlazo" value="24" min="1" max="360">
+          </div>
+        </div>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">Periodicidad</label>
+            <select class="form-select" id="cotPeriodicidad">
+              <option value="mensual">Mensual</option>
+              <option value="quincenal">Quincenal</option>
+              <option value="semanal">Semanal</option>
+            </select>
+          </div>
+          <div class="form-group" id="cotVRGroup" style="display:none">
+            <label class="form-label">Valor Residual (%)</label>
+            <input type="number" class="form-input" id="cotVR" value="1" min="0" max="100" step="0.1">
+          </div>
+          <div class="form-group" id="cotIVAGroup" style="display:none">
+            <label class="form-label">IVA sobre intereses</label>
+            <select class="form-select" id="cotIVA">
+              <option value="0">Sin IVA</option>
+              <option value="16">16%</option>
+            </select>
+          </div>
+          <div class="form-group" id="cotComisionGroup">
+            <label class="form-label">Comisión Apertura (%)</label>
+            <input type="number" class="form-input" id="cotComision" value="0" min="0" max="10" step="0.5">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end">
+            <button class="btn btn-red" onclick="calcularCotizacion()" style="width:100%">Calcular Corrida</button>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="cotResultado" style="display:none;margin-top:20px">
+        <div class="card-header">
+          <span class="card-title">Resultado de la Cotización</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="exportCotizacionPDF()">Exportar PDF</button>
+            <button class="btn btn-primary btn-sm" onclick="guardarCotizacion()">Guardar Cotización</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="cotResumen" style="margin-bottom:20px"></div>
+        <div class="table-wrapper">
+          <table class="amort-table">
+            <thead><tr><th>#</th><th>Fecha</th><th>Saldo Inicial</th><th>Capital</th><th>Interés</th><th>IVA</th><th>Pago Total</th><th>Saldo Final</th></tr></thead>
+            <tbody id="tbAmortCot"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- Sprint S: Simulador de Escenarios -->
+      <div id="seccionEscenarios" style="display:none">
+        <div class="card" style="margin-top:20px">
+          <div class="card-header">
+            <span class="card-title">Simulador de Estrés de Tasas</span>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-outline btn-sm" onclick="exportarEscenariosPDF()">Exportar PDF</button>
+              <button class="btn btn-outline btn-sm" onclick="exportarEscenariosExcel()">Exportar Excel</button>
+            </div>
+          </div>
+          <p style="color:var(--text-muted);margin-bottom:16px;font-size:13px">Simula el impacto de variaciones en tasas de interés sobre la cartera de créditos y los fondeos activos.</p>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label class="form-label">Variación mínima (pts)</label>
+              <input type="number" class="form-input" id="escVarMin" value="-3" step="0.5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Variación máxima (pts)</label>
+              <input type="number" class="form-input" id="escVarMax" value="3" step="0.5">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Incrementos (pts)</label>
+              <input type="number" class="form-input" id="escStep" value="1" min="0.25" step="0.25">
+            </div>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group">
+              <label class="form-label">Escenario tasa TIIE referencia (%)</label>
+              <input type="number" class="form-input" id="escTIIE" value="11.25" step="0.25">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Horizonte proyección (meses)</label>
+              <input type="number" class="form-input" id="escHorizonte" value="12" min="1" max="60">
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end">
+              <button class="btn btn-red" onclick="simularEscenarios()" style="width:100%">Ejecutar Simulación</button>
+            </div>
+          </div>
+        </div>
+        <div id="escResultados" style="display:none">
+          <div class="kpi-grid" id="escKPIs" style="margin:20px 0"></div>
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-header"><span class="card-title">Tabla de Sensibilidad</span></div>
+            <div class="table-wrapper">
+              <table class="data-table" id="tblSensibilidad">
+                <thead id="tblSensHead"></thead>
+                <tbody id="tblSensBody"></tbody>
+              </table>
+            </div>
+          </div>
+          <div class="card" style="margin-bottom:20px">
+            <div class="card-header"><span class="card-title">Comparativa de Escenarios</span></div>
+            <div style="height:350px;position:relative"><canvas id="chartEscenarios"></canvas></div>
+          </div>
+          <div class="card">
+            <div class="card-header"><span class="card-title">Detalle por Escenario</span></div>
+            <div class="table-wrapper">
+              <table class="data-table">
+                <thead><tr><th>Escenario</th><th>Var. Tasa</th><th>Ingreso Cartera</th><th>Costo Fondeo</th><th>Spread</th><th>Utilidad Est.</th><th>Δ vs Base</th><th>Impacto</th></tr></thead>
+                <tbody id="tblEscDetalle"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== FONDEOS ===================== -->
+    <div class="page" id="page-fondeos">
+      <div class="search-bar">
+        <input type="text" class="form-input" placeholder="Buscar por fondeador, número..." id="searchFondeos" oninput="pageState.fondeos=1;renderFondeos()" style="flex:1">
+        <select class="form-select" id="filterEstadoFondeo" onchange="pageState.fondeos=1;renderFondeos()" style="width:160px">
+          <option value="">Todos los estados</option>
+          <option value="vigente">Vigente</option>
+          <option value="liquidado">Liquidado</option>
+          <option value="vencido">Vencido</option>
+        </select>
+        <button class="btn btn-outline btn-sm" onclick="exportarFondeosExcel()" title="Exportar a Excel">📥 Excel</button>
+        <button class="btn btn-primary" onclick="abrirNuevoFondeo()">+ Nuevo Fondeo</button>
+      </div>
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>No. Fondeo</th><th>Fondeador</th><th>Monto</th><th>Tasa</th><th>Plazo</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="tbFondeos"></tbody>
+          </table>
+        </div>
+        <div class="pagination-bar" id="pagFondeos"></div>
+      </div>
+    </div>
+
+    <!-- ===================== CONTABILIDAD ===================== -->
+    <div class="page" id="page-contabilidad">
+      <div class="tabs">
+        <div class="tab active" onclick="setContaTab('movimientos')">Movimientos</div>
+        <div class="tab" onclick="setContaTab('balance')">Balance General</div>
+        <div class="tab" onclick="setContaTab('resultados')">Estado de Resultados</div>
+        <div class="tab" onclick="setContaTab('conciliacion')">Conciliación</div>
+        <div class="tab" onclick="setContaTab('cierres')">Cierres</div>
+      </div>
+      <div id="contaMovimientos">
+        <div class="search-bar">
+          <select class="form-select" style="max-width:200px" id="filterContaTipo" onchange="renderContabilidad()">
+            <option value="">Todos los tipos</option>
+            <option value="ingreso_intereses">Ingreso por intereses</option>
+            <option value="pago_recibido">Pago recibido</option>
+            <option value="colocacion">Colocación</option>
+            <option value="pago_fondeo">Pago de fondeo</option>
+            <option value="comision">Comisión</option>
+            <option value="gasto_operativo">Gasto operativo</option>
+            <option value="otro">Otro</option>
+          </select>
+          <input type="month" class="form-input" id="filterContaMes" onchange="renderContabilidad()" style="max-width:180px">
+          <button class="btn btn-outline btn-sm" onclick="exportarContabilidadExcel()">📥 Excel</button>
+          <button class="btn btn-primary" onclick="openModal('modalContabilidad')">+ Nuevo Registro</button>
+        </div>
+        <div class="kpi-grid" id="contaResumen"></div>
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Fecha</th><th>Tipo</th><th>Cuenta</th><th>Concepto</th><th>Debe</th><th>Haber</th><th>Ref</th></tr></thead>
+              <tbody id="tbContabilidad"></tbody>
+            </table>
+          </div>
+          <div class="pagination-bar" id="pagContabilidad"></div>
+        </div>
+      </div>
+      <div id="contaBalance" style="display:none">
+        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+          <span style="font-size:13px;color:var(--gray-500);font-weight:600">Corte al:</span>
+          <input type="date" class="form-input" id="balanceFecha" style="max-width:180px" onchange="renderBalance()">
+        </div>
+        <div id="balanceContent"></div>
+      </div>
+      <div id="contaResultados" style="display:none">
+        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+          <span style="font-size:13px;color:var(--gray-500);font-weight:600">Periodo:</span>
+          <input type="month" class="form-input" id="resultadosMes" style="max-width:180px" onchange="renderResultados()">
+        </div>
+        <div id="resultadosContent"></div>
+      </div>
+      <div id="contaConciliacion" style="display:none">
+        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--gray-500);font-weight:600">Mes:</span>
+          <input type="month" class="form-input" id="conciliacionMes" style="max-width:180px" onchange="renderConciliacion()">
+          <span style="font-size:13px;color:var(--gray-500);font-weight:600;margin-left:12px">Saldo Banco:</span>
+          <input type="text" class="form-input" id="conciliacionSaldoBanco" style="max-width:180px" placeholder="$0.00" oninput="formatMiles(this);renderConciliacion()">
+        </div>
+        <div id="conciliacionContent"></div>
+      </div>
+      <!-- Bug #40: Cierres contables -->
+      <div id="contaCierres" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Cierres Contables Mensuales</span>
+            <button class="btn btn-primary btn-sm" onclick="ejecutarCierreContable()">🔒 Cerrar Mes Actual</button>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Período</th><th>Fecha Cierre</th><th>Cerrado por</th><th>Ingresos</th><th>Egresos</th><th>Resultado</th><th>Estado</th></tr></thead>
+              <tbody id="tbCierres"></tbody>
+            </table>
+          </div>
+          <p style="color:var(--gray-400);font-size:12px;margin-top:8px">Los períodos cerrados no permiten modificar ni agregar registros contables.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== REPORTES ===================== -->
+    <div class="page" id="page-reportes">
+      <div class="tabs">
+        <div class="tab active" onclick="setReporteTab('cartera')">Cartera</div>
+        <div class="tab" onclick="setReporteTab('morosidad')">Morosidad</div>
+        <div class="tab" onclick="setReporteTab('colocacion')">Colocación</div>
+        <div class="tab" onclick="setReporteTab('flujo')">Flujo Efectivo</div>
+        <div class="tab" onclick="setReporteTab('resultados')">Estado Resultados</div>
+        <div class="tab" onclick="setReporteTab('garantias')">Garantías</div>
+        <div class="tab" onclick="setReporteTab('riesgo')">Riesgo</div>
+        <div class="tab" onclick="setReporteTab('alertas')">Alertas</div>
+        <div class="tab" onclick="setReporteTab('semaforo')" style="border-left:2px solid var(--border);margin-left:8px;padding-left:16px">🚦 Semáforo</div>
+        <div class="tab" onclick="setReporteTab('ejecutivo')">📊 Ejecutivo</div>
+      </div>
+
+      <!-- TAB: Cartera -->
+      <div id="reporteCartera">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Reporte de Cartera</h3>
+          <button class="btn btn-primary btn-sm" onclick="exportarReporteCarteraPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarReporteCarteraExcel()">📊 Excel</button>
+        </div>
+        <div id="rptCarteraKpis" class="kpi-grid" style="margin-bottom:16px"></div>
+        <div id="rptCarteraCharts" style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card" style="padding:16px"><canvas id="chartRptTipo" style="max-height:250px"></canvas></div>
+          <div class="card" style="padding:16px"><canvas id="chartRptEstado" style="max-height:250px"></canvas></div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Número</th><th>Cliente</th><th>Tipo</th><th>Monto Original</th><th>Saldo</th><th>Tasa</th><th>Estado</th><th>Días Mora</th></tr></thead>
+            <tbody id="tbRptCartera"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: Morosidad -->
+      <div id="reporteMorosidad" style="display:none">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Reporte de Morosidad</h3>
+          <button class="btn btn-primary btn-sm" onclick="exportarMorosidadPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarMorosidadExcel()">📊 Excel</button>
+        </div>
+        <div id="rptMorosidadKpis" class="kpi-grid" style="margin-bottom:16px"></div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Número</th><th>Cliente</th><th>Tipo</th><th>Saldo</th><th>Pago Mensual</th><th>Días Mora</th><th>Rango</th><th>Interés Moratorio Est.</th></tr></thead>
+            <tbody id="tbRptMorosidad"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: Colocación -->
+      <div id="reporteColocacion" style="display:none">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Reporte de Colocación por Período</h3>
+          <button class="btn btn-primary btn-sm" onclick="exportarColocacionPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarColocacionExcel()">📊 Excel</button>
+        </div>
+        <div id="rptColocacionKpis" class="kpi-grid" style="margin-bottom:16px"></div>
+        <div style="margin-bottom:16px">
+          <div class="card" style="padding:16px"><canvas id="chartRptColocacion" style="max-height:300px"></canvas></div>
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Período</th><th>Créditos Nuevos</th><th>Monto Colocado</th><th>Tasa Prom.</th><th>Plazo Prom.</th><th>Tipo Predominante</th></tr></thead>
+            <tbody id="tbRptColocacion"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: Flujo de Efectivo -->
+      <div id="reporteFlujo" style="display:none">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Proyección de Flujo de Efectivo (12 meses)</h3>
+          <button class="btn btn-primary btn-sm" onclick="exportarFlujoPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarFlujoExcel()">📊 Excel</button>
+        </div>
+        <div id="rptFlujoKpis" class="kpi-grid" style="margin-bottom:16px"></div>
+        <div style="margin-bottom:16px">
+          <div class="card" style="padding:16px"><canvas id="chartFlujoEfectivo" style="max-height:320px"></canvas></div>
+        </div>
+        <div class="card" style="padding:16px;margin-bottom:16px">
+          <h4 style="margin:0 0 12px 0">Detalle Mensual</h4>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead><tr><th>Mes</th><th>Cobranza Esperada</th><th>Pagos a Fondeo</th><th>Flujo Neto</th><th>Flujo Acumulado</th><th>Cobertura</th></tr></thead>
+              <tbody id="tbFlujoEfectivo"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Estado de Resultados -->
+      <div id="reporteResultados" style="display:none">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Estado de Resultados (P&L)</h3>
+          <select id="resultadosPeriodo" class="form-select" style="max-width:180px" onchange="renderReporteResultados()">
+            <option value="12">Últimos 12 meses</option>
+            <option value="6">Últimos 6 meses</option>
+            <option value="3">Últimos 3 meses</option>
+            <option value="0">Mes actual</option>
+            <option value="-1">Todo el histórico</option>
+          </select>
+          <button class="btn btn-primary btn-sm" onclick="exportarResultadosPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarResultadosExcel()">📊 Excel</button>
+        </div>
+        <div id="rptResultadosKpis" class="kpi-grid" style="margin-bottom:16px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card" style="padding:16px"><canvas id="chartResultados" style="max-height:280px"></canvas></div>
+          <div class="card" style="padding:16px"><canvas id="chartMargen" style="max-height:280px"></canvas></div>
+        </div>
+        <div class="card" style="padding:16px;margin-bottom:16px">
+          <h4 style="margin:0 0 12px 0">Detalle por Período</h4>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead><tr><th>Período</th><th>Ingreso Intereses</th><th>Ingreso Comisiones</th><th>Ingreso Moratorio</th><th>Total Ingresos</th><th>Costo Fondeo</th><th>Provisiones</th><th>Utilidad Bruta</th><th>Margen %</th></tr></thead>
+              <tbody id="tbResultados"></tbody>
+              <tfoot id="tfResultados"></tfoot>
+            </table>
+          </div>
+        </div>
+        <div class="card" style="padding:16px">
+          <h4 style="margin:0 0 12px 0">Ratios de Rentabilidad</h4>
+          <div id="rptRatios" class="kpi-grid"></div>
+        </div>
+      </div>
+
+      <!-- TAB: Garantías -->
+      <div id="reporteGarantias" style="display:none">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Reporte de Garantías y Cobertura</h3>
+          <button class="btn btn-primary btn-sm" onclick="exportarGarantiasPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarGarantiasExcel()">📊 Excel</button>
+        </div>
+        <div id="rptGarantiasKpis" class="kpi-grid" style="margin-bottom:16px"></div>
+        <div class="card" style="padding:16px;margin-bottom:16px">
+          <h4 style="margin:0 0 12px 0">Cobertura por Crédito</h4>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead><tr><th>Crédito</th><th>Cliente</th><th>Saldo</th><th>Garantías</th><th>Valor Total</th><th>Cobertura</th><th>Estado</th></tr></thead>
+              <tbody id="tbGarantiasCobertura"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" style="padding:16px">
+          <h4 style="margin:0 0 12px 0">Detalle de Garantías</h4>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead><tr><th>ID</th><th>Crédito</th><th>Tipo</th><th>Descripción</th><th>Valor Avalúo</th><th>Fecha Avalúo</th><th>Estado</th></tr></thead>
+              <tbody id="tbGarantiasDetalle"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Riesgo -->
+      <div id="reporteRiesgo" style="display:none">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Scoring de Riesgo de Cartera</h3>
+          <button class="btn btn-primary btn-sm" onclick="exportarRiesgoPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarRiesgoExcel()">📊 Excel</button>
+        </div>
+        <div id="rptRiesgoKpis" class="kpi-grid" style="margin-bottom:16px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card" style="padding:16px"><canvas id="chartRiesgoDistrib" style="max-height:280px"></canvas></div>
+          <div class="card" style="padding:16px">
+            <h4 style="margin:0 0 12px 0">Escala de Calificaciones</h4>
+            <div id="riesgoEscala" style="font-size:12px">
+              <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="display:inline-block;width:32px;height:20px;border-radius:4px;background:#0D9F6E"></span><strong>A1</strong> Mínimo (95-100) — Sin factores de riesgo</div>
+              <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="display:inline-block;width:32px;height:20px;border-radius:4px;background:#34D399"></span><strong>A2</strong> Bajo (85-94) — Factores menores</div>
+              <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="display:inline-block;width:32px;height:20px;border-radius:4px;background:#3B82F6"></span><strong>B1</strong> Moderado bajo (75-84)</div>
+              <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="display:inline-block;width:32px;height:20px;border-radius:4px;background:#60A5FA"></span><strong>B2</strong> Moderado (65-74)</div>
+              <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="display:inline-block;width:32px;height:20px;border-radius:4px;background:#F59E0B"></span><strong>C1</strong> Medio (55-64) — Atención recomendada</div>
+              <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="display:inline-block;width:32px;height:20px;border-radius:4px;background:#FB923C"></span><strong>C2</strong> Medio alto (40-54)</div>
+              <div style="display:flex;align-items:center;gap:8px;padding:4px 0;border-bottom:1px solid var(--border)"><span style="display:inline-block;width:32px;height:20px;border-radius:4px;background:#EF4444"></span><strong>D</strong> Alto (20-39) — Seguimiento prioritario</div>
+              <div style="display:flex;align-items:center;gap:8px;padding:4px 0"><span style="display:inline-block;width:32px;height:20px;border-radius:4px;background:#991B1B"></span><strong>E</strong> Crítico (0-19) — Acción inmediata</div>
+            </div>
+          </div>
+        </div>
+        <div class="card" style="padding:16px">
+          <h4 style="margin:0 0 12px 0">Detalle por Crédito (ordenado por mayor riesgo)</h4>
+          <div class="table-wrapper">
+            <table class="table">
+              <thead><tr><th>Crédito</th><th>Cliente</th><th>Saldo</th><th>Calif.</th><th>Score</th><th>Mora</th><th>Cobert.</th><th>Principales Factores</th></tr></thead>
+              <tbody id="tbRiesgo"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB: Alertas -->
+      <div id="reporteAlertas" style="display:none">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Centro de Alertas</h3>
+          <button class="btn btn-outline btn-sm" onclick="renderReporteAlertas()">🔄 Actualizar</button>
+        </div>
+        <div id="rptAlertasContent"></div>
+      </div>
+
+      <!-- Sprint U: Semáforo de Cartera -->
+      <div id="reporteSemaforo" style="display:none">
+        <div class="search-bar" style="margin-bottom:16px">
+          <h3 style="margin:0;flex:1">Semáforo de Cartera — Alertas Tempranas</h3>
+          <div style="display:flex;gap:8px">
+            <select class="form-select" id="semaforoFiltro" onchange="renderReporteSemaforo()" style="width:160px">
+              <option value="">Todos</option>
+              <option value="rojo">🔴 Rojo — Crítico</option>
+              <option value="amarillo">🟡 Amarillo — Precaución</option>
+              <option value="verde">🟢 Verde — Normal</option>
+            </select>
+            <button class="btn btn-outline btn-sm" onclick="exportarSemaforoPDF()">PDF</button>
+            <button class="btn btn-outline btn-sm" onclick="exportarSemaforoExcel()">Excel</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="semaforoKPIs" style="margin-bottom:16px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+          <div class="card"><div class="card-header"><span class="card-title">Distribución Semáforo</span></div><div style="height:250px;position:relative"><canvas id="chartSemaforo"></canvas></div></div>
+          <div class="card"><div class="card-header"><span class="card-title">Factores de Riesgo Dominantes</span></div><div style="height:250px;position:relative"><canvas id="chartFactores"></canvas></div></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Detalle por Crédito</span></div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>Semáforo</th><th>Crédito</th><th>Cliente</th><th>Saldo</th><th>Días Mora</th><th>Alertas Activas</th><th>Score</th><th>Acciones</th></tr></thead>
+              <tbody id="tblSemaforo"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card" style="margin-top:20px">
+          <div class="card-header">
+            <span class="card-title">Registro de Acciones Correctivas</span>
+            <button class="btn btn-primary btn-sm" onclick="nuevaAccionCorrectiva()">+ Nueva Acción</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>Fecha</th><th>Crédito</th><th>Tipo Acción</th><th>Descripción</th><th>Responsable</th><th>Estado</th><th></th></tr></thead>
+              <tbody id="tblAccionesCorr"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Sprint Y: Tablero Ejecutivo -->
+      <div id="reporteEjecutivo" style="display:none">
+        <div class="search-bar" style="margin-bottom:16px">
+          <h3 style="margin:0;flex:1">Tablero Ejecutivo — One Pager</h3>
+          <button class="btn btn-red btn-sm" onclick="exportarEjecutivoPDF()">📄 Exportar PDF</button>
+        </div>
+        <div id="ejecutivoContent"></div>
+      </div>
+    </div>
+
+    <!-- ===================== CALENDARIO ===================== -->
+    <div class="page" id="page-calendario">
+      <div class="search-bar" style="margin-bottom:16px">
+        <button class="btn btn-outline btn-sm" onclick="calNavMes(-1)">◀ Anterior</button>
+        <h3 id="calTitulo" style="margin:0;flex:1;text-align:center">—</h3>
+        <button class="btn btn-outline btn-sm" onclick="calNavMes(0)">Hoy</button>
+        <button class="btn btn-outline btn-sm" onclick="calNavMes(1)">Siguiente ▶</button>
+      </div>
+      <div id="calKpis" class="kpi-grid" style="margin-bottom:16px"></div>
+      <div style="display:grid;grid-template-columns:1fr 300px;gap:16px">
+        <div class="card" style="padding:0;overflow:hidden">
+          <table id="calGrid" class="cal-table" style="width:100%;border-collapse:collapse">
+            <thead><tr>
+              <th style="padding:8px;text-align:center;background:var(--navy);color:white">Lun</th>
+              <th style="padding:8px;text-align:center;background:var(--navy);color:white">Mar</th>
+              <th style="padding:8px;text-align:center;background:var(--navy);color:white">Mié</th>
+              <th style="padding:8px;text-align:center;background:var(--navy);color:white">Jue</th>
+              <th style="padding:8px;text-align:center;background:var(--navy);color:white">Vie</th>
+              <th style="padding:8px;text-align:center;background:#6B7280;color:white">Sáb</th>
+              <th style="padding:8px;text-align:center;background:#6B7280;color:white">Dom</th>
+            </tr></thead>
+            <tbody id="calBody"></tbody>
+          </table>
+        </div>
+        <div>
+          <div class="card" style="padding:16px;margin-bottom:12px">
+            <h4 id="calDiaTitle" style="margin:0 0 12px 0">Seleccione un día</h4>
+            <div id="calDiaDetalle" style="font-size:13px;color:var(--gray)">Haga clic en un día del calendario para ver los eventos programados.</div>
+          </div>
+          <div class="card" style="padding:16px">
+            <h4 style="margin:0 0 8px 0">Leyenda</h4>
+            <div style="font-size:12px;display:flex;flex-direction:column;gap:4px">
+              <div><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#0D9F6E;margin-right:6px;vertical-align:middle"></span>Cobranza esperada</div>
+              <div><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#C8102E;margin-right:6px;vertical-align:middle"></span>Pago a fondeo</div>
+              <div><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#F59E0B;margin-right:6px;vertical-align:middle"></span>Vencimiento crédito</div>
+              <div><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#3B82F6;margin-right:6px;vertical-align:middle"></span>Vencimiento fondeo</div>
+              <div><span style="display:inline-block;width:12px;height:12px;border-radius:2px;background:#8B5CF6;margin-right:6px;vertical-align:middle"></span>Inicio crédito</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== APROBACIONES ===================== -->
+    <div class="page" id="page-aprobaciones">
+      <div class="tabs">
+        <div class="tab active" onclick="setAprobTab('pendientes')">Pendientes</div>
+        <div class="tab" onclick="setAprobTab('aprobadas')">Aprobadas</div>
+        <div class="tab" onclick="setAprobTab('rechazadas')">Rechazadas</div>
+        <div class="tab" onclick="setAprobTab('todas')">Todas</div>
+      </div>
+      <div id="aprobPendientes"></div>
+      <div id="aprobAprobadas" style="display:none"></div>
+      <div id="aprobRechazadas" style="display:none"></div>
+      <div id="aprobTodas" style="display:none"></div>
+    </div>
+
+    <!-- Modal Rechazo -->
+    <div class="modal-overlay" id="modalRechazo">
+      <div class="modal" style="max-width:480px">
+        <div class="modal-header">
+          <h3>Rechazar Solicitud</h3>
+          <button class="modal-close" onclick="closeModal('modalRechazo')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <div class="form-group">
+            <label class="form-label">Motivo del rechazo *</label>
+            <textarea id="rechazoMotivo" class="form-input" rows="3" placeholder="Explique el motivo del rechazo..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeModal('modalRechazo')">Cancelar</button>
+          <button class="btn btn-danger" onclick="confirmarRechazo()">Rechazar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Garantía -->
+    <div class="modal-overlay" id="modalGarantia">
+      <div class="modal" style="max-width:580px">
+        <div class="modal-header">
+          <h3>Registrar Garantía</h3>
+          <button class="modal-close" onclick="closeModal('modalGarantia')">&times;</button>
+        </div>
+        <div class="modal-body">
+          <input type="hidden" id="garCreditoId">
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label class="form-label">Tipo de Garantía *</label>
+              <select id="garTipo" class="form-input">
+                <option value="hipotecaria">Hipotecaria</option>
+                <option value="prendaria">Prendaria</option>
+                <option value="fiduciaria">Fiduciaria</option>
+                <option value="personal">Personal / Aval</option>
+                <option value="deposito">Depósito en Garantía</option>
+                <option value="pagare">Pagaré</option>
+                <option value="vehiculo">Vehículo</option>
+                <option value="equipo">Equipo / Maquinaria</option>
+                <option value="otra">Otra</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label class="form-label">Estado</label>
+              <select id="garEstado" class="form-input">
+                <option value="vigente">Vigente</option>
+                <option value="en_tramite">En Trámite</option>
+                <option value="vencida">Vencida</option>
+                <option value="liberada">Liberada</option>
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Descripción *</label>
+            <input type="text" id="garDescripcion" class="form-input" placeholder="Ej: Inmueble en Col. Roma, CDMX — Escritura #12345">
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label class="form-label">Valor de Avalúo *</label>
+              <input type="text" id="garValor" class="form-input" placeholder="$0.00" oninput="formatMiles(this)">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Fecha de Avalúo</label>
+              <input type="date" id="garFechaAvaluo" class="form-input">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label class="form-label">Ubicación / Referencia</label>
+              <input type="text" id="garUbicacion" class="form-input" placeholder="Dirección o referencia">
+            </div>
+            <div class="form-group">
+              <label class="form-label">No. Documento / Escritura</label>
+              <input type="text" id="garDocumento" class="form-input" placeholder="Número de escritura, factura, etc.">
+            </div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notas</label>
+            <textarea id="garNotas" class="form-input" rows="2" placeholder="Observaciones adicionales..."></textarea>
+          </div>
+        </div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeModal('modalGarantia')">Cancelar</button>
+          <button class="btn btn-primary" onclick="guardarGarantia()">Guardar Garantía</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Modal Genérico (Sprint T) -->
+    <div class="modal-overlay" id="modalGenerico">
+      <div class="modal" style="max-width:700px">
+        <div class="modal-header">
+          <h3 id="modalGenericoTitle">Detalle</h3>
+          <button class="modal-close" onclick="closeModal('modalGenerico')">&times;</button>
+        </div>
+        <div class="modal-body" id="modalGenericoBody"></div>
+        <div class="modal-footer">
+          <button class="btn btn-outline" onclick="closeModal('modalGenerico')">Cerrar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== CONCILIACIÓN BANCARIA ===================== -->
+    <div class="page" id="page-conciliacion">
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <span class="card-title">Importar Movimientos Bancarios</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-outline btn-sm" onclick="agregarMovBancManual()">+ Agregar Manual</button>
+            <label class="btn btn-primary btn-sm" style="cursor:pointer;margin:0">📂 Importar CSV <input type="file" accept=".csv" onchange="importarMovBancCSV(this)" style="display:none"></label>
+          </div>
+        </div>
+        <div class="form-row-3" id="formMovManual" style="display:none;margin-bottom:12px">
+          <div class="form-group">
+            <label class="form-label">Fecha</label>
+            <input type="date" class="form-input" id="movBancFecha">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Concepto</label>
+            <input type="text" class="form-input" id="movBancConcepto" placeholder="Referencia o concepto">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Monto (+ ingreso, - egreso)</label>
+            <input type="number" class="form-input" id="movBancMonto" step="0.01" placeholder="Ej: 15000 o -8500">
+          </div>
+        </div>
+        <div id="formMovManual2" style="display:none;margin-bottom:12px" class="form-row-3">
+          <div class="form-group">
+            <label class="form-label">Referencia bancaria</label>
+            <input type="text" class="form-input" id="movBancRef" placeholder="No. referencia">
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end">
+            <button class="btn btn-red btn-sm" onclick="guardarMovBancManual()" style="width:100%">Guardar Movimiento</button>
+          </div>
+          <div class="form-group" style="display:flex;align-items:flex-end">
+            <button class="btn btn-outline btn-sm" onclick="document.getElementById('formMovManual').style.display='none';document.getElementById('formMovManual2').style.display='none'" style="width:100%">Cancelar</button>
+          </div>
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Referencia</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="tbMovBancarios"></tbody>
+          </table>
+        </div>
+        <div id="movBancVacio" style="text-align:center;padding:30px;color:var(--text-muted);display:none">
+          No hay movimientos bancarios. Importa un CSV o agrega manualmente.
+        </div>
+      </div>
+      <div class="card" style="margin-bottom:20px">
+        <div class="card-header">
+          <span class="card-title">Conciliación</span>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-red btn-sm" onclick="ejecutarConciliacionAuto()">⚡ Conciliar Automático</button>
+            <button class="btn btn-outline btn-sm" onclick="exportarConciliacionPDF()">PDF</button>
+            <button class="btn btn-outline btn-sm" onclick="exportarConciliacionExcel()">Excel</button>
+          </div>
+        </div>
+        <div class="kpi-grid" id="concKPIs" style="margin-bottom:16px"></div>
+        <div style="height:280px;position:relative;margin-bottom:20px"><canvas id="chartConciliacion"></canvas></div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Mov. Bancario</th><th>Fecha</th><th>Monto Banco</th><th>↔</th><th>Registro Interno</th><th>Monto Sistema</th><th>Diferencia</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="tbConciliacion"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== ADMIN ===================== -->
+    <div class="page" id="page-admin">
+      <div class="tabs">
+        <div class="tab active" onclick="setAdminTab('usuarios')">Usuarios</div>
+        <div class="tab" onclick="setAdminTab('auditoria')">Auditoría</div>
+        <div class="tab" onclick="setAdminTab('seguridad')">Seguridad</div>
+        <div class="tab" onclick="setAdminTab('importar')">📤 Importar</div>
+      </div>
+      <div id="adminUsuarios">
+        <div class="search-bar">
+          <button class="btn btn-primary" onclick="openModal('modalUsuario')">+ Nuevo Usuario</button>
+          <button class="btn btn-outline" onclick="exportarDatos()">📥 Backup JSON</button>
+          <button class="btn btn-outline" onclick="exportarBackupExcel()">📥 Backup Excel</button>
+          <label class="btn btn-outline" style="cursor:pointer">📤 Importar Datos<input type="file" accept=".json" style="display:none" onchange="importarDatos(this)"></label>
+          <button class="btn btn-outline" onclick="purgarDatosAntiguos()">🗑 Purgar Antiguos</button>
+          <button class="btn btn-outline" onclick="editarTipoCambio()">💱 Tipo Cambio</button>
+          <button class="btn btn-outline" style="color:var(--red)" onclick="resetDatos()">🔄 Resetear</button>
+        </div>
+        <!-- Sprint W: Indicador de respaldo -->
+        <div id="backupStatusBar" style="margin-bottom:12px"></div>
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>ID</th><th>Nombre</th><th>Email</th><th>Rol</th><th>Permisos</th><th>Activo</th><th>Último Acceso</th><th>Acciones</th></tr></thead>
+              <tbody id="tbUsuarios"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <div id="adminAuditoria" style="display:none">
+        <div class="card">
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Módulo</th><th>Detalle</th></tr></thead>
+              <tbody id="tbAuditoria"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+      <!-- Bug #47: Log de Seguridad -->
+      <div id="adminSeguridad" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Log de Eventos de Seguridad</span>
+            <span style="font-size:12px;color:var(--gray-400)">Últimos 200 eventos</span>
+          </div>
+          <div class="table-wrapper">
+            <table>
+              <thead><tr><th>Fecha</th><th>Tipo</th><th>Usuario</th><th>Detalle</th></tr></thead>
+              <tbody id="tbSecurityLog"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- TAB 4: IMPORTAR (Sprint L) -->
+      <div id="adminImportar" style="display:none">
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header">
+            <span class="card-title">Importación Masiva de Datos</span>
+          </div>
+          <p style="color:var(--gray-500);font-size:13px;margin-bottom:16px">Importa clientes, créditos o fondeos desde archivos Excel (.xlsx) o CSV. Descarga primero la plantilla para asegurar el formato correcto.</p>
+
+          <!-- Paso 1: Seleccionar tipo y archivo -->
+          <div class="form-row" style="margin-bottom:16px">
+            <div>
+              <label class="form-label">Tipo de datos a importar</label>
+              <select class="form-input form-select" id="importTipo" onchange="onImportTipoChange()">
+                <option value="clientes">Clientes</option>
+                <option value="fondeos">Fondeos</option>
+              </select>
+            </div>
+            <div>
+              <label class="form-label">Archivo Excel o CSV</label>
+              <input type="file" class="form-input" id="importFile" accept=".xlsx,.xls,.csv,.tsv" onchange="onImportFileSelected(this)" style="padding:7px 12px">
+            </div>
+          </div>
+          <div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap">
+            <button class="btn btn-outline btn-sm" onclick="descargarPlantilla('clientes')">📋 Plantilla Clientes</button>
+            <button class="btn btn-outline btn-sm" onclick="descargarPlantilla('fondeos')">📋 Plantilla Fondeos</button>
+          </div>
+        </div>
+
+        <!-- Paso 2: Preview -->
+        <div class="card" id="importPreviewCard" style="display:none;margin-bottom:20px">
+          <div class="card-header">
+            <span class="card-title">Vista Previa de Importación</span>
+            <span id="importStats" style="font-size:12px;color:var(--gray-400)"></span>
+          </div>
+          <div id="importMapeo" style="margin-bottom:16px"></div>
+          <div class="table-wrapper" style="max-height:360px;overflow-y:auto">
+            <table>
+              <thead id="importPreviewHead"></thead>
+              <tbody id="importPreviewBody"></tbody>
+            </table>
+          </div>
+          <div id="importErrors" style="margin-top:12px"></div>
+          <div style="margin-top:16px;display:flex;gap:10px;justify-content:flex-end">
+            <button class="btn btn-outline" onclick="cancelarImport()">Cancelar</button>
+            <button class="btn btn-primary" id="btnConfirmImport" onclick="ejecutarImport()">Confirmar Importación</button>
+          </div>
+        </div>
+
+        <!-- Paso 3: Resultado -->
+        <div class="card" id="importResultCard" style="display:none">
+          <div class="card-header">
+            <span class="card-title">Resultado de Importación</span>
+          </div>
+          <div id="importResultContent"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== PLD — PREVENCIÓN DE LAVADO DE DINERO ===================== -->
+    <div class="page" id="page-pld">
+      <div class="tabs">
+        <div class="tab active" onclick="setPLDTab('monitor')">Monitor PLD</div>
+        <div class="tab" onclick="setPLDTab('alertas')">Alertas</div>
+        <div class="tab" onclick="setPLDTab('reporteMensual')">Reporte Mensual</div>
+        <div class="tab" onclick="setPLDTab('configuracion')">Configuración</div>
+      </div>
+      <div id="pldMonitor">
+        <div class="kpi-grid" id="pldKPIs" style="margin-bottom:20px"></div>
+        <div id="pldAlertaDeadline" style="display:none;margin-bottom:16px;padding:14px 18px;border-radius:8px;border-left:4px solid #EF4444;background:#FEF2F2;font-size:13px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:20px">
+          <div class="card"><div class="card-header"><span class="card-title">Tendencia Mensual</span></div><div style="padding:12px;height:260px"><canvas id="chartPLDTendencia"></canvas></div></div>
+          <div class="card"><div class="card-header"><span class="card-title">Distribución por Categoría</span></div><div style="padding:12px;height:260px"><canvas id="chartPLDCategorias"></canvas></div></div>
+        </div>
+        <div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">Cumplimiento PLD</span></div><div class="kpi-grid" id="pldKPIsCumplimiento" style="padding:12px"></div></div>
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header">
+            <span class="card-title">Operaciones por Revisar</span>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary btn-sm" onclick="escanearPLD()">🔍 Escanear Operaciones</button>
+              <button class="btn btn-outline btn-sm" onclick="exportarPLDCSV()">📥 Exportar CSV</button>
+              <select class="form-select" id="pldFiltroEstado" onchange="renderPLD()" style="width:auto;font-size:12px">
+                <option value="todas">Todas</option><option value="pendiente">Pendientes</option>
+                <option value="revisada">Revisadas</option><option value="reportada">Reportadas</option>
+                <option value="descartada">Descartadas</option>
+              </select>
+            </div>
+          </div>
+          <div class="table-wrapper"><table>
+            <thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo</th><th>Categoría</th><th>Monto</th><th>Nivel Riesgo</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <tbody id="tbPLDOperaciones"></tbody>
+          </table></div>
+        </div>
+        <div id="pldActividadReciente"></div>
+      </div>
+      <div id="pldAlertas" style="display:none">
+        <div class="card"><div class="card-header"><span class="card-title">Alertas PLD Activas</span><span style="font-size:12px;color:var(--text-muted)" id="pldAlertasCount">0 alertas</span></div>
+        <div id="pldAlertasList" style="max-height:600px;overflow-y:auto"></div></div>
+      </div>
+      <div id="pldReporteMensual" style="display:none">
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><span class="card-title">Generar Aviso PLD/FT (LFPIORPI — SAT SPPLD)</span></div>
+          <div class="form-row-3" style="margin-bottom:16px">
+            <div class="form-group"><label class="form-label">Mes</label><select class="form-select" id="pldReporteMes"><option value="01">Enero</option><option value="02">Febrero</option><option value="03">Marzo</option><option value="04">Abril</option><option value="05">Mayo</option><option value="06">Junio</option><option value="07">Julio</option><option value="08">Agosto</option><option value="09">Septiembre</option><option value="10">Octubre</option><option value="11">Noviembre</option><option value="12">Diciembre</option></select></div>
+            <div class="form-group"><label class="form-label">Año</label><input type="number" class="form-input" id="pldReporteAnio" value="2026" min="2020" max="2030"></div>
+            <div class="form-group" style="display:flex;align-items:flex-end;gap:8px"><button class="btn btn-primary" onclick="generarReporteMensualPLD()">Generar Reporte</button><button class="btn btn-outline" onclick="exportarReportePLDPDF()">📄 Exportar PDF</button></div>
+          </div>
+        </div>
+        <div id="pldReporteContenido" style="display:none">
+          <div class="kpi-grid" id="pldReporteKPIs" style="margin-bottom:20px"></div>
+          <div class="card" style="margin-bottom:20px"><div class="card-header"><span class="card-title">Operaciones Relevantes del Periodo</span></div>
+            <div class="table-wrapper"><table><thead><tr><th>Fecha</th><th>Cliente</th><th>Tipo Op.</th><th>Categoría</th><th>Monto</th><th>Riesgo</th><th>Estado</th><th>Observaciones</th></tr></thead><tbody id="tbPLDReporte"></tbody></table></div>
+          </div>
+          <div class="card"><div class="card-header"><span class="card-title">Resumen por Categoría</span></div><div id="pldReporteResumenCat"></div></div>
+        </div>
+      </div>
+      <div id="pldConfiguracion" style="display:none">
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><span class="card-title">Umbrales de Detección</span></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Configuración conforme a <strong>LFPIORPI Art. 17 Fracc. IV</strong> — Actividad Vulnerable: otorgamiento de préstamos o créditos. Umbral de aviso: <strong>1,605 UMAs</strong>. Avisos mensuales al SAT SPPLD (día 17 del mes siguiente). Aviso 24h por indicios ilícitos (Reforma jul-2025). Conservación: 10 años (Art. 18).</p>
+          <div class="form-row-3">
+            <div class="form-group"><label class="form-label">UMA Diaria (INEGI)</label><input type="number" class="form-input" id="pldValorUMA" step="0.01" min="1"><small style="color:var(--text-muted)">Vigente 01-feb-2026: $117.31 (INEGI DOF)</small></div>
+            <div class="form-group"><label class="form-label">Umbral de Aviso (Art. 17 IV)</label><input type="text" class="form-input" id="pldUmbralAviso" oninput="formatMiles(this)"><small style="color:var(--text-muted)">1,605 UMAs = ~$188,283 MXN (préstamos/créditos)</small></div>
+            <div class="form-group"><button class="btn btn-outline btn-sm" onclick="recalcularUmbralesPLD()" style="margin-top:22px">Recalcular desde UMA</button></div>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group"><label class="form-label">Depósito en Efectivo — Umbral</label><input type="text" class="form-input" id="pldUmbralEfectivo" oninput="formatMiles(this)"><small style="color:var(--text-muted)">💵 Monitoreo interno de efectivo (control de riesgo)</small></div>
+            <div class="form-group"><label class="form-label">Acumulado Efectivo 30 días</label><input type="text" class="form-input" id="pldUmbralAcumEfectivo" oninput="formatMiles(this)"><small style="color:var(--text-muted)">💵 Suma de efectivo por cliente en 30 días</small></div>
+            <div class="form-group"></div>
+          </div>
+          <div class="form-row-3">
+            <div class="form-group"><label class="form-label">Operación Inusual — Desviación (%)</label><input type="number" class="form-input" id="pldUmbralInusual" min="50" max="500" value="200"><small style="color:var(--text-muted)">% sobre el promedio histórico del cliente</small></div>
+            <div class="form-group"><label class="form-label">Fraccionamiento — Ventana (días)</label><input type="number" class="form-input" id="pldDiasFraccionamiento" min="1" max="30" value="5"><small style="color:var(--text-muted)">Detección de estructuración para evadir umbral</small></div>
+            <div class="form-group"></div>
+          </div>
+          <div class="form-row-3" style="margin-top:12px">
+            <div class="form-group"><label class="form-label">Oficial de Cumplimiento</label><input type="text" class="form-input" id="pldOficial" placeholder="Nombre completo"></div>
+            <div class="form-group"><label class="form-label">Razón Social</label><input type="text" class="form-input" id="pldRazonSocial" value="AP Operadora de Fondos, S.A. de C.V."></div>
+            <div class="form-group"><label class="form-label">Clave Portal SAT SPPLD</label><input type="text" class="form-input" id="pldClavePortal" placeholder="Clave de acceso SPPLD"></div>
+          </div>
+          <div style="margin-top:16px"><button class="btn btn-primary" onclick="guardarConfigPLD()">Guardar Configuración</button></div>
+        </div>
+        <div class="card"><div class="card-header"><span class="card-title">Niveles de Riesgo por Cliente</span></div>
+          <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px">Clasificación de riesgo PLD asignada a cada cliente según su perfil transaccional.</p>
+          <div class="table-wrapper"><table><thead><tr><th>Cliente</th><th>Tipo</th><th>Operaciones (6m)</th><th>Monto Acum.</th><th>Nivel Riesgo</th><th>Última Revisión</th><th>Acciones</th></tr></thead><tbody id="tbPLDRiesgoClientes"></tbody></table></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+</div>
+
+<!-- ===================== MODALS ===================== -->
+<!-- Modal Cliente -->
+<div class="modal-overlay" id="modalCliente">
+  <div class="modal">
+    <div class="modal-header"><h3 id="modalClienteTitle">Nuevo Cliente</h3><button class="modal-close" onclick="closeModal('modalCliente')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="clienteEditId">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo Persona</label><select class="form-select" id="cliTipo"><option value="fisica">Persona Física</option><option value="moral">Persona Moral</option></select></div>
+        <div class="form-group"><label class="form-label">Nombre / Razón Social *</label><input type="text" class="form-input" id="cliNombre" required></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">RFC *</label><input type="text" class="form-input" id="cliRFC" maxlength="13"></div>
+        <div class="form-group"><label class="form-label">CURP</label><input type="text" class="form-input" id="cliCURP" maxlength="18"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Teléfono</label><input type="text" class="form-input" id="cliTel"></div>
+        <div class="form-group"><label class="form-label">Email</label><input type="email" class="form-input" id="cliEmail"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Dirección</label><input type="text" class="form-input" id="cliDir"></div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Ciudad</label><input type="text" class="form-input" id="cliCiudad"></div>
+        <div class="form-group"><label class="form-label">Estado</label><input type="text" class="form-input" id="cliEstado"></div>
+        <div class="form-group"><label class="form-label">C.P.</label><input type="text" class="form-input" id="cliCP" maxlength="5"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Ingresos Mensuales ($)</label><input type="text" class="form-input" id="cliIngresos" oninput="formatMiles(this)" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Score Crediticio</label><input type="number" class="form-input" id="cliScore" min="0" max="850"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Sector Económico</label><input type="text" class="form-input" id="cliSector"></div>
+      <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="cliNotas"></textarea></div>
+
+      <!-- Sección de Documentos en el formulario de cliente -->
+      <div class="form-group" style="margin-top:16px;border-top:1px solid var(--gray-200);padding-top:16px">
+        <label class="form-label" style="font-size:15px;font-weight:600">Documentos del Cliente</label>
+        <div class="doc-upload-zone" id="modalDocUploadZone"
+             onclick="document.getElementById('modalDocFileInput').click()"
+             ondragover="event.preventDefault();this.classList.add('dragover')"
+             ondragleave="this.classList.remove('dragover')"
+             ondrop="handleModalDocDrop(event)">
+          <div class="upload-icon">📁</div>
+          <p>Arrastra archivos aquí o haz clic para seleccionar<br><small>PDF, JPG, PNG, DOC, DOCX</small></p>
+          <input type="file" id="modalDocFileInput" style="display:none" accept=".pdf,.jpg,.jpeg,.png,.doc,.docx" multiple onchange="handleModalDocSelect(this.files)">
+        </div>
+        <!-- Lista de archivos pendientes -->
+        <div id="modalPendingDocs" style="margin-top:8px"></div>
+        <!-- Selector de tipo (visible al agregar archivos) -->
+        <div id="modalDocTypeSelect" style="display:none;margin-top:8px;padding:10px;background:var(--gray-50);border-radius:var(--radius);border:1px solid var(--gray-200)">
+          <p style="font-size:12px;color:var(--gray-500);margin-bottom:6px">Selecciona el tipo de documento:</p>
+          <div style="display:flex;flex-wrap:wrap;gap:4px">
+            <button class="btn btn-sm btn-outline" onclick="assignModalDocType('contrato')">📄 Contrato</button>
+            <button class="btn btn-sm btn-outline" onclick="assignModalDocType('ine')">🪪 INE / ID</button>
+            <button class="btn btn-sm btn-outline" onclick="assignModalDocType('csf')">📋 CSF</button>
+            <button class="btn btn-sm btn-outline" onclick="assignModalDocType('estados_financieros')">📊 Est. Financieros</button>
+            <button class="btn btn-sm btn-outline" onclick="assignModalDocType('comprobante_domicilio')">🏠 Comp. Domicilio</button>
+            <button class="btn btn-sm btn-outline" onclick="assignModalDocType('acta_constitutiva')">📑 Acta Constitutiva</button>
+            <button class="btn btn-sm btn-outline" onclick="assignModalDocType('poder_notarial')">⚖️ Poder Notarial</button>
+            <button class="btn btn-sm btn-outline" onclick="assignModalDocType('otro')">📎 Otro</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalCliente')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarCliente()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Crédito -->
+<div class="modal-overlay" id="modalCredito">
+  <div class="modal">
+    <div class="modal-header"><h3>Nuevo Crédito</h3><button class="modal-close" onclick="closeModal('modalCredito')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Cliente *</label><select class="form-select" id="credCliente"></select></div>
+        <div class="form-group"><label class="form-label">Tipo Producto *</label>
+          <select class="form-select" id="credTipo" onchange="toggleCreditoFields()">
+            <option value="credito_simple">Crédito Simple</option>
+            <option value="arrendamiento">Arrendamiento Financiero</option>
+            <option value="nomina">Crédito Nómina</option>
+            <option value="cuenta_corriente">Cuenta Corriente (Revolvente)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Monto *</label><input type="text" class="form-input" id="credMonto" oninput="formatMiles(this)" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Moneda</label>
+          <select class="form-select" id="credMoneda"><option value="MXN">MXN — Peso Mexicano</option><option value="USD">USD — Dólar</option><option value="UDI">UDI — Unidades de Inversión</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Tasa Anual (%) *</label><input type="number" class="form-input" id="credTasa" min="0" step="0.01"></div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Tasa Moratoria (%)</label><input type="number" class="form-input" id="credTasaMora" value="0" min="0" step="0.01"></div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Plazo (meses) *</label><input type="number" class="form-input" id="credPlazo" min="1"></div>
+        <div class="form-group"><label class="form-label">Periodicidad</label>
+          <select class="form-select" id="credPeriodicidad">
+            <option value="mensual">Mensual</option><option value="quincenal">Quincenal</option><option value="semanal">Semanal</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Fecha Inicio *</label><input type="date" class="form-input" id="credFechaInicio"></div>
+      </div>
+      <div class="form-row" id="credArrendFields" style="display:none">
+        <div class="form-group"><label class="form-label">Valor Residual (%)</label><input type="number" class="form-input" id="credVR" value="1" min="0"></div>
+        <div class="form-group"><label class="form-label">Valor del Equipo ($)</label><input type="text" class="form-input" id="credValorEquipo" oninput="formatMiles(this)" placeholder="0"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Comisión Apertura ($)</label><input type="text" class="form-input" id="credComision" oninput="formatMiles(this)" value="0"></div>
+        <div class="form-group"><label class="form-label">Fondeo Asociado</label><select class="form-select" id="credFondeo"><option value="">Ninguno</option></select></div>
+      </div>
+      <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="credNotas"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalCredito')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarCredito()">Guardar y Generar Amortización</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Pago -->
+<div class="modal-overlay" id="modalPago">
+  <div class="modal">
+    <div class="modal-header"><h3>Registrar Pago</h3><button class="modal-close" onclick="closeModal('modalPago')">&times;</button></div>
+    <div class="modal-body">
+      <div id="pagoInfoCredito" style="margin-bottom:16px"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha de Pago *</label><input type="date" class="form-input" id="pagoFecha"></div>
+        <div class="form-group"><label class="form-label">Método de Pago</label>
+          <select class="form-select" id="pagoMetodo"><option value="transferencia">Transferencia</option><option value="cheque">Cheque</option><option value="efectivo">Efectivo</option><option value="domiciliacion">Domiciliación</option></select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Capital *</label><input type="text" class="form-input" id="pagoCapital" oninput="formatMiles(this)"></div>
+        <div class="form-group"><label class="form-label">Interés Ordinario *</label><input type="text" class="form-input" id="pagoInteres" oninput="formatMiles(this)"></div>
+        <div class="form-group"><label class="form-label">Interés Moratorio</label><input type="text" class="form-input" id="pagoMoratorio" oninput="formatMiles(this)"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Comisiones</label><input type="text" class="form-input" id="pagoComision" oninput="formatMiles(this)" value="0"></div>
+        <div class="form-group"><label class="form-label">Referencia</label><input type="text" class="form-input" id="pagoRef"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="pagoNotas"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalPago')">Cancelar</button>
+      <button class="btn btn-success" onclick="guardarPago()">Registrar Pago</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Fondeo -->
+<div class="modal-overlay" id="modalFondeo">
+  <div class="modal">
+    <div class="modal-header"><h3>Nuevo Fondeo</h3><button class="modal-close" onclick="closeModal('modalFondeo')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fondeador *</label><input type="text" class="form-input" id="fondNombre"></div>
+        <div class="form-group"><label class="form-label">Tipo</label>
+          <select class="form-select" id="fondTipo"><option value="banco">Banco</option><option value="sofom">SOFOM</option><option value="fondo">Fondo</option><option value="inversionista">Inversionista</option><option value="linea_credito">Línea de Crédito</option><option value="cuenta_corriente">Cuenta Corriente</option></select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Monto *</label><input type="text" class="form-input" id="fondMonto" oninput="formatMiles(this)" placeholder="0"></div>
+        <div class="form-group"><label class="form-label">Moneda</label>
+          <select class="form-select" id="fondMoneda"><option value="MXN">MXN</option><option value="USD">USD</option><option value="UDI">UDI</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Tasa Anual (%) *</label><input type="number" class="form-input" id="fondTasa" min="0" step="0.01"></div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Plazo (meses) *</label><input type="number" class="form-input" id="fondPlazo" min="1"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Periodicidad</label>
+          <select class="form-select" id="fondPeriodicidad"><option value="mensual">Mensual</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="al_vencimiento">Al Vencimiento</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Fecha Inicio *</label><input type="date" class="form-input" id="fondFechaInicio"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Garantía</label><input type="text" class="form-input" id="fondGarantia"></div>
+      <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="fondNotas"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalFondeo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarFondeo()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Contabilidad -->
+<div class="modal-overlay" id="modalContabilidad">
+  <div class="modal">
+    <div class="modal-header"><h3>Nuevo Registro Contable</h3><button class="modal-close" onclick="closeModal('modalContabilidad')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Fecha *</label><input type="date" class="form-input" id="contaFecha"></div>
+        <div class="form-group"><label class="form-label">Tipo *</label>
+          <select class="form-select" id="contaTipo"><option value="ingreso_intereses">Ingreso por intereses</option><option value="pago_recibido">Pago recibido</option><option value="colocacion">Colocación</option><option value="pago_fondeo">Pago de fondeo</option><option value="comision">Comisión</option><option value="otro">Otro</option></select>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Concepto *</label><input type="text" class="form-input" id="contaConcepto"></div>
+        <div class="form-group"><label class="form-label">Monto *</label><input type="text" class="form-input" id="contaMonto" oninput="formatMiles(this)" placeholder="0"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Referencia</label><input type="text" class="form-input" id="contaRef"></div>
+      <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="contaNotas"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalContabilidad')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarContabilidad()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Usuario -->
+<div class="modal-overlay" id="modalUsuario">
+  <div class="modal">
+    <div class="modal-header"><h3>Nuevo Usuario</h3><button class="modal-close" onclick="closeModal('modalUsuario')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nombre *</label><input type="text" class="form-input" id="usrNombre"></div>
+        <div class="form-group"><label class="form-label">Email *</label><input type="email" class="form-input" id="usrEmail"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Contraseña *</label><input type="password" class="form-input" id="usrPassword"></div>
+        <div class="form-group"><label class="form-label">Rol *</label>
+          <select class="form-select" id="usrRol"><option value="admin">Administrador</option><option value="analista">Analista</option><option value="operador">Operador</option><option value="capturista">Capturista</option><option value="viewer">Solo Lectura</option></select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalUsuario')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarUsuario()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+
+<!-- MODAL: Login Selector -->
+<div class="modal-overlay" id="modalLogin">
+  <div class="modal" style="max-width:420px">
+    <div class="modal-header"><h3>Seleccionar Usuario</h3><button class="modal-close" onclick="closeModal('modalLogin')">&times;</button></div>
+    <div class="modal-body">
+      <p style="color:var(--gray-400);margin-bottom:12px;font-size:13px">Inicia sesión como uno de los usuarios activos:</p>
+      <div id="loginUserList"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Editor de Permisos -->
+<div class="modal-overlay" id="modalPermisos">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header"><h3 id="permisosTitle">Editar Permisos</h3><button class="modal-close" onclick="closeModal('modalPermisos')">&times;</button></div>
+    <div class="modal-body">
+      <div id="permisosGrid"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalPermisos')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarPermisosModal()">Guardar Permisos</button>
+    </div>
+  </div>
+</div>
+
+<!-- Bug #24: LOADING SPINNER -->
+<div class="loading-overlay" id="loadingOverlay">
+  <div class="spinner"></div>
+  <div class="loading-text" id="loadingText">Procesando...</div>
+</div>
+
+<!-- Bug #29: PROMPT MODAL (reemplazo de prompt() nativo) -->
+<div class="prompt-overlay" id="promptOverlay">
+  <div class="prompt-box">
+    <h4 id="promptTitle">Ingrese un valor</h4>
+    <p id="promptMsg"></p>
+    <input type="text" class="form-input" id="promptInput" inputmode="numeric">
+    <div class="prompt-actions">
+      <button class="btn btn-outline" onclick="closePrompt(null)">Cancelar</button>
+      <button class="btn btn-primary" onclick="closePrompt(document.getElementById('promptInput').value)">Aceptar</button>
+    </div>
+  </div>
+</div>
+
+<!-- TOAST CONTAINER -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- CONFIRM DIALOG -->
+<div class="confirm-overlay" id="confirmOverlay">
+  <div class="confirm-box">
+    <h4 id="confirmTitle">¿Estás seguro?</h4>
+    <p id="confirmMsg">Esta acción no se puede deshacer.</p>
+    <div class="confirm-actions">
+      <button class="btn btn-outline" onclick="closeConfirm(false)">Cancelar</button>
+      <button class="btn btn-red" id="confirmBtn" onclick="closeConfirm(true)">Confirmar</button>
+    </div>
+  </div>
+</div>
+
+<!-- SPRINT J: BÚSQUEDA GLOBAL -->
+<div class="search-overlay" id="searchOverlay" onclick="if(event.target===this)closeSearch()">
+  <div class="search-box">
+    <div class="search-box-input">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="globalSearchInput" placeholder="Buscar clientes, créditos, fondeos..." oninput="onGlobalSearch(this.value)" autocomplete="off">
+      <kbd>ESC</kbd>
+    </div>
+    <div class="search-results" id="globalSearchResults"></div>
+    <div class="search-footer">
+      <span><kbd>↑</kbd> <kbd>↓</kbd> navegar</span>
+      <span><kbd>↵</kbd> seleccionar</span>
+      <span><kbd>ESC</kbd> cerrar</span>
+    </div>
+  </div>
+</div>
+
+<!-- SPRINT J: AYUDA ATAJOS DE TECLADO -->
+<div class="kbd-help-overlay" id="kbdHelpOverlay" onclick="if(event.target===this)this.classList.remove('active')">
+  <div class="kbd-help-box">
+    <h3 style="margin-bottom:16px;font-size:16px">Atajos de Teclado</h3>
+    <div class="kbd-row"><span>Búsqueda global</span><kbd>Ctrl+K</kbd></div>
+    <div class="kbd-row"><span>Tema claro/oscuro</span><kbd>Ctrl+D</kbd></div>
+    <div class="kbd-row"><span>Dashboard</span><kbd>Alt+1</kbd></div>
+    <div class="kbd-row"><span>Clientes</span><kbd>Alt+2</kbd></div>
+    <div class="kbd-row"><span>Créditos</span><kbd>Alt+3</kbd></div>
+    <div class="kbd-row"><span>Pagos</span><kbd>Alt+4</kbd></div>
+    <div class="kbd-row"><span>Fondeos</span><kbd>Alt+5</kbd></div>
+    <div class="kbd-row"><span>Contabilidad</span><kbd>Alt+6</kbd></div>
+    <div class="kbd-row"><span>Reportes</span><kbd>Alt+7</kbd></div>
+    <div class="kbd-row"><span>Administración</span><kbd>Alt+8</kbd></div>
+    <div class="kbd-row"><span>Mostrar esta ayuda</span><kbd>?</kbd></div>
+    <div class="kbd-row"><span>Cerrar modal/overlay</span><kbd>ESC</kbd></div>
+    <div style="margin-top:16px;text-align:right"><button class="btn btn-outline btn-sm" onclick="document.getElementById('kbdHelpOverlay').classList.remove('active')">Cerrar</button></div>
+  </div>
+</div>
+
+<!-- SPRINT J: SCROLL TO TOP -->
+<button class="scroll-top-btn" id="scrollTopBtn" onclick="document.querySelector('.content').scrollTo({top:0,behavior:'smooth'})" title="Volver arriba">
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:20px;height:20px"><polyline points="18 15 12 9 6 15"/></svg>
+</button>
+
+<!-- Storage Engine (must load before core.js) -->
+<script src="js/storage-engine.js"></script>
+
+<!-- Core Infrastructure -->
+<script src="js/core.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/permisos.js"></script>
+
+<!-- Financial & Data -->
+<script src="js/financiero.js"></script>
+<script src="js/export-import.js"></script>
+
+<!-- Navigation -->
+<script src="js/navegacion.js"></script>
+
+<!-- Modules -->
+<script src="js/modales.js"></script>
+<script src="js/dashboard.js"></script>
+<script src="js/clientes.js"></script>
+<script src="js/creditos.js"></script>
+<script src="js/pagos.js"></script>
+<script src="js/cotizador.js"></script>
+<script src="js/reestructura.js"></script>
+<script src="js/conciliacion.js"></script>
+<script src="js/fondeos.js"></script>
+<script src="js/contabilidad.js"></script>
+<script src="js/admin.js"></script>
+<script src="js/reportes.js"></script>
+<script src="js/garantias.js"></script>
+<script src="js/calendario.js"></script>
+<script src="js/aprobaciones.js"></script>
+
+<!-- Features -->
+<script src="js/exportaciones.js"></script>
+<script src="js/importacion.js"></script>
+<script src="js/ux.js"></script>
+<script src="js/notificaciones.js"></script>
+<script src="js/riesgo.js"></script>
+<script src="js/pld.js"></script>
+
+<!-- Init (must be last) -->
+<script src="js/init.js"></script>
+</body>
+</html>

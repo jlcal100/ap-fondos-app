@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>AP Fondos — Prueba de Estrés localStorage</title>
+<style>
+  body { font-family: 'Segoe UI', sans-serif; margin: 40px; background: #f5f7fa; color: #1E3050; }
+  h1 { color: #1E3050; border-bottom: 3px solid #2E75B6; padding-bottom: 8px; }
+  h2 { color: #1E3050; margin-top: 24px; }
+  .card { background: white; border-radius: 12px; padding: 24px; margin: 16px 0; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
+  .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; margin: 4px; }
+  .btn-primary { background: #2E75B6; color: white; }
+  .btn-danger { background: #C8102E; color: white; }
+  .btn-success { background: #0D9F6E; color: white; }
+  .btn-warning { background: #E3A008; color: white; }
+  .btn:hover { opacity: 0.9; }
+  pre { background: #1E3050; color: #7dd3fc; padding: 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; max-height: 400px; overflow-y: auto; }
+  .meter { height: 30px; background: #e2e8f0; border-radius: 15px; overflow: hidden; margin: 12px 0; }
+  .meter-fill { height: 100%; transition: width 0.5s; border-radius: 15px; display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; color: white; }
+  .meter-fill.green { background: #0D9F6E; }
+  .meter-fill.yellow { background: #E3A008; }
+  .meter-fill.red { background: #C8102E; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; }
+  th { background: #1E3050; color: white; padding: 10px; text-align: left; }
+  td { padding: 8px 10px; border-bottom: 1px solid #e2e8f0; }
+  tr:nth-child(even) { background: #f8fafc; }
+</style>
+</head>
+<body>
+<h1>Prueba de Estrés — localStorage</h1>
+
+<div class="card">
+  <h2>Uso Actual de Almacenamiento</h2>
+  <div class="meter"><div class="meter-fill green" id="usageMeter" style="width:0%">0%</div></div>
+  <div id="usageTable"></div>
+  <button class="btn btn-primary" onclick="refreshUsage()">Actualizar</button>
+</div>
+
+<div class="card">
+  <h2>Prueba de Estrés</h2>
+  <p>Genera datos ficticios para probar los límites de localStorage:</p>
+  <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:12px 0">
+    <label>Clientes: <input type="number" id="stClientes" value="100" style="width:80px"></label>
+    <label>Créditos: <input type="number" id="stCreditos" value="500" style="width:80px"></label>
+    <label>Pagos: <input type="number" id="stPagos" value="2000" style="width:80px"></label>
+    <label>Contabilidad: <input type="number" id="stContab" value="3000" style="width:80px"></label>
+    <label>Auditoría: <input type="number" id="stAudit" value="5000" style="width:80px"></label>
+  </div>
+  <button class="btn btn-warning" onclick="runStress()">Ejecutar Prueba de Estrés</button>
+  <button class="btn btn-danger" onclick="cleanStress()">Limpiar Datos de Prueba</button>
+  <pre id="stressOutput">Resultados aparecerán aquí...</pre>
+</div>
+
+<div class="card">
+  <h2>Archivado Automático</h2>
+  <p>Mueve registros antiguos (>6 meses) a almacenamiento de archivo para liberar espacio.</p>
+  <button class="btn btn-success" onclick="runArchive()">Ejecutar Archivado</button>
+  <button class="btn btn-danger" onclick="clearArchives()">Limpiar Archivos</button>
+  <pre id="archiveOutput">Resultados aparecerán aquí...</pre>
+</div>
+
+<div class="card">
+  <h2>Compresión</h2>
+  <p>Prueba la compresión LZW en datos de ejemplo:</p>
+  <button class="btn btn-primary" onclick="testCompression()">Probar Compresión</button>
+  <pre id="compOutput">Resultados aparecerán aquí...</pre>
+</div>
+
+<script src="storage-engine.js"></script>
+<script>
+function refreshUsage() {
+  var usage = StorageEngine.getUsage();
+  var pct = usage._percent;
+  var meter = document.getElementById('usageMeter');
+  meter.style.width = Math.max(pct, 5) + '%';
+  meter.textContent = pct + '% (' + usage._total.mb + ' MB / ' + usage._quota.mb + ' MB)';
+  meter.className = 'meter-fill ' + (pct > 90 ? 'red' : pct > 70 ? 'yellow' : 'green');
+
+  var html = '<table><tr><th>Key</th><th>Registros</th><th>Tamaño (KB)</th><th>Comprimido</th></tr>';
+  Object.keys(usage).filter(function(k){return k.indexOf('apf_') === 0}).sort().forEach(function(k) {
+    var d = usage[k];
+    var shortKey = k.replace('apf_','').replace('arch_','📦 ');
+    var compressed = StorageEngine.isCompressed(k.replace('apf_','')) ? '✓' : '—';
+    html += '<tr><td>' + shortKey + '</td><td>' + d.records + '</td><td>' + d.kb + '</td><td>' + compressed + '</td></tr>';
+  });
+  html += '<tr style="font-weight:bold"><td>TOTAL</td><td>—</td><td>' + usage._total.kb + '</td><td>—</td></tr>';
+  html += '</table>';
+  document.getElementById('usageTable').innerHTML = html;
+}
+
+function runStress() {
+  var opts = {
+    clientes: +document.getElementById('stClientes').value,
+    creditos: +document.getElementById('stCreditos').value,
+    pagos: +document.getElementById('stPagos').value,
+    contabilidad: +document.getElementById('stContab').value,
+    auditoria: +document.getElementById('stAudit').value
+  };
+  try {
+    var results = StorageEngine.stressTest(opts);
+    var out = 'PRUEBA DE ESTRÉS COMPLETADA\n';
+    out += '============================\n\n';
+    out += 'Duración: ' + results.duration + 'ms\n\n';
+    out += 'Registros generados:\n';
+    Object.keys(results.generated).forEach(function(k) {
+      out += '  ' + k + ': ' + results.generated[k] + '\n';
+    });
+    out += '\nAntes:\n  ' + results.before._total.mb + ' MB (' + results.before._percent + '%)\n';
+    out += '\nDespués:\n  ' + results.after._total.mb + ' MB (' + results.after._percent + '%)\n';
+    out += '\nIncremento: ' + (results.after._total.kb - results.before._total.kb).toFixed(2) + ' KB\n';
+
+    if (results.after._percent > 90) {
+      out += '\n⚠️ ALERTA: Almacenamiento por encima del 90%!';
+    }
+
+    document.getElementById('stressOutput').textContent = out;
+    refreshUsage();
+  } catch(e) {
+    document.getElementById('stressOutput').textContent = 'ERROR: ' + e.message;
+  }
+}
+
+function cleanStress() {
+  var removed = StorageEngine.cleanStressTest();
+  document.getElementById('stressOutput').textContent = 'Limpieza completada: ' + removed + ' registros de prueba eliminados.';
+  refreshUsage();
+}
+
+function runArchive() {
+  var before = StorageEngine.getUsage();
+  var archived = StorageEngine.autoArchive();
+  var after = StorageEngine.getUsage();
+  var out = 'ARCHIVADO AUTOMÁTICO\n';
+  out += '=====================\n\n';
+  out += 'Registros archivados: ' + archived + '\n';
+  out += 'Antes: ' + before._total.mb + ' MB\n';
+  out += 'Después: ' + after._total.mb + ' MB\n';
+  out += 'Liberado: ' + (before._total.kb - after._total.kb).toFixed(2) + ' KB\n';
+  document.getElementById('archiveOutput').textContent = out;
+  refreshUsage();
+}
+
+function clearArchives() {
+  var cleared = StorageEngine.clearAllArchives();
+  document.getElementById('archiveOutput').textContent = 'Archivos limpiados: ' + cleared + ' keys eliminadas.';
+  refreshUsage();
+}
+
+function testCompression() {
+  // Test with sample JSON data
+  var sample = JSON.stringify(StorageEngine.read('creditos').slice(0, 10));
+  if (!sample || sample === '[]') {
+    sample = JSON.stringify([{id:1,nombre:"Test",monto:1000000,tasa:0.24,plazo:12,estado:"vigente"}]);
+  }
+  var compressed = StorageEngine.compress(sample);
+  var decompressed = StorageEngine.decompress(compressed);
+  var ratio = ((1 - compressed.length / sample.length) * 100).toFixed(1);
+  var match = decompressed === sample;
+
+  var out = 'PRUEBA DE COMPRESIÓN LZW\n';
+  out += '=========================\n\n';
+  out += 'Original:    ' + sample.length + ' chars (' + (sample.length * 2 / 1024).toFixed(2) + ' KB)\n';
+  out += 'Comprimido:  ' + compressed.length + ' chars (' + (compressed.length * 2 / 1024).toFixed(2) + ' KB)\n';
+  out += 'Ratio:       ' + ratio + '% reducción\n';
+  out += 'Integridad:  ' + (match ? '✓ VERIFICADA' : '✗ ERROR - datos no coinciden') + '\n';
+
+  document.getElementById('compOutput').textContent = out;
+}
+
+// Init
+refreshUsage();
+</script>
+</body>
+</html>
