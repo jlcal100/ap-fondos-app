@@ -1,0 +1,12 @@
+{
+  "name": "ap-fondos-app",
+  "version": "1.0.0",
+  "description": "AP Operadora de Fondos - Sistema Financiero",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
