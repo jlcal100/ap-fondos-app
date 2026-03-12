@@ -275,9 +275,20 @@ function guardarTipoCambio() {
 })();
 
 function getStore(key) {
-  try { return JSON.parse(localStorage.getItem('apf_' + key)) || []; } catch { return []; }
+  // Use API client if available and logged in
+  if (typeof ApiClient !== 'undefined' && ApiClient.isLoggedIn()) {
+    return ApiClient.read(key);
+  }
+  // Fallback to localStorage
+  try { return JSON.parse(localStorage.getItem('apf_' + key)) || []; } catch(e) { return []; }
 }
 function setStore(key, data) {
+  // Use API client if available and logged in
+  if (typeof ApiClient !== 'undefined' && ApiClient.isLoggedIn()) {
+    ApiClient.write(key, data);
+    return;
+  }
+  // Fallback to localStorage
   try {
     localStorage.setItem('apf_' + key, JSON.stringify(data));
     checkStorageUsage();

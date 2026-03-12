@@ -492,6 +492,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
 </style>
 </head>
 <body>
+<div id="appContainer">
 <div class="layout">
 <!-- SIDEBAR -->
 <aside class="sidebar" id="sidebar">
@@ -1994,11 +1995,15 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
     <div style="margin-top:16px;text-align:right"><button class="btn btn-outline btn-sm" onclick="document.getElementById('kbdHelpOverlay').classList.remove('active')">Cerrar</button></div>
   </div>
 </div>
+</div>
 
 <!-- SPRINT J: SCROLL TO TOP -->
 <button class="scroll-top-btn" id="scrollTopBtn" onclick="document.querySelector('.content').scrollTo({top:0,behavior:'smooth'})" title="Volver arriba">
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:20px;height:20px"><polyline points="18 15 12 9 6 15"/></svg>
 </button>
+
+<!-- API Client (must load before core.js) -->
+<script src="js/api-client.js?v=2"></script>
 
 <!-- Storage Engine (must load before core.js) -->
 <script src="js/storage-engine.js?v=2"></script>
@@ -2045,5 +2050,26 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
 
 <!-- Init (must be last) -->
 <script src="js/init.js?v=2"></script>
+
+<!-- Authentication Check -->
+<script>
+// Check authentication on page load
+(function() {
+  if (ApiClient.isLoggedIn()) {
+    // Already logged in - load data and show app
+    ApiClient.loadAllData().then(function() {
+      var user = ApiClient.getUser();
+      if (user) window.currentUser = user;
+      if (typeof renderDashboard === 'function') renderDashboard();
+    }).catch(function() {
+      // Token expired - show login
+      showLoginScreen();
+    });
+  } else {
+    // Not logged in - show login screen
+    showLoginScreen();
+  }
+})();
+</script>
 </body>
 </html>
