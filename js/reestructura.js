@@ -171,3 +171,134 @@ function renderEscenariosReestructura(cred, escenarios, moraInfo) {
   addAudit('Simulación', 'Reestructura', 'Análisis de ' + escenarios.length + ' escenarios para crédito ' + cred.numero);
 }
 
+// ============================================================
+//  REESTRUCTURACIÓN DE CRÉDITOS
+// ============================================================
+function abrirRestructura(creditoId) {
+  var creditos = getStore('creditos');
+  var c = creditos.find(function(cr) { return cr.id === creditoId; });
+  if (!c) return toast('Crédito no encontrado', 'error');
+  _reestructCreditoId = creditoId;
+
+  var saldo = c.saldoActual || c.saldo || c.monto;
+  var html = '<div style="margin-bottom:16px;padding:12px;background:var(--gray-50);border-radius:8px">';
+  html += '<strong>Crédito:</strong> ' + esc(c.numero) + ' | <strong>Saldo actual:</strong> ' + fmt(saldo) + ' | <strong>Tasa actual:</strong> ' + ((c.tasa || 0) * 100).toFixed(2) + '% | <strong>Estado:</strong> ' + c.estado;
+  html += ' | <strong>Días mora:</strong> ' + (c.diasMora || 0);
+  html += '</div>';
+  html += '<div class="form-row-3">';
+  html += '<div class="form-group"><label class="form-label">Nuevo saldo (después de quita)</label><input type="text" class="form-input" id="restNuevoSaldo" value="' + saldo.toLocaleString('es-MX') + '" oninput="formatMiles(this)"></div>';
+  html += '<div class="form-group"><label class="form-label">Quita / Condonación</label><input type="text" class="form-input" id="restQuita" value="0" oninput="formatMiles(this)"><small style="color:var(--text-muted)">Monto a condonar</small></div>';
+  html += '<div class="form-group"><label class="form-label">Nueva tasa anual (%)</label><input type="number" class="form-input" id="restTasa" value="' + ((c.tasa ? c.tasa * 100 : 24)).toFixed(2) + '" min="0" step="0.5"></div>';
+  html += '</div>';
+  html += '<div class="form-row-3">';
+  html += '<div class="form-group"><label class="form-label">Nuevo plazo (meses)</label><input type="number" class="form-input" id="restPlazo" value="' + (c.plazo || 24) + '" min="1" max="360"></div>';
+  html += '<div class="form-group"><label class="form-label">Periodicidad</label><select class="form-select" id="restPeriodicidad"><option value="mensual"' + (c.periodicidad === 'mensual' ? ' selected' : '') + '>Mensual</option><option value="quincenal"' + (c.periodicidad === 'quincenal' ? ' selected' : '') + '>Quincenal</option><option value="semanal"' + (c.periodicidad === 'semanal' ? ' selected' : '') + '>Semanal</option></select></div>';
+  html += '<div class="form-group"><label class="form-label">Fecha inicio nueva tabla</label><input type="date" class="form-input" id="restFecha" value="' + new Date().toISOString().split('T')[0] + '"></div>';
+  html += '</div>';
+  html += '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Motivo de reestructura</label><textarea class="form-input" id="restMotivo" rows="2" placeholder="Razón de la reestructuración..."></textarea></div>';
+  html += '<div style="display:flex;gap:8px"><button class="btn btn-red" onclick="ejecutarRestructura()">Confirmar Reestructura</button><button class="btn btn-outline" onclick="closeModal(\'modalGenerico\')">Cancelar</button></div>';
+
+  openModal('modalGenerico');
+  document.getElementById('modalGenericoTitle').textContent = '🔄 Reestructuración de Crédito';
+  document.getElementById('modalGenericoBody').innerHTML = html;
+}
+
+function ejecutarRestructura() {
+  if (!_reestructCreditoId) return;
+  var nuevoSaldo = parseMilesVal(document.getElementById('restNuevoSaldo').value);
+  var quita = parseMilesVal(document.getElementById('restQuita').value);
+  var nuevaTasa = parseFloat(document.getElementById('restTasa').value);
+  var nuevoPlazo = parseInt(document.getElementById('restPlazo').value);
+  var periodicidad = document.getElementById('restPeriodicidad').value;
+  var fechaInicio = document.getElementById('restFecha').value;
+  var motivo = document.getElementById('restMotivo').value.trim();
+
+  if (nuevoSaldo <= 0) return toast('El nuevo saldo debe ser mayor a 0', 'warning');
+  if (nuevaTasa < 0) return toast('La tasa no puede ser negativa', 'warning');
+  if (nuevoPlazo < 1) return toast('El plazo debe ser al menos 1 mes', 'warning');
+  if (!motivo) return toast('Indica el motivo de la reestructura', 'warning');
+
+  // PLD: Verificar alertas pendientes del cliente antes de reestructurar
+  var cOrigPLD = getStore('creditos').find(function(cr) { return cr.id === _reestructCreditoId; });
+  if (cOrigPLD) {
+    var pldRest = getStore('pld') || [];
+    var alertasRestPLD = pldRest.filter(function(a) {
+      return a.clienteId === cOrigPLD.clienteId && a.estado !== 'revisado' && a.estado !== 'descartado';
+    });
+    if (alertasRestPLD.length > 0) {
+      var cliRestPLD = getStore('clientes').find(function(cl) { return cl.id === cOrigPLD.clienteId; });
+      var descRestPLD = (cOrigPLD.numero || '#' + _reestructCreditoId) + ' — ' + (cliRestPLD ? cliRestPLD.nombre : 'Cliente #' + cOrigPLD.clienteId) + ' — Reestructura ' + fmt(nuevoSaldo) + (quita > 0 ? ' (Quita ' + fmt(quita) + ')' : '') + ' [ALERTA PLD]';
+      crearSolicitudAprobacion('reestructura_quita', { creditoId: _reestructCreditoId, nuevoSaldo: nuevoSaldo, quita: quita, nuevaTasa: nuevaTasa, nuevoPlazo: nuevoPlazo, periodicidad: periodicidad, fechaInicio: fechaInicio, motivo: motivo, alertaPLD: true }, nuevoSaldo, descRestPLD);
+      _forceCloseModal('modalGenerico');
+      toast('Reestructura enviada a aprobación obligatoria por alerta PLD del cliente (' + alertasRestPLD.length + ' alertas)', 'warning');
+      addAudit('Reestructura bloqueada por PLD', 'PLD', (cOrigPLD.numero || '#' + _reestructCreditoId) + ': ' + alertasRestPLD.length + ' alertas pendientes');
+      refreshNotifications();
+      return;
+    }
+  }
+
+  // Gate de aprobación para quitas significativas
+  if (quita >= (window.APROB_UMBRAL_CREDITO || 500000)) {
+    var cOrig = getStore('creditos').find(function(cr) { return cr.id === _reestructCreditoId; });
+    var desc = (cOrig ? cOrig.numero : '#' + _reestructCreditoId) + ' — Quita: ' + fmt(quita) + ', Nuevo saldo: ' + fmt(nuevoSaldo);
+    crearSolicitudAprobacion('reestructura_quita', { creditoId: _reestructCreditoId, nuevoSaldo: nuevoSaldo, quita: quita, nuevaTasa: nuevaTasa, nuevoPlazo: nuevoPlazo, periodicidad: periodicidad, fechaInicio: fechaInicio, motivo: motivo }, quita, desc);
+    _forceCloseModal('modalGenerico');
+    toast('Reestructura con quita de ' + fmt(quita) + ' enviada a aprobación', 'info');
+    refreshNotifications();
+    return;
+  }
+
+  if (!confirm('¿Confirmas reestructurar este crédito?\n\nNuevo saldo: ' + fmt(nuevoSaldo) + '\nQuita: ' + fmt(quita) + '\nNueva tasa: ' + nuevaTasa + '%\nNuevo plazo: ' + nuevoPlazo + ' meses')) return;
+
+  var creditos = getStore('creditos');
+  creditos = creditos.map(function(c) {
+    if (c.id !== _reestructCreditoId) return c;
+    var snapshot = {
+      fecha: new Date().toISOString(), saldoAnterior: c.saldoActual || c.saldo || c.monto,
+      tasaAnterior: c.tasa, plazoAnterior: c.plazo, estadoAnterior: c.estado,
+      diasMoraAnterior: c.diasMora || 0, nuevoSaldo: nuevoSaldo, quita: quita,
+      nuevaTasa: nuevaTasa, nuevoPlazo: nuevoPlazo, periodicidad: periodicidad,
+      motivo: motivo, usuario: currentUser ? currentUser.nombre : 'Sistema'
+    };
+    if (!c.reestructuras) c.reestructuras = [];
+    c.reestructuras.push(snapshot);
+    c.saldo = nuevoSaldo; c.saldoActual = nuevoSaldo; c.tasa = nuevaTasa / 100;
+    c.plazo = nuevoPlazo; c.periodicidad = periodicidad; c.estado = 'vigente';
+    c.diasMora = 0; c.reestructurado = true; c.numReestructuras = (c.numReestructuras || 0) + 1;
+    var nuevaAmort = generarAmortizacion(nuevoSaldo, nuevaTasa / 100, nuevoPlazo, periodicidad, fechaInicio, c.valorResidual || 0, 16, c.tipo);
+    c.amortizacion = nuevaAmort;
+    c.pago = +calcPago(nuevoSaldo, nuevaTasa / 100, nuevoPlazo, periodicidad, c.valorResidual || 0, c.tipo).toFixed(2);
+    c.fechaVencimiento = nuevaAmort[nuevaAmort.length - 1].fecha;
+    return c;
+  });
+  setStore('creditos', creditos);
+
+  if (quita > 0) {
+    var contab = getStore('contabilidad');
+    var polQuita = POLIZA_MAP['quita_reestructura'];
+    contab.push({
+      id: nextId('contabilidad'), fecha: fechaInicio, tipo: 'quita_reestructura',
+      concepto: 'Quita por reestructura — Crédito #' + _reestructCreditoId,
+      monto: -quita, cuentaDebe: polQuita.debe, cuentaHaber: polQuita.haber,
+      creditoId: _reestructCreditoId, referencia: 'REST-' + _reestructCreditoId,
+      createdAt: new Date().toISOString()
+    });
+    setStore('contabilidad', contab);
+  }
+
+  var bitacora = getStore('bitacora');
+  bitacora.push({
+    id: nextId('bitacora'), creditoId: _reestructCreditoId, categoria: 'reestructura',
+    prioridad: 'alta',
+    comentario: 'Reestructura aplicada: Nuevo saldo ' + fmt(nuevoSaldo) + (quita > 0 ? ', Quita ' + fmt(quita) : '') + ', Tasa ' + nuevaTasa + '%, Plazo ' + nuevoPlazo + 'm. Motivo: ' + motivo,
+    fechaSeguimiento: null, usuario: currentUser ? currentUser.nombre : 'Sistema',
+    createdAt: new Date().toISOString()
+  });
+  setStore('bitacora', bitacora);
+
+  addAudit('Reestructurar', 'Créditos', 'Crédito #' + _reestructCreditoId + ' — Saldo: ' + fmt(nuevoSaldo) + ', Quita: ' + fmt(quita) + ', Tasa: ' + nuevaTasa + '%');
+  _forceCloseModal('modalGenerico');
+  toast('Crédito reestructurado exitosamente', 'success');
+  verCredito(_reestructCreditoId);
+  _reestructCreditoId = null;
+}

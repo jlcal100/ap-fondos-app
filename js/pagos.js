@@ -1,5 +1,15 @@
 //  PAGOS
 // ============================================================
+
+// Navegar a la sección de pagos con un crédito preseleccionado
+function irAPagar(creditoId) {
+  showPage('pagos');
+  setTimeout(() => {
+    document.getElementById('pagoCredito').value = creditoId;
+    renderPagosCredito();
+  }, 100);
+}
+
 function populatePagoSelect() {
   const creditos = getStore('creditos').filter(c => c.estado === 'vigente' || c.estado === 'vencido');
   const clientes = getStore('clientes');

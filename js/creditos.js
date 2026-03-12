@@ -356,4 +356,153 @@ function marcarVencido(id) {
   verCredito(id);
 }
 
+// ============================================================
+//  HISTORIAL DE REESTRUCTURAS (para detalle de crédito)
+// ============================================================
+function renderRestructurasHTML(creditoId) {
+  var c = getStore('creditos').find(function(cr) { return cr.id === creditoId; });
+  if (!c || !c.reestructuras || c.reestructuras.length === 0) return '';
 
+  var html = '<div class="card" style="margin-top:20px;border-left:4px solid #8B5CF6">';
+  html += '<div class="card-header"><span class="card-title">🔄 Historial de Reestructuras (' + c.reestructuras.length + ')</span></div>';
+  html += '<div style="max-height:300px;overflow-y:auto">';
+  c.reestructuras.slice().reverse().forEach(function(r, idx) {
+    var fecha = new Date(r.fecha);
+    var fechaStr = fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' });
+    html += '<div style="padding:12px 16px;border-bottom:1px solid var(--border)">';
+    html += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">';
+    html += '<strong style="color:#8B5CF6">Reestructura #' + (c.reestructuras.length - idx) + '</strong>';
+    html += '<span style="font-size:12px;color:var(--text-muted)">' + fechaStr + ' — ' + esc(r.usuario) + '</span></div>';
+    html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:8px;font-size:12px">';
+    html += '<div><span style="color:var(--text-muted)">Saldo anterior:</span> ' + fmt(r.saldoAnterior) + '</div>';
+    html += '<div><span style="color:var(--text-muted)">Nuevo saldo:</span> <strong>' + fmt(r.nuevoSaldo) + '</strong></div>';
+    if (r.quita > 0) html += '<div><span style="color:#EF4444">Quita:</span> <strong style="color:#EF4444">' + fmt(r.quita) + '</strong></div>';
+    html += '<div><span style="color:var(--text-muted)">Tasa:</span> ' + (r.tasaAnterior < 1 ? (r.tasaAnterior * 100).toFixed(2) : r.tasaAnterior) + '% → <strong>' + r.nuevaTasa + '%</strong></div>';
+    html += '<div><span style="color:var(--text-muted)">Plazo:</span> ' + r.plazoAnterior + ' → <strong>' + r.nuevoPlazo + ' meses</strong></div>';
+    html += '<div><span style="color:var(--text-muted)">Mora anterior:</span> ' + r.diasMoraAnterior + ' días</div>';
+    html += '</div>';
+    html += '<div style="margin-top:8px;font-size:12px;color:var(--text-muted)"><em>Motivo: ' + esc(r.motivo) + '</em></div>';
+    html += '</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+// ============================================================
+//  BITÁCORA DE GESTIÓN Y COMENTARIOS
+// ============================================================
+var BITACORA_CATEGORIAS = {
+  seguimiento: { label: 'Seguimiento', icon: '📋', color: '#3B82F6' },
+  cobranza: { label: 'Cobranza', icon: '💰', color: '#F59E0B' },
+  reestructura: { label: 'Reestructura', icon: '🔄', color: '#8B5CF6' },
+  legal: { label: 'Legal', icon: '⚖️', color: '#EF4444' },
+  garantia: { label: 'Garantía', icon: '🛡️', color: '#0D9F6E' },
+  cliente: { label: 'Cliente', icon: '👤', color: '#EC4899' },
+  nota: { label: 'Nota general', icon: '📝', color: '#6B7280' }
+};
+
+function renderBitacoraHTML(creditoId) {
+  var notas = getStore('bitacora').filter(function(n) { return n.creditoId === creditoId; });
+  notas.sort(function(a, b) { return b.createdAt.localeCompare(a.createdAt); });
+
+  var html = '<div class="card" style="margin-top:20px">';
+  html += '<div class="card-header"><span class="card-title">📋 Bitácora de Gestión</span>';
+  html += '<button class="btn btn-primary btn-sm" onclick="abrirFormBitacora(' + creditoId + ')">+ Nueva Nota</button></div>';
+
+  // Formulario inline (oculto por defecto)
+  html += '<div id="formBitacora_' + creditoId + '" style="display:none;padding:16px;background:var(--gray-50);border-radius:8px;margin-bottom:12px">';
+  html += '<div class="form-row-3">';
+  html += '<div class="form-group"><label class="form-label">Categoría</label><select class="form-select" id="bitCat_' + creditoId + '">';
+  Object.keys(BITACORA_CATEGORIAS).forEach(function(k) {
+    var cat = BITACORA_CATEGORIAS[k];
+    html += '<option value="' + k + '">' + cat.icon + ' ' + cat.label + '</option>';
+  });
+  html += '</select></div>';
+  html += '<div class="form-group"><label class="form-label">Prioridad</label><select class="form-select" id="bitPrior_' + creditoId + '"><option value="normal">Normal</option><option value="alta">Alta</option><option value="urgente">Urgente</option></select></div>';
+  html += '<div class="form-group"><label class="form-label">Fecha seguimiento</label><input type="date" class="form-input" id="bitFechaSeg_' + creditoId + '"></div>';
+  html += '</div>';
+  html += '<div class="form-group" style="margin-bottom:8px"><label class="form-label">Comentario</label><textarea class="form-input" id="bitComentario_' + creditoId + '" rows="3" placeholder="Escribe tu nota o comentario..."></textarea></div>';
+  html += '<div style="display:flex;gap:8px"><button class="btn btn-red btn-sm" onclick="guardarNotaBitacora(' + creditoId + ')">Guardar</button>';
+  html += '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'formBitacora_' + creditoId + '\').style.display=\'none\'">Cancelar</button></div>';
+  html += '</div>';
+
+  // Lista de notas
+  if (notas.length === 0) {
+    html += '<p style="text-align:center;color:var(--text-muted);padding:20px">Sin notas registradas en la bitácora</p>';
+  } else {
+    html += '<div style="max-height:400px;overflow-y:auto">';
+    notas.forEach(function(n) {
+      var cat = BITACORA_CATEGORIAS[n.categoria] || BITACORA_CATEGORIAS.nota;
+      var priorBadge = n.prioridad === 'urgente' ? '<span class="badge" style="background:#EF4444;color:#fff;font-size:9px;margin-left:6px">URGENTE</span>' :
+        n.prioridad === 'alta' ? '<span class="badge" style="background:#F59E0B;color:#fff;font-size:9px;margin-left:6px">ALTA</span>' : '';
+      var segBadge = n.fechaSeguimiento ? '<span style="color:var(--text-muted);font-size:11px;margin-left:8px">📅 Seguimiento: ' + n.fechaSeguimiento + '</span>' : '';
+      var fecha = new Date(n.createdAt);
+      var fechaStr = fecha.toLocaleDateString('es-MX', { day: '2-digit', month: 'short', year: 'numeric' }) + ' ' + fecha.toLocaleTimeString('es-MX', { hour: '2-digit', minute: '2-digit' });
+
+      html += '<div style="padding:12px 16px;border-left:3px solid ' + cat.color + ';margin-bottom:8px;background:var(--gray-50);border-radius:0 8px 8px 0">';
+      html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px">';
+      html += '<div>' + cat.icon + ' <strong style="font-size:13px">' + cat.label + '</strong>' + priorBadge + segBadge + '</div>';
+      html += '<div style="display:flex;align-items:center;gap:8px"><span style="font-size:11px;color:var(--text-muted)">' + fechaStr + ' — ' + esc(n.usuario || 'Sistema') + '</span>';
+      html += '<button class="btn btn-outline btn-sm" onclick="eliminarNotaBitacora(' + n.id + ',' + creditoId + ')" style="padding:2px 6px;font-size:11px" title="Eliminar">✕</button></div>';
+      html += '</div>';
+      html += '<p style="margin:0;font-size:13px;color:var(--text-primary);white-space:pre-wrap">' + esc(n.comentario) + '</p>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  html += '<div style="padding:8px;text-align:right;color:var(--text-muted);font-size:11px">' + notas.length + ' nota(s) registrada(s)</div>';
+  html += '</div>';
+  return html;
+}
+
+function abrirFormBitacora(creditoId) {
+  var form = document.getElementById('formBitacora_' + creditoId);
+  if (form) {
+    form.style.display = form.style.display === 'none' ? '' : 'none';
+    if (form.style.display !== 'none') {
+      document.getElementById('bitComentario_' + creditoId).value = '';
+      document.getElementById('bitCat_' + creditoId).value = 'seguimiento';
+      document.getElementById('bitPrior_' + creditoId).value = 'normal';
+      document.getElementById('bitFechaSeg_' + creditoId).value = '';
+    }
+  }
+}
+
+function guardarNotaBitacora(creditoId) {
+  var comentario = document.getElementById('bitComentario_' + creditoId).value.trim();
+  if (!comentario) { toast('Escribe un comentario', 'warning'); return; }
+  var categoria = document.getElementById('bitCat_' + creditoId).value;
+  var prioridad = document.getElementById('bitPrior_' + creditoId).value;
+  var fechaSeg = document.getElementById('bitFechaSeg_' + creditoId).value || null;
+
+  var bitacora = getStore('bitacora');
+  var nota = {
+    id: nextId('bitacora'),
+    creditoId: creditoId,
+    categoria: categoria,
+    prioridad: prioridad,
+    comentario: comentario,
+    fechaSeguimiento: fechaSeg,
+    usuario: currentUser ? currentUser.nombre : 'Sistema',
+    createdAt: new Date().toISOString()
+  };
+  bitacora.push(nota);
+  setStore('bitacora', bitacora);
+
+  var cred = getStore('creditos').find(function(c) { return c.id === creditoId; });
+  addAudit('Crear', 'Bitácora', (BITACORA_CATEGORIAS[categoria] || {}).label + ' — Crédito ' + (cred ? cred.numero : creditoId));
+  toast('Nota guardada en bitácora', 'success');
+
+  // Re-render la sección de bitácora
+  verCredito(creditoId);
+}
+
+function eliminarNotaBitacora(notaId, creditoId) {
+  if (!confirm('¿Eliminar esta nota de la bitácora?')) return;
+  var bitacora = getStore('bitacora');
+  bitacora = bitacora.filter(function(n) { return n.id !== notaId; });
+  setStore('bitacora', bitacora);
+  addAudit('Eliminar', 'Bitácora', 'Nota #' + notaId);
+  toast('Nota eliminada', 'success');
+  verCredito(creditoId);
+}
