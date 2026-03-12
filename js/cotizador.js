@@ -128,15 +128,25 @@ function exportCotizacionPDF() {
     doc.setTextColor(100);
     doc.text('Cotización Financiera', 20, 28);
 
+    // Destinatario
+    const destinatario = (document.getElementById('cotDestinatario') ? document.getElementById('cotDestinatario').value.trim() : '');
+    let yOffset = 34;
+    if (destinatario) {
+      doc.setFontSize(10);
+      doc.setTextColor(30, 48, 80);
+      doc.text('Dirigido a: ' + destinatario, 20, yOffset);
+      yOffset += 6;
+    }
+
     // Info
     doc.setFontSize(10);
     doc.setTextColor(0);
     const cot = lastCotizacion;
-    doc.text('Producto: ' + (tipoLabel[cot.tipo] || cot.tipo), 20, 38);
-    doc.text('Monto: ' + fmt(cot.monto) + '  |  Tasa: ' + (cot.tasa * 100).toFixed(2) + '%  |  Plazo: ' + cot.plazo + ' meses  |  CAT: ' + (cot.catPct || '0.0') + '%', 20, 44);
+    doc.text('Producto: ' + (tipoLabel[cot.tipo] || cot.tipo), 20, yOffset + 4);
+    doc.text('Monto: ' + fmt(cot.monto) + '  |  Tasa: ' + (cot.tasa * 100).toFixed(2) + '%  |  Plazo: ' + cot.plazo + ' meses  |  CAT: ' + (cot.catPct || '0.0') + '%', 20, yOffset + 10);
 
     // Summary boxes
-    let y = 52;
+    let y = yOffset + 18;
     const boxes = [
       ['Pago Periódico', fmt(cot.pagoP)],
       ['Total Intereses', fmt(cot.totalIntereses)],
@@ -180,10 +190,11 @@ function exportCotizacionPDF() {
 
 function guardarCotizacion() {
   if (!lastCotizacion) return;
+  const destinatario = (document.getElementById('cotDestinatario') ? document.getElementById('cotDestinatario').value.trim() : '');
   const cots = getStore('cotizaciones');
-  cots.push({ id: cots.length + 1, ...lastCotizacion, createdAt: new Date().toISOString() });
+  cots.push({ id: cots.length + 1, ...lastCotizacion, destinatario: destinatario, createdAt: new Date().toISOString() });
   setStore('cotizaciones', cots);
-  addAudit('Guardar', 'Cotizador', `${tipoLabel[lastCotizacion.tipo]} - ${fmt(lastCotizacion.monto)}`);
+  addAudit('Guardar', 'Cotizador', `${tipoLabel[lastCotizacion.tipo]} - ${fmt(lastCotizacion.monto)}${destinatario ? ' — ' + destinatario : ''}`);
   toast('Cotización guardada exitosamente', 'success');
 }
 
