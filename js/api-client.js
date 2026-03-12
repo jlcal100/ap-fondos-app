@@ -181,7 +181,7 @@ function showLoginScreen() {
       '<input type="password" id="loginPass" style="width:100%;padding:10px 14px;border:1px solid #ddd;border-radius:8px;font-size:14px;box-sizing:border-box" placeholder="Ingresa tu contraseña">' +
       '</div>' +
       '<button id="loginBtn" onclick="doLogin()" style="width:100%;padding:12px;background:#C8102E;color:#fff;border:none;border-radius:8px;font-size:15px;font-weight:600;cursor:pointer">Iniciar Sesión</button>' +
-      '<div style="text-align:center;margin-top:16px;color:#999;font-size:11px">© 2026 AP Operadora de Fondos, SOFOM E.N.R.</div>' +
+      '<div style="text-align:center;margin-top:16px;color:#999;font-size:11px">© 2026 AP Operadora de Fondos, S.A. de C.V.</div>' +
       '</div></div>';
     document.body.appendChild(loginDiv);
 
