@@ -10707,7 +10707,7 @@ var IMPORT_COLUMNS = {
   },
   creditos: {
     required: ['cliente_rfc', 'tipo_credito', 'monto', 'tasa', 'plazo', 'periodicidad', 'fecha_inicio'],
-    optional: ['tasa_mora', 'valor_residual', 'valor_equipo', 'comision', 'fondeo', 'moneda', 'garantia', 'notas'],
+    optional: ['tasa_mora', 'valor_residual', 'valor_equipo', 'comision', 'fondeo', 'moneda', 'garantia', 'pagos_realizados', 'saldo_actual', 'estado_credito', 'dias_mora', 'fecha_ultimo_pago', 'notas'],
     aliases: {
       'cliente_rfc': ['cliente_rfc', 'rfc', 'rfc_cliente', 'cliente (rfc)', 'cliente rfc', 'rfc cliente'],
       'tipo_credito': ['tipo_credito', 'tipo', 'tipo credito', 'tipo crédito', 'producto', 'tipo_producto'],
@@ -10723,6 +10723,11 @@ var IMPORT_COLUMNS = {
       'fondeo': ['fondeo', 'fuente', 'linea_fondeo', 'línea fondeo'],
       'moneda': ['moneda', 'currency', 'divisa'],
       'garantia': ['garantia', 'garantía', 'collateral'],
+      'pagos_realizados': ['pagos_realizados', 'pagos realizados', 'pagos', 'cuotas_pagadas', 'cuotas pagadas', 'periodos_pagados'],
+      'saldo_actual': ['saldo_actual', 'saldo actual', 'saldo', 'saldo_insoluto', 'saldo insoluto', 'balance'],
+      'estado_credito': ['estado_credito', 'estado', 'status', 'estado crédito', 'estado credito'],
+      'dias_mora': ['dias_mora', 'días mora', 'dias mora', 'mora_dias', 'atraso'],
+      'fecha_ultimo_pago': ['fecha_ultimo_pago', 'fecha último pago', 'fecha ultimo pago', 'ultimo_pago', 'último pago', 'last_payment'],
       'notas': ['notas', 'notes', 'observaciones', 'comentarios']
     }
   },
@@ -10940,6 +10945,16 @@ function processImportData(rawData, tipo) {
       // Moneda
       row.moneda = (row.moneda || 'MXN').toUpperCase().trim();
       if (['MXN', 'USD'].indexOf(row.moneda) === -1) row.moneda = 'MXN';
+      // Campos de progreso
+      row.pagos_realizados = parseInt(row.pagos_realizados) || 0;
+      if (row.pagos_realizados > row.plazo) errors.push('Pagos realizados (' + row.pagos_realizados + ') > plazo (' + row.plazo + ')');
+      row.saldo_actual = parseFloat(String(row.saldo_actual || '0').replace(/[,$\s]/g, '')) || 0;
+      var estadosValidos = ['vigente', 'vencido', 'reestructurado', 'liquidado'];
+      row.estado_credito = (row.estado_credito || 'vigente').toLowerCase().trim();
+      if (estadosValidos.indexOf(row.estado_credito) === -1) row.estado_credito = 'vigente';
+      row.dias_mora = parseInt(row.dias_mora) || 0;
+      row.fecha_ultimo_pago = row.fecha_ultimo_pago || '';
+      if (row.fecha_ultimo_pago instanceof Date) row.fecha_ultimo_pago = row.fecha_ultimo_pago.toISOString().split('T')[0];
     } else if (tipo === 'fondeos') {
       if (!row.fondeador || row.fondeador.length < 2) errors.push('Fondeador inválido');
       row.monto = parseFloat(String(row.monto).replace(/[,$\s]/g, '')) || 0;
@@ -11101,26 +11116,47 @@ function ejecutarImport() {
       var tasaMoraDecimal = row.tasa_mora / 100;
       var credito;
       if (row.tipo_credito === 'cuenta_corriente') {
+        // Cuenta corriente: saldo = disposiciones - pagos
+        var saldoCC = row.saldo_actual || 0;
         credito = {
           id: id, numero: numero, clienteId: row._clienteId, tipo: row.tipo_credito,
           monto: row.monto, tasa: tasaDecimal, tasaMoratoria: tasaMoraDecimal,
           plazo: row.plazo, periodicidad: 'diario', fechaInicio: fechaInicio,
-          estado: 'vigente', saldo: 0, limite: row.monto, disponible: row.monto,
-          disposiciones: [], comision: row.comision,
+          estado: row.estado_credito || 'vigente', saldo: saldoCC, limite: row.monto,
+          disponible: row.monto - saldoCC, disposiciones: [], comision: row.comision,
           fechaVencimiento: addMonths(new Date(fechaInicio), row.plazo),
           esRevolvente: true, moneda: row.moneda || 'MXN',
+          diasMora: row.dias_mora || 0,
           notas: row.notas || '', createdAt: new Date().toISOString()
         };
       } else {
         credito = crearCreditoObj(id, numero, row._clienteId, row.tipo_credito, row.monto, tasaDecimal, tasaMoraDecimal, row.plazo, row.periodicidad, fechaInicio, row.valor_residual, row.valor_equipo, row.comision);
         credito.moneda = row.moneda || 'MXN';
+        // ── Marcar pagos realizados y ajustar saldo ──
+        if (row.pagos_realizados > 0 && credito.amortizacion && credito.amortizacion.length > 0) {
+          var pagosHechos = Math.min(row.pagos_realizados, credito.amortizacion.length);
+          for (var pi = 0; pi < pagosHechos; pi++) {
+            credito.amortizacion[pi].pagado = true;
+          }
+          // Actualizar saldo: usar saldo_actual del Excel si se proporcionó, sino calcular del schedule
+          if (row.saldo_actual > 0) {
+            credito.saldo = row.saldo_actual;
+          } else {
+            // Saldo = saldoFinal del último periodo pagado
+            credito.saldo = credito.amortizacion[pagosHechos - 1].saldoFinal;
+          }
+        }
+        // Aplicar estado y mora del Excel
+        credito.estado = row.estado_credito || 'vigente';
+        credito.diasMora = row.dias_mora || 0;
+        if (row.fecha_ultimo_pago) credito.fechaUltimoPago = row.fecha_ultimo_pago;
       }
       // Vincular fondeo si se especificó
       if (row.fondeo) {
-        var fondeos = getStore('fondeos');
-        var fondeoMatch = fondeos.find(function(f) {
+        var fondeosList = getStore('fondeos');
+        var fondeoMatch = fondeosList.find(function(f) {
           return f.fondeador && f.fondeador.toLowerCase().indexOf(row.fondeo.toLowerCase()) !== -1;
-        }) || fondeos.find(function(f) {
+        }) || fondeosList.find(function(f) {
           return f.numero && f.numero.toLowerCase() === row.fondeo.toLowerCase();
         });
         if (fondeoMatch) credito.fondeoId = fondeoMatch.id;
@@ -11205,10 +11241,10 @@ function descargarPlantilla(tipo) {
     ];
     sheetName = 'Clientes';
   } else if (tipo === 'creditos') {
-    headers = ['cliente_rfc', 'tipo_credito', 'monto', 'tasa', 'tasa_mora', 'plazo', 'periodicidad', 'fecha_inicio', 'valor_residual', 'valor_equipo', 'comision', 'fondeo', 'moneda', 'garantia', 'notas'];
+    headers = ['cliente_rfc', 'tipo_credito', 'monto', 'tasa', 'tasa_mora', 'plazo', 'periodicidad', 'fecha_inicio', 'valor_residual', 'valor_equipo', 'comision', 'moneda', 'garantia', 'pagos_realizados', 'saldo_actual', 'estado_credito', 'dias_mora', 'fecha_ultimo_pago', 'fondeo', 'notas'];
     sampleData = [
-      ['GIN200101ABC', 'Crédito Simple', 1500000, 24, 36, 12, 'mensual', '2025-01-15', 0, 0, 15000, '', 'MXN', 'Inmueble', ''],
-      ['LOHM850315ABC', 'Arrendamiento', 800000, 18, 28, 24, 'mensual', '2025-03-01', 10, 900000, 8000, '', 'MXN', 'Equipo', 'Leasing operativo']
+      ['GIN200101ABC', 'credito_simple', 1500000, 24, 36, 24, 'mensual', '2025-01-15', 0, 0, 15000, 'MXN', 'Inmueble', 14, 662500, 'vigente', 0, '2026-03-15', '', 'Capital de trabajo'],
+      ['LOHM850315ABC', 'arrendamiento', 800000, 18, 28, 36, 'mensual', '2025-03-01', 10, 900000, 8000, 'MXN', 'Equipo', 12, 540000, 'vigente', 0, '2026-03-01', '', 'Leasing - 12 pagos hechos']
     ];
     sheetName = 'Créditos';
   } else if (tipo === 'fondeos') {
