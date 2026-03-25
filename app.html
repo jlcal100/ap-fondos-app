@@ -1537,18 +1537,18 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
               <h4 style="margin:0 0 12px;color:#92400E">3. Historial Crediticio</h4>
               <div class="form-grid">
                 <div class="form-group">
-                  <label class="form-label">Score Buró de Crédito *</label>
-                  <input type="number" class="form-input" id="scorBuro" min="300" max="850" placeholder="300-850">
-                  <small style="color:var(--gray-400);font-size:11px">300 = Muy bajo · 550 = Regular · 650 = Bueno · 750+ = Excelente</small>
+                  <label class="form-label">Score Buró de Crédito</label>
+                  <input type="number" class="form-input" id="scorBuro" min="300" max="850" placeholder="Opcional (300-850)">
+                  <small style="color:var(--gray-400);font-size:11px">Si el cliente lo tiene. 550 = Regular · 650 = Bueno · 750+ = Excelente</small>
                 </div>
                 <div class="form-group">
                   <label class="form-label">Créditos Vigentes en Buró</label>
                   <input type="number" class="form-input" id="scorCreditosVigentes" min="0" max="50" placeholder="0">
                 </div>
                 <div class="form-group">
-                  <label class="form-label">Atrasos últimos 12 meses (Buró)</label>
+                  <label class="form-label">Atrasos reportados últimos 12 meses</label>
                   <select class="form-input form-select" id="scorAtrasos">
-                    <option value="0">Ninguno</option>
+                    <option value="0">Ninguno / No se sabe</option>
                     <option value="1">1 atraso menor (1-29 días)</option>
                     <option value="2">2-3 atrasos menores</option>
                     <option value="3">Atrasos moderados (30-89 días)</option>
@@ -1559,11 +1559,54 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
                 <div class="form-group">
                   <label class="form-label">Experiencia crediticia (años)</label>
                   <input type="number" class="form-input" id="scorExpCredito" min="0" max="50" placeholder="0">
-                  <small style="color:var(--gray-400);font-size:11px">Antigüedad del primer crédito en buró</small>
+                  <small style="color:var(--gray-400);font-size:11px">Antigüedad del primer crédito (buró o declaración del cliente)</small>
                 </div>
               </div>
               <!-- Historial interno (auto-calculado) -->
               <div id="scorHistorialInterno" style="display:none;margin-top:14px;padding:12px;background:white;border-radius:8px;border:1px solid #E5E7EB">
+              </div>
+            </div>
+
+            <!-- PASO 3B: Verificación directa (sustituye/complementa Buró) -->
+            <div style="background:#ECFDF5;border:1px solid #6EE7B7;border-radius:10px;padding:16px;margin-bottom:20px">
+              <h4 style="margin:0 0 4px;color:#065F46">3B. Verificación Directa del Analista</h4>
+              <p style="margin:0 0 12px;font-size:12px;color:#047857">Estos campos sustituyen al Score Buró cuando no se tiene. Entre más documentación verifiques, más preciso el scoring.</p>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Comprobante de Ingresos</label>
+                  <select class="form-input form-select" id="scorCompIngresos">
+                    <option value="0">No presentó</option>
+                    <option value="1">Declaración verbal / carta</option>
+                    <option value="2">Recibos de nómina (últimos 3 meses)</option>
+                    <option value="3">Estados de cuenta bancarios (3-6 meses)</option>
+                    <option value="4">Declaración fiscal + estados de cuenta</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Verificación de Domicilio</label>
+                  <select class="form-input form-select" id="scorVerifDomicilio">
+                    <option value="0">No verificado</option>
+                    <option value="1">Comprobante presentado</option>
+                    <option value="2">Visitado / Verificado en campo</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Verificación del Negocio/Empleo</label>
+                  <select class="form-input form-select" id="scorVerifNegocio">
+                    <option value="0">No verificado</option>
+                    <option value="1">Alta en SAT / Constancia fiscal</option>
+                    <option value="2">Visita al negocio / Llamada al empleador</option>
+                    <option value="3">Estados financieros auditados</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Historial de Pagos de Servicios</label>
+                  <select class="form-input form-select" id="scorHistPagos">
+                    <option value="0">No se verificó</option>
+                    <option value="1">Paga con atrasos frecuentes</option>
+                    <option value="2">Paga puntualmente (luz, agua, renta)</option>
+                  </select>
+                </div>
               </div>
             </div>
 
@@ -11585,6 +11628,10 @@ function limpiarScoring() {
   });
   document.getElementById('scorAtrasos').value = '0';
   document.getElementById('scorReferencias').value = '0';
+  document.getElementById('scorCompIngresos').value = '0';
+  document.getElementById('scorVerifDomicilio').value = '0';
+  document.getElementById('scorVerifNegocio').value = '0';
+  document.getElementById('scorHistPagos').value = '0';
   document.getElementById('scorTipoPersona').value = 'fisica';
   document.getElementById('scorTipoCredito').value = 'credito_simple';
   document.getElementById('scorGarantia').value = 'ninguna';
@@ -11625,33 +11672,63 @@ function calcularScoring() {
   var destino = document.getElementById('scorDestino').value;
   var notas = document.getElementById('scorNotas').value;
 
+  // Campos de verificación directa
+  var compIngresos = parseInt(document.getElementById('scorCompIngresos').value) || 0;
+  var verifDomicilio = parseInt(document.getElementById('scorVerifDomicilio').value) || 0;
+  var verifNegocio = parseInt(document.getElementById('scorVerifNegocio').value) || 0;
+  var histPagos = parseInt(document.getElementById('scorHistPagos').value) || 0;
+  var tieneBuro = scoreBuro >= 300 && scoreBuro <= 850;
+
   // Validaciones mínimas
   if (!nombre || nombre.length < 3) return toast('Ingresa el nombre del solicitante', 'error');
   if (!rfc || (rfc.length !== 12 && rfc.length !== 13)) return toast('RFC inválido', 'error');
   if (ingresos <= 0) return toast('Ingresa los ingresos mensuales', 'error');
-  if (scoreBuro < 300 || scoreBuro > 850) return toast('Score Buró debe ser entre 300 y 850', 'error');
   if (montoSolicitado <= 0) return toast('Ingresa el monto solicitado', 'error');
   if (plazoSolicitado < 1) return toast('Ingresa el plazo solicitado', 'error');
+  if (scoreBuro > 0 && (scoreBuro < 300 || scoreBuro > 850)) return toast('Score Buró debe ser entre 300 y 850 (o dejarlo vacío)', 'error');
 
   var detalles = [];
   var score = 0;
 
   // ═══ 1. CARÁCTER — 250 pts máx ═══
   var ptsCaracter = 0;
-  // Score Buró (hasta 150 pts)
-  var buroPts = 0;
-  if (scoreBuro >= 750) buroPts = 150;
-  else if (scoreBuro >= 700) buroPts = 130;
-  else if (scoreBuro >= 650) buroPts = 110;
-  else if (scoreBuro >= 600) buroPts = 85;
-  else if (scoreBuro >= 550) buroPts = 60;
-  else if (scoreBuro >= 500) buroPts = 40;
-  else if (scoreBuro >= 450) buroPts = 20;
-  else buroPts = 0;
-  ptsCaracter += buroPts;
-  detalles.push({ cat: 'Carácter', factor: 'Score Buró (' + scoreBuro + ')', pts: buroPts, max: 150 });
 
-  // Historial de pagos — atrasos (hasta 60 pts)
+  if (tieneBuro) {
+    // CON BURÓ: Score Buró vale 150 pts
+    var buroPts = 0;
+    if (scoreBuro >= 750) buroPts = 150;
+    else if (scoreBuro >= 700) buroPts = 130;
+    else if (scoreBuro >= 650) buroPts = 110;
+    else if (scoreBuro >= 600) buroPts = 85;
+    else if (scoreBuro >= 550) buroPts = 60;
+    else if (scoreBuro >= 500) buroPts = 40;
+    else if (scoreBuro >= 450) buroPts = 20;
+    else buroPts = 0;
+    ptsCaracter += buroPts;
+    detalles.push({ cat: 'Carácter', factor: 'Score Buró (' + scoreBuro + ')', pts: buroPts, max: 150 });
+  } else {
+    // SIN BURÓ: la verificación directa sustituye (hasta 150 pts)
+    // Comprobante ingresos (hasta 50 pts)
+    var compPts = [0, 15, 30, 40, 50][compIngresos] || 0;
+    ptsCaracter += compPts;
+    var compLabels = ['No presentó', 'Declaración verbal', 'Recibos nómina', 'Estados de cuenta', 'Fiscal + estados cuenta'];
+    detalles.push({ cat: 'Carácter', factor: 'Comprobante ingresos: ' + compLabels[compIngresos], pts: compPts, max: 50 });
+    // Verificación domicilio (hasta 30 pts)
+    var domPts = [0, 15, 30][verifDomicilio] || 0;
+    ptsCaracter += domPts;
+    detalles.push({ cat: 'Carácter', factor: 'Verificación domicilio', pts: domPts, max: 30 });
+    // Verificación negocio (hasta 40 pts)
+    var negPts = [0, 15, 25, 40][verifNegocio] || 0;
+    ptsCaracter += negPts;
+    var negLabels = ['No verificado', 'Alta SAT', 'Visita/llamada', 'Financieros auditados'];
+    detalles.push({ cat: 'Carácter', factor: 'Verificación negocio: ' + negLabels[verifNegocio], pts: negPts, max: 40 });
+    // Historial pagos servicios (hasta 30 pts)
+    var hpPts = [0, 10, 30][histPagos] || 0;
+    ptsCaracter += hpPts;
+    detalles.push({ cat: 'Carácter', factor: 'Pago de servicios puntual', pts: hpPts, max: 30 });
+  }
+
+  // Historial de pagos — atrasos (hasta 60 pts, aplica con o sin buró)
   var atrasosPts = [60, 50, 30, 10, 0, 0][atrasos] || 0;
   ptsCaracter += atrasosPts;
   var atrasosLabel = ['Sin atrasos', '1 atraso menor', '2-3 atrasos menores', 'Atrasos moderados', 'Atrasos graves', 'Cartera castigada'][atrasos];
@@ -11918,7 +11995,8 @@ function calcularScoring() {
     clienteId: document.getElementById('scorCliente').value || null,
     ingresos: ingresos, gastos: gastos, deudaActual: deudaActual, pagoDeudas: pagoDeudas,
     patrimonio: patrimonio, antiguedad: antiguedad,
-    scoreBuro: scoreBuro, creditosVigentes: creditosVigentes, atrasos: atrasos, expCredito: expCredito,
+    scoreBuro: scoreBuro, tieneBuro: tieneBuro, creditosVigentes: creditosVigentes, atrasos: atrasos, expCredito: expCredito,
+    compIngresos: compIngresos, verifDomicilio: verifDomicilio, verifNegocio: verifNegocio, histPagos: histPagos,
     montoSolicitado: montoSolicitado, plazoSolicitado: plazoSolicitado,
     tipoCredito: tipoCredito, destino: destino,
     garantia: garantia, valorGarantia: valorGarantia,
@@ -11993,6 +12071,10 @@ function verEvaluacion(id) {
   document.getElementById('scorValorGarantia').value = ev.valorGarantia ? Number(ev.valorGarantia).toLocaleString('es-MX') : '';
   document.getElementById('scorSector').value = ev.sector || '';
   document.getElementById('scorReferencias').value = ev.referencias || '0';
+  document.getElementById('scorCompIngresos').value = ev.compIngresos || '0';
+  document.getElementById('scorVerifDomicilio').value = ev.verifDomicilio || '0';
+  document.getElementById('scorVerifNegocio').value = ev.verifNegocio || '0';
+  document.getElementById('scorHistPagos').value = ev.histPagos || '0';
   document.getElementById('scorNotas').value = ev.notas || '';
   if (ev.clienteId) document.getElementById('scorCliente').value = ev.clienteId;
   calcularScoring();
