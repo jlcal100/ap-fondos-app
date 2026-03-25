@@ -2625,6 +2625,12 @@ function renderPagination(module, totalPages, currentPage, totalItems) {
 
 const STORE_KEYS = ['clientes','creditos','pagos','fondeos','contabilidad','usuarios','auditoria','cotizaciones','valuaciones','aprobaciones','garantias','conciliaciones','bitacora','pld'];
 
+// Fecha local YYYY-MM-DD (evita el bug de toISOString que da fecha UTC)
+function hoyLocal() {
+  var d = new Date();
+  return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+}
+
 // Bug #6: Sanitización XSS — escapar HTML en datos de usuario
 function esc(str) {
   if (str === null || str === undefined) return '';
@@ -3213,7 +3219,7 @@ function exportarDatos() {
 
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-  a.download = 'AP_Fondos_Backup_' + new Date().toISOString().split('T')[0] + '.json';
+  a.download = 'AP_Fondos_Backup_' + hoyLocal() + '.json';
   a.click(); URL.revokeObjectURL(a.href);
   localStorage.setItem('ap_last_backup_date', new Date().toISOString());
   toast('Respaldo JSON completo exportado (' + STORE_KEYS.length + ' colecciones)', 'success');
@@ -3261,7 +3267,7 @@ function exportarBackupExcel() {
   var wsResumen = XLSX.utils.json_to_sheet(resumen);
   XLSX.utils.book_append_sheet(wb, wsResumen, '_Resumen');
 
-  XLSX.writeFile(wb, 'AP_Fondos_Backup_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  XLSX.writeFile(wb, 'AP_Fondos_Backup_' + hoyLocal() + '.xlsx');
   localStorage.setItem('ap_last_backup_date', new Date().toISOString());
   toast('Backup Excel exportado (' + totalRegs + ' registros en ' + STORE_KEYS.length + ' hojas)', 'success');
   addAudit('Exportar', 'Sistema', 'Backup Excel multi-hoja — ' + totalRegs + ' registros');
@@ -3411,10 +3417,15 @@ function getDiasPeriodo(periodicidad) {
 function avanzarFechaPeriodo(fecha, periodicidad, diaOriginal) {
   fecha = new Date(fecha);
   if (periodicidad === 'mensual') {
-    fecha.setMonth(fecha.getMonth() + 1);
-    // Si el día cambió (overflow de mes), ajustar al último día del mes correcto
-    if (diaOriginal && fecha.getDate() !== diaOriginal) {
-      fecha.setDate(0); // Último día del mes anterior al overflow
+    var mesTarget = fecha.getMonth() + 1;
+    var anioTarget = fecha.getFullYear();
+    if (mesTarget > 11) { mesTarget = 0; anioTarget++; }
+    // Intentar restaurar el día original primero
+    var diaIntento = diaOriginal || fecha.getDate();
+    fecha = new Date(anioTarget, mesTarget, diaIntento);
+    // Si el mes se desbordó (ej: 31 feb → 3 mar), usar último día del mes target
+    if (fecha.getMonth() !== mesTarget) {
+      fecha = new Date(anioTarget, mesTarget + 1, 0); // último día del mes correcto
     }
   } else if (periodicidad === 'quincenal') {
     fecha.setDate(fecha.getDate() + 15);
@@ -3525,7 +3536,7 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
 //  CAT — COSTO ANUAL TOTAL (Banxico Circular 21/2009)
 // ============================================================
 // Calcula el CAT como la TIR anualizada de los flujos del acreditado.
-// Metodología: Banxico Circular 21/2009 — base 365 días, fechas exactas.
+// Metodología: Banxico Circular 21/2009 — base 360 días (año comercial).
 //
 // Flujo 0 = monto recibido neto por el acreditado:
 //   montoNeto - comisiónApertura - IVA_comisión - seguro - otros costos iniciales
@@ -3535,7 +3546,7 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
 // La comisión de apertura también causa IVA.
 // Todos estos costos deben incluirse en el CAT conforme a la norma.
 //
-// Se resuelve: MontoRecibido = Σ(Flujo_j / (1+i)^(dias_j/365))  →  i = CAT
+// Se resuelve: MontoRecibido = Σ(Flujo_j / (1+i)^(dias_j/360))  →  i = CAT
 //
 // Parámetros:
 //   montoNeto:        monto del crédito (principal)
@@ -3577,14 +3588,14 @@ function calcularCAT(montoNeto, tabla, fechaInicio, comisionApertura, opciones) 
     return { dias: dias, monto: montoFlujo };
   });
 
-  // Newton-Raphson para resolver TIR (base 365 días — Banxico Circular 21/2009)
-  // f(i) = -montoRecibido + Σ(flujo_j / (1+i)^(dias_j/365)) = 0
+  // Newton-Raphson para resolver TIR (base 360 días — Banxico Circular 21/2009)
+  // f(i) = -montoRecibido + Σ(flujo_j / (1+i)^(dias_j/360)) = 0
   var cat = 0.30; // semilla inicial 30%
   for (var iter = 0; iter < 200; iter++) {
     var fVal = -montoRecibido;
     var fDeriv = 0;
     for (var j = 0; j < flujos.length; j++) {
-      var t = flujos[j].dias / 365;
+      var t = flujos[j].dias / 360;
       var denom = Math.pow(1 + cat, t);
       fVal += flujos[j].monto / denom;
       fDeriv -= flujos[j].monto * t / Math.pow(1 + cat, t + 1);
@@ -3694,8 +3705,14 @@ function calcMoratorioDevengado(credito, allPagos) {
   }
 
   // Pagos ya aplicados como moratorio (evitar doble conteo)
+  // Excluir pagos reversados: no cuentan como moratorio cobrado
   var pagosCredito = (allPagos || getStore('pagos')).filter(function(p) { return p.creditoId === credito.id; });
-  var moratorioYaPagado = pagosCredito.reduce(function(s, p) { return s + (p.moratorio || 0); }, 0);
+  var moratorioYaPagado = pagosCredito.reduce(function(s, p) {
+    if (p.reversado) return s; // pago reversado: no descontar su moratorio
+    if (p.tipo === 'reversa') return s - (p.moratorio || 0); // reversa: resta el moratorio devuelto
+    return s + (p.moratorio || 0);
+  }, 0);
+  moratorioYaPagado = Math.max(0, moratorioYaPagado); // protección contra negativos
 
   // Calcular moratorio periodo por periodo (capital vencido × tasa diaria × días mora)
   var totalMoratorio = 0;
@@ -3771,16 +3788,24 @@ function calcularEfectivoDisponible(creditos, fondeos, pagos) {
   var contab = getStore('contabilidad');
 
   // Entradas de efectivo
+  // FIX: Cuenta corriente fondeos → solo contar saldoDispuesto (no el límite completo)
   var fondeoRecibido = fondeos.reduce(function(s, f) {
+    if (f.esRevolvente || f.tipo === 'cuenta_corriente') {
+      return s + (f.saldoDispuesto || 0);
+    }
     return s + (f.monto || 0);
   }, 0);
-  // Excluir pagos reversados — no representan cash real recibido
-  var pagosRecibidos = pagos.filter(function(p) { return !p.reversado; }).reduce(function(s, p) {
+  // FIX: Excluir pagos reversados, reversas (evitar doble deducción), y pagos a fondeos (son salidas, no entradas)
+  var pagosRecibidos = pagos.filter(function(p) { return !p.reversado && p.tipo !== 'reversa' && p.tipo !== 'pago_fondeo'; }).reduce(function(s, p) {
     return s + (p.monto || 0);
   }, 0);
 
   // Salidas de efectivo
+  // FIX: Cuenta corriente créditos → solo contar saldo dispuesto (no el límite)
   var creditosDesembolsados = creditos.reduce(function(s, c) {
+    if (c.esRevolvente || c.tipo === 'cuenta_corriente') {
+      return s + (c.saldo || 0);
+    }
     return s + (c.monto || 0);
   }, 0);
   var pagosAFondeos = contab.filter(function(c) {
@@ -4719,7 +4744,7 @@ function openModalCredito() {
   document.getElementById('credCliente').innerHTML = clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
   const fondeos = getStore('fondeos').filter(f => f.estado === 'vigente');
   document.getElementById('credFondeo').innerHTML = '<option value="">Ninguno</option>' + fondeos.map(f => `<option value="${f.id}">${esc(f.numero)} - ${esc(f.fondeador)}</option>`).join('');
-  document.getElementById('credFechaInicio').value = new Date().toISOString().split('T')[0];
+  document.getElementById('credFechaInicio').value = hoyLocal();
   openModal('modalCredito');
 }
 
@@ -4793,7 +4818,7 @@ function guardarCredito() {
   if (tipo === 'cuenta_corriente') {
     // Cuenta corriente: línea revolvente sin amortización
     credito = {
-      id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad: 'diario',
+      id, numero, clienteId, tipo, monto, tasa, tasaMoratoria: tasaMora, plazo, periodicidad: 'diario',
       fechaInicio, estado: 'vigente', saldo: 0, limite: monto,
       disponible: monto, disposiciones: [], comision,
       fechaVencimiento: addMonths(new Date(fechaInicio), plazo),
@@ -4857,8 +4882,9 @@ function guardarCredito() {
     const contab = getStore('contabilidad');
     var cidC = nextId('contabilidad');
     var cliNombreC = getStore('clientes').find(c => c.id === clienteId);
-    // Asiento 1: Colocación (monto íntegro va a Cartera)
-    contab.push({ id: cidC++, fecha: fechaInicio, tipo: 'colocacion', concepto: `Colocación ${numero} - ${cliNombreC?.nombre || ''}`, monto, cuentaDebe: '1201', cuentaHaber: '1101', creditoId: id, referencia: numero, createdAt: new Date().toISOString() });
+    // Asiento 1: Colocación (monto íntegro va a Cartera — 1204 arrendamiento, 1201 créditos)
+    var ctaCarteraCol = tipo === 'arrendamiento' ? '1204' : '1201';
+    contab.push({ id: cidC++, fecha: fechaInicio, tipo: 'colocacion', concepto: `Colocación ${numero} - ${cliNombreC?.nombre || ''}`, monto, cuentaDebe: ctaCarteraCol, cuentaHaber: '1101', creditoId: id, referencia: numero, createdAt: new Date().toISOString() });
     // Asiento 2: Comisión de apertura (se cobra al cliente, es ingreso)
     if (comision > 0) {
       contab.push({ id: cidC++, fecha: fechaInicio, tipo: 'comision', concepto: `Comisión apertura ${numero}`, monto: comision, cuentaDebe: '1101', cuentaHaber: '4102', creditoId: id, referencia: numero, createdAt: new Date().toISOString() });
@@ -4922,6 +4948,10 @@ function verCredito(id) {
         ${c.estado === 'vigente' || c.estado === 'vencido' ? '<button class="btn btn-outline btn-sm" style="color:var(--purple,#8B5CF6)" onclick="abrirRestructura(' + c.id + ')">🔄 Reestructurar</button>' : ''}
         ${c.estado === 'vigente' ? '<button class="btn btn-outline btn-sm" style="color:var(--red)" onclick="marcarVencido(' + c.id + ')">⚠️ Marcar Vencido</button>' : ''}
         <button class="btn btn-outline btn-sm" style="color:var(--red)" onclick="eliminarCredito(${c.id})">🗑 Eliminar</button>
+        <span style="border-left:1px solid var(--gray-200);height:24px;margin:0 4px"></span>
+        <button class="btn btn-outline btn-sm" onclick="generarContratoPDF(${c.id})">📄 Contrato</button>
+        <button class="btn btn-outline btn-sm" onclick="generarPagarePDF(${c.id})">📜 Pagaré</button>
+        <button class="btn btn-outline btn-sm" onclick="generarTablaAmortPDF(${c.id})">📊 Tabla Amort. PDF</button>
       </div>`;
 
   let tableHTML = '';
@@ -5012,7 +5042,7 @@ function openModalPago() {
   if (!credId) return;
   const c = getStore('creditos').find(cr => cr.id === credId);
   document.getElementById('pagoInfoCredito').innerHTML = `<strong>${esc(c.numero)}</strong> — Saldo: ${fmt(c.saldo)} — Pago sugerido: ${fmt(c.pago)}`;
-  document.getElementById('pagoFecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('pagoFecha').value = hoyLocal();
 
   // Sugerir desglose del próximo pago
   const nextPago = (c.amortizacion || []).find(a => !a.pagado);
@@ -5231,9 +5261,9 @@ function guardarPago() {
             }
 
             if (esArrendRecalc) {
-              // ARRENDAMIENTO FINANCIERO: interés FLAT sobre saldo actual
+              // ARRENDAMIENTO FINANCIERO: interés FLAT sobre monto ORIGINAL del contrato (no saldo reducido)
               var capitalFijoArr = +((saldoNuevo - vrMonto) / nuevoPeriodos).toFixed(2);
-              var interesFlatArr = +(saldoNuevo * tasaPeriodica).toFixed(2);
+              var interesFlatArr = +(cr.monto * tasaPeriodica).toFixed(2);
               nuevoPago = capitalFijoArr + interesFlatArr;
             } else {
               // CRÉDITO ESTÁNDAR: sistema francés sobre saldo insoluto
@@ -5385,7 +5415,7 @@ function revertirPago(pagoId) {
       txPagos.push({
         id: reversaId,
         creditoId: pagoOriginal.creditoId,
-        fecha: new Date().toISOString().split('T')[0],
+        fecha: hoyLocal(),
         monto: -pagoOriginal.monto,
         capital: -(pagoOriginal.capital || 0),
         interes: -(pagoOriginal.interes || 0),
@@ -5427,9 +5457,9 @@ function revertirPago(pagoId) {
             var nuevoPayRev;
 
             if (esArrendRevCalc) {
-              // Arrendamiento: interés flat
+              // Arrendamiento: interés flat sobre monto ORIGINAL
               var capFijoRevArr = +((saldoRev - vrMontoRev) / periodosRestRev).toFixed(2);
-              var intFlatRevArr = +(saldoRev * tasaPerRev).toFixed(2);
+              var intFlatRevArr = +(txCred.monto * tasaPerRev).toFixed(2);
               nuevoPayRev = capFijoRevArr + intFlatRevArr;
             } else {
               var montoFinRev = saldoRev - vrMontoRev / Math.pow(1 + tasaPerRev, periodosRestRev);
@@ -5475,7 +5505,7 @@ function revertirPago(pagoId) {
 
       // Asientos contables de reversa — revertir cada componente del pago original
       var cid = nextId('contabilidad');
-      var fechaRev = new Date().toISOString().split('T')[0];
+      var fechaRev = hoyLocal();
       var refRev = 'REV-' + pagoId;
       var conceptoBase = 'REVERSA: Pago #' + pagoId + ' — ' + numCred + ' — ' + razon;
       var esArrendRev = cred && cred.tipo === 'arrendamiento';
@@ -5611,7 +5641,7 @@ function calcularCotizacion() {
 
   if (!monto || !tasa || !plazo) return toast('Complete todos los campos', 'error');
 
-  const tabla = generarAmortizacion(monto, tasa, plazo, periodicidad, new Date().toISOString().split('T')[0], vrPct, ivaPct, cotizadorTipo);
+  const tabla = generarAmortizacion(monto, tasa, plazo, periodicidad, hoyLocal(), vrPct, ivaPct, cotizadorTipo);
   const pagoP = tabla[0]?.pagoTotal || 0;
   const totalIntereses = tabla.reduce((s, r) => s + r.interes, 0);
   const totalIVA = tabla.reduce((s, r) => s + r.iva, 0);
@@ -5619,7 +5649,7 @@ function calcularCotizacion() {
 
   // CAT: Costo Anual Total (metodología Banxico Circular 21/2009)
   // Para S.A. de C.V.: incluye IVA 16% sobre intereses y sobre comisión de apertura
-  const fechaHoy = new Date().toISOString().split('T')[0];
+  const fechaHoy = hoyLocal();
   const catOpciones = {
     ivaComision: +(comisionApertura * 0.16).toFixed(2),
     // Si ivaPct > 0, la tabla ya incluye IVA en pagoTotal — no volver a sumar
@@ -5721,7 +5751,7 @@ function exportCotizacionPDF() {
     doc.setFontSize(7); doc.setTextColor(150);
     doc.text('Generado el ' + new Date().toLocaleDateString('es-MX') + ' — ' + EMPRESA.nombre + '. Cotización informativa, no constituye una oferta de crédito.', 20, pageH - 10);
 
-    doc.save('Cotizacion_AP_' + new Date().toISOString().split('T')[0] + '.pdf');
+    doc.save('Cotizacion_AP_' + hoyLocal() + '.pdf');
     toast('PDF generado exitosamente', 'success');
   } catch (err) {
     toast('Error al generar PDF: ' + err.message, 'error');
@@ -5756,6 +5786,7 @@ function simularEscenarios() {
 
   var creditos = getStore('creditos').filter(function(c) { return c.estado === 'vigente'; });
   var fondeos = getStore('fondeos').filter(function(f) { return f.estado === 'vigente'; });
+  if (creditos.length === 0 || fondeos.length === 0) return toast('Se requieren créditos y fondeos vigentes para simular escenarios', 'warning');
 
   // Calcular base: ingresos cartera y costo fondeos actuales
   var carteraSaldo = 0, tasaPromCartera = 0, fondeoSaldo = 0, tasaPromFondeo = 0;
@@ -5772,13 +5803,17 @@ function simularEscenarios() {
   tasaPromCartera = carteraSaldo > 0 ? tasaPromCartera / carteraSaldo : 0;
   tasaPromFondeo = fondeoSaldo > 0 ? tasaPromFondeo / fondeoSaldo : 0;
 
-  // Generar escenarios
+  // Convertir tasas promedio de decimal a porcentaje para trabajar en pts porcentuales
+  var tasaPctCartera = tasaPromCartera * 100; // ej: 0.24 → 24
+  var tasaPctFondeo = tasaPromFondeo * 100;   // ej: 0.12 → 12
+
+  // Generar escenarios (variaciones en puntos porcentuales)
   var escenarios = [];
   for (var v = varMin; v <= varMax + 0.001; v = +(v + step).toFixed(4)) {
     var varTasa = +v.toFixed(2);
-    var tasaCartera = tasaPromCartera + varTasa;
-    var tasaFondeo = tasaPromFondeo + varTasa * 0.7; // fondeos reaccionan al 70%
-    var ingresoAnual = carteraSaldo * (tasaCartera / 100);
+    var tasaCartera = tasaPctCartera + varTasa;          // en porcentaje: 24 + 3 = 27%
+    var tasaFondeo = tasaPctFondeo + varTasa * 0.7;      // fondeos reaccionan al 70%
+    var ingresoAnual = carteraSaldo * (tasaCartera / 100); // convertir a decimal para cálculo
     var costoAnual = fondeoSaldo * (tasaFondeo / 100);
     var ingresoPeriodo = ingresoAnual * (horizonte / 12);
     var costoPeriodo = costoAnual * (horizonte / 12);
@@ -5797,7 +5832,7 @@ function simularEscenarios() {
   }
 
   var base = escenarios.find(function(e) { return e.esBase; }) || escenarios[Math.floor(escenarios.length / 2)];
-  lastEscenarios = { escenarios: escenarios, base: base, carteraSaldo: carteraSaldo, fondeoSaldo: fondeoSaldo, tiie: tiie, horizonte: horizonte, tasaPromCartera: tasaPromCartera, tasaPromFondeo: tasaPromFondeo };
+  lastEscenarios = { escenarios: escenarios, base: base, carteraSaldo: carteraSaldo, fondeoSaldo: fondeoSaldo, tiie: tiie, horizonte: horizonte, tasaPromCartera: tasaPctCartera, tasaPromFondeo: tasaPctFondeo };
 
   renderEscenariosResultados();
   document.getElementById('escResultados').style.display = '';
@@ -5853,7 +5888,7 @@ function renderEscenariosResultados() {
       '<td style="text-align:center">' + (e.variacion > 0 ? '+' : '') + e.variacion.toFixed(2) + ' pts</td>' +
       '<td style="text-align:right">' + fmt(e.ingresoCartera) + '</td>' +
       '<td style="text-align:right">' + fmt(e.costoFondeo) + '</td>' +
-      '<td style="text-align:center;font-weight:600">' + e.spread.toFixed(2) + '%</td>' +
+      '<td style="text-align:center;font-weight:600">' + e.spread.toFixed(2) + ' pts</td>' +
       '<td style="text-align:right;font-weight:600">' + fmt(e.utilidad) + '</td>' +
       '<td style="text-align:right;color:' + (delta >= 0 ? '#0D9F6E' : '#EF4444') + '">' + (delta > 0 ? '+' : '') + fmt(delta) + ' (' + deltaPct + '%)</td>' +
       '<td>' + impacto + '</td></tr>';
@@ -5925,7 +5960,7 @@ function exportarEscenariosPDF() {
     headStyles: { fillColor: [220, 38, 38] }
   });
 
-  doc.save('escenarios_tasas_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('escenarios_tasas_' + hoyLocal() + '.pdf');
   toast('PDF de escenarios exportado', 'success');
 }
 
@@ -5947,7 +5982,7 @@ function exportarEscenariosExcel() {
   ws['!cols'] = [{ wch: 14 }, { wch: 14 }, { wch: 14 }, { wch: 12 }, { wch: 16 }, { wch: 16 }, { wch: 16 }, { wch: 16 }];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Escenarios');
-  XLSX.writeFile(wb, 'escenarios_tasas_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  XLSX.writeFile(wb, 'escenarios_tasas_' + hoyLocal() + '.xlsx');
   toast('Excel de escenarios exportado', 'success');
 }
 
@@ -5994,7 +6029,7 @@ function simularReestructuraCredito(creditoId) {
 
   // 1. Replazo: extender plazo +50%
   var plazoExtendido = Math.ceil(periodosRestantes * 1.5);
-  var pagoExtendido = calcPagoSimple(saldo, tasaActual, plazoExtendido, periodicidadCred);
+  var pagoExtendido = calcPagoSimple(saldo, tasaActual, plazoExtendido, periodicidadCred, cred.tipo);
   escenarios.push({
     nombre: 'Extender plazo (' + plazoExtendido + ' meses)',
     tipo: 'replazo',
@@ -6006,12 +6041,12 @@ function simularReestructuraCredito(creditoId) {
     costoMora: 0,
     quita: 0,
     gracia: 0,
-    costoEmpresa: +((pagoExtendido * plazoExtendido) - saldo - (pagoActual * periodosRestantes - saldo)).toFixed(2)
+    costoEmpresa: +((pagoExtendido * plazoExtendido - saldo) - (pagoActual * periodosRestantes - saldo)).toFixed(2)
   });
 
   // 2. Quita 20% + replazo
   var saldoConQuita = +(saldo * 0.8).toFixed(2);
-  var pagoConQuita = calcPagoSimple(saldoConQuita, tasaActual, periodosRestantes, periodicidadCred);
+  var pagoConQuita = calcPagoSimple(saldoConQuita, tasaActual, periodosRestantes, periodicidadCred, cred.tipo);
   escenarios.push({
     nombre: 'Quita 20% ($' + fmt(saldo - saldoConQuita) + ')',
     tipo: 'quita',
@@ -6030,7 +6065,7 @@ function simularReestructuraCredito(creditoId) {
   var periodosGracia = 3;
   var divisorGracia = periodicidadCred === 'quincenal' ? 24 : periodicidadCred === 'semanal' ? 52 : 12;
   var intGracia = +(saldo * (tasaActual / divisorGracia) * periodosGracia).toFixed(2);
-  var pagoPostGracia = calcPagoSimple(saldo, tasaActual, periodosRestantes, periodicidadCred);
+  var pagoPostGracia = calcPagoSimple(saldo, tasaActual, periodosRestantes, periodicidadCred, cred.tipo);
   escenarios.push({
     nombre: 'Gracia ' + periodosGracia + ' periodos (solo intereses)',
     tipo: 'gracia',
@@ -6047,7 +6082,7 @@ function simularReestructuraCredito(creditoId) {
 
   // 4. Reducción de tasa 25% + extensión
   var tasaReducida = +(tasaActual * 0.75).toFixed(4);
-  var pagoTasaRed = calcPagoSimple(saldo, tasaReducida, plazoExtendido, periodicidadCred);
+  var pagoTasaRed = calcPagoSimple(saldo, tasaReducida, plazoExtendido, periodicidadCred, cred.tipo);
   escenarios.push({
     nombre: 'Tasa -25% (' + (tasaReducida * 100).toFixed(1) + '%) + plazo',
     tipo: 'tasa_reducida',
@@ -6066,12 +6101,16 @@ function simularReestructuraCredito(creditoId) {
   renderEscenariosReestructura(cred, escenarios, moraInfo);
 }
 
-function calcPagoSimple(saldo, tasaAnual, periodos, periodicidad) {
+function calcPagoSimple(saldo, tasaAnual, periodos, periodicidad, tipoCredito) {
   // Usar tasa periódica correcta según periodicidad (igual que getTasaPeriodica)
   var divisor = 12; // mensual por defecto
   if (periodicidad === 'quincenal') divisor = 24;
   else if (periodicidad === 'semanal') divisor = 52;
   var r = tasaAnual / divisor;
+  // Arrendamiento: interés flat sobre saldo (igual que calcPago)
+  if (tipoCredito === 'arrendamiento') {
+    return +((saldo / periodos) + (saldo * r)).toFixed(2);
+  }
   if (r === 0) return +(saldo / periodos).toFixed(2);
   return +(saldo * (r * Math.pow(1 + r, periodos)) / (Math.pow(1 + r, periodos) - 1)).toFixed(2);
 }
@@ -6149,7 +6188,7 @@ function abrirRestructura(creditoId) {
   html += '<div class="form-row-3">';
   html += '<div class="form-group"><label class="form-label">Nuevo plazo (meses)</label><input type="number" class="form-input" id="restPlazo" value="' + (c.plazo || 24) + '" min="1" max="360"></div>';
   html += '<div class="form-group"><label class="form-label">Periodicidad</label><select class="form-select" id="restPeriodicidad"><option value="mensual"' + (c.periodicidad === 'mensual' ? ' selected' : '') + '>Mensual</option><option value="quincenal"' + (c.periodicidad === 'quincenal' ? ' selected' : '') + '>Quincenal</option><option value="semanal"' + (c.periodicidad === 'semanal' ? ' selected' : '') + '>Semanal</option></select></div>';
-  html += '<div class="form-group"><label class="form-label">Fecha inicio nueva tabla</label><input type="date" class="form-input" id="restFecha" value="' + new Date().toISOString().split('T')[0] + '"></div>';
+  html += '<div class="form-group"><label class="form-label">Fecha inicio nueva tabla</label><input type="date" class="form-input" id="restFecha" value="' + hoyLocal() + '"></div>';
   html += '</div>';
   html += '<div class="form-group" style="margin-bottom:12px"><label class="form-label">Motivo de reestructura</label><textarea class="form-input" id="restMotivo" rows="2" placeholder="Razón de la reestructuración..."></textarea></div>';
   html += '<div style="display:flex;gap:8px"><button class="btn btn-red" onclick="ejecutarRestructura()">Confirmar Reestructura</button><button class="btn btn-outline" onclick="closeModal(\'modalGenerico\')">Cancelar</button></div>';
@@ -6524,7 +6563,7 @@ function renderConciliacion() {
 function agregarMovBancManual() {
   document.getElementById('formMovManual').style.display = '';
   document.getElementById('formMovManual2').style.display = '';
-  document.getElementById('movBancFecha').value = new Date().toISOString().split('T')[0];
+  document.getElementById('movBancFecha').value = hoyLocal();
   document.getElementById('movBancConcepto').value = '';
   document.getElementById('movBancMonto').value = '';
   document.getElementById('movBancRef').value = '';
@@ -6721,7 +6760,7 @@ function ejecutarConciliacionAuto() {
         montoSistema: mejorMatch.monto,
         diferencia: +(Math.abs(mov.monto) - mejorMatch.monto).toFixed(2),
         descSistema: mejorMatch.desc,
-        fechaConc: new Date().toISOString().split('T')[0],
+        fechaConc: hoyLocal(),
         metodo: 'auto_' + estrategia,
         confianza: Math.round(mejorScore),
         createdAt: new Date().toISOString()
@@ -6821,7 +6860,7 @@ function confirmarConcManual(movId, refId, montoSistema) {
     montoSistema: montoSistema,
     diferencia: +(Math.abs(mov.monto) - montoSistema).toFixed(2),
     descSistema: refId,
-    fechaConc: new Date().toISOString().split('T')[0],
+    fechaConc: hoyLocal(),
     metodo: 'manual',
     createdAt: new Date().toISOString()
   });
@@ -6929,7 +6968,7 @@ function exportarConciliacionPDF() {
     startY: 36, head: [['Fecha', 'Concepto', 'Referencia', 'Monto', 'Tipo', 'Estado']],
     body: rows, styles: { fontSize: 8, cellPadding: 2 }, headStyles: { fillColor: [220, 38, 38] }
   });
-  doc.save('conciliacion_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('conciliacion_' + hoyLocal() + '.pdf');
   toast('PDF de conciliación exportado', 'success');
 }
 
@@ -6953,7 +6992,7 @@ function exportarConciliacionExcel() {
   ws['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 15 }, { wch: 14 }, { wch: 10 }, { wch: 12 }, { wch: 14 }, { wch: 12 }, { wch: 10 }];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Conciliación');
-  XLSX.writeFile(wb, 'conciliacion_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  XLSX.writeFile(wb, 'conciliacion_' + hoyLocal() + '.xlsx');
   toast('Excel de conciliación exportado', 'success');
 }
 
@@ -7207,8 +7246,8 @@ function registrarPagoFondeo(id) {
 
   // Calcular intereses devengados del fondeo
   var ultimoPago = getStore('pagos').filter(function(p) { return p.fondeoId === id && !p.reversado; }).sort(function(a, b) { return b.fecha > a.fecha ? 1 : -1; })[0];
-  var fechaRef = ultimoPago ? ultimoPago.fecha : (fondeo.fechaInicio || new Date().toISOString().split('T')[0]);
-  var hoy = new Date().toISOString().split('T')[0];
+  var fechaRef = ultimoPago ? ultimoPago.fecha : (fondeo.fechaInicio || hoyLocal());
+  var hoy = hoyLocal();
   var dias = Math.max(0, Math.floor((new Date(hoy) - new Date(fechaRef)) / 86400000));
   var intDevengado = +((fondeo.saldo || 0) * (fondeo.tasa || 0) / 360 * dias).toFixed(2);
 
@@ -7305,7 +7344,7 @@ function ejecutarDevengoPeriodico() {
   if (!hasPermiso('contabilidad', 'crear')) return toast('Sin permiso', 'error');
   var creditos = getStore('creditos');
   var contab = getStore('contabilidad');
-  var hoy = new Date().toISOString().split('T')[0];
+  var hoy = hoyLocal();
   var periodo = hoy.substring(0, 7);
 
   // Evitar doble devengo en el mismo mes
@@ -7484,7 +7523,7 @@ function renderContabilidad() {
 
 // ===== BALANCE GENERAL =====
 function renderBalance() {
-  var fechaCorte = document.getElementById('balanceFecha').value || new Date().toISOString().split('T')[0];
+  var fechaCorte = document.getElementById('balanceFecha').value || hoyLocal();
   var creditos = getStore('creditos');
   var fondeos = getStore('fondeos');
   var pagos = getStore('pagos');
@@ -7593,7 +7632,7 @@ function renderBalance() {
 
 // ===== ESTADO DE RESULTADOS =====
 function renderResultados() {
-  var mes = document.getElementById('resultadosMes').value || new Date().toISOString().substring(0, 7);
+  var mes = document.getElementById('resultadosMes').value || hoyLocal().substring(0, 7);
   var contab = getStore('contabilidad').filter(function(r) { return r.fecha && r.fecha.startsWith(mes); });
 
   var intCobrados = contab.filter(function(r) { return r.tipo === 'ingreso_intereses' || r.tipo === 'ingreso_arrendamiento' || r.tipo === 'devengo_intereses'; }).reduce(function(s, r) { return s + r.monto; }, 0);
@@ -7638,7 +7677,7 @@ function renderResultados() {
 
 // ===== CONCILIACIÓN BANCARIA =====
 function renderConciliacion() {
-  var mes = document.getElementById('conciliacionMes').value || new Date().toISOString().substring(0, 7);
+  var mes = document.getElementById('conciliacionMes').value || hoyLocal().substring(0, 7);
   var saldoBanco = parseMiles('conciliacionSaldoBanco');
 
   var contab = getStore('contabilidad').filter(function(r) { return r.fecha && r.fecha.startsWith(mes); });
@@ -7960,7 +7999,7 @@ function renderReporteMorosidad() {
       var cli = clientes.find(function(cl) { return cl.id === c.clienteId; });
       var rango = c.diasMora <= 30 ? '1-30' : c.diasMora <= 60 ? '31-60' : c.diasMora <= 90 ? '61-90' : '>90';
       var rangoBadge = c.diasMora <= 30 ? 'badge-yellow' : c.diasMora <= 60 ? 'badge-orange' : 'badge-red';
-      var moratorioEst = c.saldo * (c.tasaMora || c.tasa * 1.5) / 360 * c.diasMora;
+      var moratorioEst = c.saldo * (c.tasaMoratoria || c.tasa * 1.5) / 360 * c.diasMora;
       return '<tr><td><strong>' + esc(c.numero) + '</strong></td><td>' + (cli ? esc(cli.nombre) : '-') + '</td>' +
         '<td>' + (tipoLabel[c.tipo] || c.tipo) + '</td><td>' + fmt(c.saldo) + '</td><td>' + fmt(c.pago) + '</td>' +
         '<td style="font-weight:600;color:var(--red)">' + c.diasMora + '</td>' +
@@ -7986,7 +8025,7 @@ function renderReporteColocacion() {
 
   var periodos = Object.keys(colocPorMes).sort();
   var totalColocado = creditos.reduce(function(s, c) { return s + c.monto; }, 0);
-  var mesActual = new Date().toISOString().substring(0, 7);
+  var mesActual = hoyLocal().substring(0, 7);
   var colocMesActual = colocPorMes[mesActual] ? colocPorMes[mesActual].monto : 0;
   var promMensual = periodos.length > 0 ? totalColocado / periodos.length : 0;
 
@@ -8295,7 +8334,7 @@ function guardarAccionCorrectiva() {
     descripcion: desc,
     responsable: responsable,
     estado: 'pendiente',
-    fecha: new Date().toISOString().split('T')[0],
+    fecha: hoyLocal(),
     createdAt: new Date().toISOString()
   });
   setStore('conciliaciones', concs);
@@ -8384,7 +8423,7 @@ function exportarSemaforoPDF() {
       }
     }
   });
-  doc.save('semaforo_cartera_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('semaforo_cartera_' + hoyLocal() + '.pdf');
   toast('PDF de semáforo exportado', 'success');
 }
 
@@ -8409,7 +8448,7 @@ function exportarSemaforoExcel() {
   ws['!cols'] = [{ wch: 12 }, { wch: 15 }, { wch: 25 }, { wch: 14 }, { wch: 12 }, { wch: 50 }, { wch: 12 }, { wch: 12 }];
   var wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Semáforo');
-  XLSX.writeFile(wb, 'semaforo_cartera_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  XLSX.writeFile(wb, 'semaforo_cartera_' + hoyLocal() + '.xlsx');
   toast('Excel de semáforo exportado', 'success');
 }
 
@@ -8696,7 +8735,7 @@ function exportarReporteCarteraPDF() {
     alternateRowStyles: { fillColor: [245, 247, 250] }
   });
 
-  doc.save('AP_Reporte_Cartera_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('AP_Reporte_Cartera_' + hoyLocal() + '.pdf');
   toast('Reporte de cartera PDF generado', 'success');
 }
 
@@ -8729,7 +8768,7 @@ function exportarMorosidadPDF() {
     body: creditos.map(function(c) {
       var cli = clientes.find(function(cl) { return cl.id === c.clienteId; });
       var rango = c.diasMora <= 30 ? '1-30' : c.diasMora <= 60 ? '31-60' : c.diasMora <= 90 ? '61-90' : '>90';
-      var moratorioEst = c.saldo * (c.tasaMora || c.tasa * 1.5) / 360 * c.diasMora;
+      var moratorioEst = c.saldo * (c.tasaMoratoria || c.tasa * 1.5) / 360 * c.diasMora;
       return [c.numero, cli ? cli.nombre : '-', tipoLabel[c.tipo] || c.tipo, fmt(c.saldo), fmt(c.pago), c.diasMora, rango, fmt(moratorioEst)];
     }),
     styles: { fontSize: 8, cellPadding: 2 },
@@ -8737,7 +8776,7 @@ function exportarMorosidadPDF() {
     alternateRowStyles: { fillColor: [254, 242, 242] }
   });
 
-  doc.save('AP_Reporte_Morosidad_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('AP_Reporte_Morosidad_' + hoyLocal() + '.pdf');
   toast('Reporte de morosidad PDF generado', 'success');
 }
 
@@ -8761,7 +8800,7 @@ function exportarMorosidadExcel() {
   var data = creditos.map(function(c) {
     var cli = clientes.find(function(cl) { return cl.id === c.clienteId; });
     var rango = c.diasMora <= 30 ? '1-30' : c.diasMora <= 60 ? '31-60' : c.diasMora <= 90 ? '61-90' : '>90';
-    var moratorioEst = c.saldo * (c.tasaMora || c.tasa * 1.5) / 360 * c.diasMora;
+    var moratorioEst = c.saldo * (c.tasaMoratoria || c.tasa * 1.5) / 360 * c.diasMora;
     return [c.numero, cli ? cli.nombre : '-', tipoLabel[c.tipo] || c.tipo, c.saldo, c.pago, c.diasMora, rango, moratorioEst];
   });
   exportToExcel(data, headers, 'AP_Reporte_Morosidad_' + fmtDate(new Date().toISOString()) + '.xlsx', 'Morosidad');
@@ -9022,7 +9061,7 @@ function exportarFlujoPDF() {
   var mesesDef = flujo.filter(function(m) { return m.neto < 0; });
   doc.text('Meses en déficit: ' + mesesDef.length + '/12' + (mesesDef.length > 0 ? ' — ' + mesesDef.map(function(m) { return m.label; }).join(', ') : ' — Sin alertas'), 14, finalY);
 
-  doc.save('AP_Flujo_Efectivo_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('AP_Flujo_Efectivo_' + hoyLocal() + '.pdf');
   toast('Reporte de flujo de efectivo PDF generado', 'success');
 }
 
@@ -9382,7 +9421,7 @@ function exportarResultadosPDF() {
     }
   });
 
-  doc.save('AP_Estado_Resultados_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('AP_Estado_Resultados_' + hoyLocal() + '.pdf');
   toast('Estado de Resultados PDF generado', 'success');
 }
 
@@ -9506,7 +9545,7 @@ function exportarGarantiasPDF() {
     columnStyles: { 3: { cellWidth: 80 } }
   });
 
-  doc.save('AP_Reporte_Garantias_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('AP_Reporte_Garantias_' + hoyLocal() + '.pdf');
   toast('Reporte de garantías PDF generado', 'success');
 }
 
@@ -9567,7 +9606,7 @@ function exportarColocacionPDF() {
     alternateRowStyles: { fillColor: [239, 246, 255] }
   });
 
-  doc.save('AP_Reporte_Colocacion_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('AP_Reporte_Colocacion_' + hoyLocal() + '.pdf');
   toast('Reporte de colocación PDF generado', 'success');
 }
 
@@ -9786,7 +9825,7 @@ function openDisposicion(creditoId) {
   if (isNaN(monto) || monto <= 0) return toast('Monto inválido', 'error');
   if (monto > disponible + 0.01) return toast('Monto excede el disponible: ' + fmt(disponible), 'error');
 
-  var fecha = new Date().toISOString().split('T')[0];
+  var fecha = hoyLocal();
   var creditos = getStore('creditos');
   creditos = creditos.map(function(cr) {
     if (cr.id !== creditoId) return cr;
@@ -9842,7 +9881,7 @@ function openDisposicionFondeo(fondeoId) {
     if (isNaN(monto) || monto <= 0) return toast('Monto inválido', 'error');
     if (monto > disponible + 0.01) return toast('Monto excede disponible: ' + fmt(disponible), 'error');
 
-    var fecha = new Date().toISOString().split('T')[0];
+    var fecha = hoyLocal();
     var fondeos = getStore('fondeos');
     fondeos = fondeos.map(function(fo) {
       if (fo.id !== fondeoId) return fo;
@@ -9881,7 +9920,7 @@ function pagarFondeoCC(fondeoId) {
     if (isNaN(monto) || monto <= 0) return toast('Monto inválido', 'error');
     if (monto > saldoDisp + 0.01) return toast('Monto excede saldo: ' + fmt(saldoDisp), 'error');
 
-    var fecha = new Date().toISOString().split('T')[0];
+    var fecha = hoyLocal();
     var fondeos = getStore('fondeos');
     fondeos = fondeos.map(function(fo) {
       if (fo.id !== fondeoId) return fo;
@@ -10009,7 +10048,7 @@ function liquidarCredito(id) {
     if (saldoAnterior > 0) {
       var contab = getStore('contabilidad');
       var ctaCartLiq = c.tipo === 'arrendamiento' ? '1204' : '1201';
-      contab.push({ id: nextId('contabilidad'), fecha: new Date().toISOString().split('T')[0], tipo: 'liquidacion_credito', concepto: 'Liquidación ' + c.numero + ' — Saldo: ' + fmt(saldoAnterior), monto: -saldoAnterior, cuentaDebe: '5202', cuentaHaber: ctaCartLiq, creditoId: id, referencia: c.numero, createdAt: new Date().toISOString() });
+      contab.push({ id: nextId('contabilidad'), fecha: hoyLocal(), tipo: 'liquidacion_credito', concepto: 'Liquidación ' + c.numero + ' — Saldo: ' + fmt(saldoAnterior), monto: -saldoAnterior, cuentaDebe: '5202', cuentaHaber: ctaCartLiq, creditoId: id, referencia: c.numero, createdAt: new Date().toISOString() });
       setStore('contabilidad', contab);
     }
     addAudit('Liquidar', 'Créditos', c.numero);
@@ -10430,7 +10469,7 @@ function exportarExpedientePDF(clienteId) {
     });
   }
 
-  doc.save('AP_Expediente_' + c.nombre.replace(/\s+/g, '_') + '_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('AP_Expediente_' + c.nombre.replace(/\s+/g, '_') + '_' + hoyLocal() + '.pdf');
   toast('Índice de expediente PDF generado', 'success');
 }
 
@@ -11426,8 +11465,10 @@ function ejecutarImport() {
             credito.amortizacion[pi].pagado = true;
           }
           // Actualizar saldo: usar saldo_actual del Excel si se proporcionó, sino calcular del schedule
-          if (row.saldo_actual > 0) {
-            credito.saldo = row.saldo_actual;
+          // Nota: saldo_actual=0 es válido (crédito liquidado), solo ignorar si no se proporcionó (undefined/null/'')
+          if (row.saldo_actual !== undefined && row.saldo_actual !== null && row.saldo_actual !== '' && !isNaN(row.saldo_actual)) {
+            credito.saldo = parseFloat(row.saldo_actual);
+            if (credito.saldo <= 0.01) credito.estado = 'liquidado'; // saldo 0 = liquidado
           } else {
             // Saldo = saldoFinal del último periodo pagado
             credito.saldo = credito.amortizacion[pagosHechos - 1].saldoFinal;
@@ -11750,7 +11791,9 @@ function calcularScoring() {
   var disponible = ingresos - gastos - pagoDeudas;
   // Tasa estimada para calcular cuota
   var tasaEstimada = 0.24; // 24% default
-  var cuotaEstimada = montoSolicitado * (tasaEstimada / 12) / (1 - Math.pow(1 + tasaEstimada / 12, -plazoSolicitado));
+  var _trScor = tasaEstimada / 12;
+  var _denScor = 1 - Math.pow(1 + _trScor, -plazoSolicitado);
+  var cuotaEstimada = _denScor > 0.0001 ? montoSolicitado * _trScor / _denScor : montoSolicitado / plazoSolicitado;
   var cuotaConIVA = cuotaEstimada * 1.05; // aprox con IVA sobre intereses
 
   // PTI: Payment-to-Income ratio (cuota / ingresos)
@@ -11778,7 +11821,7 @@ function calcularScoring() {
   detalles.push({ cat: 'Capacidad', factor: 'DTI — Deuda Total/Ingreso (' + (dti * 100).toFixed(1) + '%)', pts: dtiPts, max: 80 });
 
   // Flujo disponible vs cuota
-  var cobertura = disponible > 0 ? disponible / cuotaConIVA : 0;
+  var cobertura = (disponible > 0 && cuotaConIVA > 0) ? disponible / cuotaConIVA : 0;
   var cobPts = 0;
   if (cobertura >= 2.0) cobPts = 70;
   else if (cobertura >= 1.5) cobPts = 55;
@@ -12324,7 +12367,7 @@ function exportarScoringPDF() {
   }
 
   // Guardar
-  var filename = 'Scoring_' + ev.rfc + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+  var filename = 'Scoring_' + ev.rfc + '_' + hoyLocal() + '.pdf';
   doc.save(filename);
   toast('PDF exportado: ' + filename, 'success');
 }
@@ -12342,6 +12385,581 @@ function refreshScoringClientes() {
       return '<option value="' + c.id + '">' + esc(c.nombre) + ' (' + c.rfc + ')</option>';
     }).join('');
   if (current) sel.value = current;
+}
+
+// ============================================================
+//  GENERACIÓN DE CONTRATOS, PAGARÉS Y TABLA AMORT. EN PDF
+// ============================================================
+
+// ── Número a letras (para pagarés) ──
+function numeroALetras(num) {
+  var data = {
+    unidades: ['', 'UN', 'DOS', 'TRES', 'CUATRO', 'CINCO', 'SEIS', 'SIETE', 'OCHO', 'NUEVE'],
+    decenas: ['', 'DIEZ', 'VEINTE', 'TREINTA', 'CUARENTA', 'CINCUENTA', 'SESENTA', 'SETENTA', 'OCHENTA', 'NOVENTA'],
+    especiales: ['DIEZ', 'ONCE', 'DOCE', 'TRECE', 'CATORCE', 'QUINCE', 'DIECISÉIS', 'DIECISIETE', 'DIECIOCHO', 'DIECINUEVE'],
+    centenas: ['', 'CIENTO', 'DOSCIENTOS', 'TRESCIENTOS', 'CUATROCIENTOS', 'QUINIENTOS', 'SEISCIENTOS', 'SETECIENTOS', 'OCHOCIENTOS', 'NOVECIENTOS']
+  };
+  function seccion(n) {
+    if (n === 0) return '';
+    if (n === 100) return 'CIEN';
+    var c = Math.floor(n / 100), d = Math.floor((n % 100) / 10), u = n % 10;
+    var txt = data.centenas[c];
+    var resto = n % 100;
+    if (resto >= 10 && resto <= 19) { return (txt ? txt + ' ' : '') + data.especiales[resto - 10]; }
+    if (resto >= 21 && resto <= 29) { return (txt ? txt + ' ' : '') + 'VEINTI' + data.unidades[u]; }
+    var dtxt = data.decenas[d];
+    var utxt = data.unidades[u];
+    if (dtxt && utxt) return (txt ? txt + ' ' : '') + dtxt + ' Y ' + utxt;
+    return (txt ? txt + ' ' : '') + dtxt + utxt;
+  }
+  if (num === 0) return 'CERO';
+  var neg = num < 0; if (neg) num = Math.abs(num);
+  var entero = Math.floor(num);
+  var centavos = Math.round((num - entero) * 100);
+  var resultado = '';
+  if (entero >= 1000000) {
+    var millones = Math.floor(entero / 1000000);
+    resultado += (millones === 1 ? 'UN MILLÓN' : seccion(millones) + ' MILLONES');
+    entero %= 1000000;
+    if (entero > 0) resultado += ' ';
+  }
+  if (entero >= 1000) {
+    var miles = Math.floor(entero / 1000);
+    resultado += (miles === 1 ? 'MIL' : seccion(miles) + ' MIL');
+    entero %= 1000;
+    if (entero > 0) resultado += ' ';
+  }
+  if (entero > 0) resultado += seccion(entero);
+  resultado += ' PESOS ' + String(centavos).padStart(2, '0') + '/100 M.N.';
+  return (neg ? 'MENOS ' : '') + resultado;
+}
+
+// ── Helpers PDF ──
+function _pdfHeader(doc, titulo, subtitulo) {
+  var w = doc.internal.pageSize.getWidth();
+  var m = 18;
+  doc.setFillColor(27, 42, 74);
+  doc.rect(0, 0, w, 36, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.setFont('helvetica', 'bold');
+  doc.text(EMPRESA.nombre, m, 14);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(EMPRESA.razonSocial, m, 22);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'bold');
+  doc.text(titulo, m, 32);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  if (subtitulo) doc.text(subtitulo, w - m, 32, { align: 'right' });
+  doc.setTextColor(0, 0, 0);
+  return 44;
+}
+
+function _pdfSeccion(doc, y, titulo, m) {
+  var w = doc.internal.pageSize.getWidth();
+  doc.setTextColor(27, 42, 74);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text(titulo, m, y);
+  y += 2;
+  doc.setDrawColor(27, 42, 74);
+  doc.line(m, y, w - m, y);
+  y += 5;
+  doc.setTextColor(50, 50, 50);
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+  return y;
+}
+
+function _pdfParrafo(doc, y, texto, m, maxW) {
+  var lines = doc.splitTextToSize(texto, maxW || (doc.internal.pageSize.getWidth() - m * 2));
+  var pageH = doc.internal.pageSize.getHeight();
+  for (var i = 0; i < lines.length; i++) {
+    if (y > pageH - 25) { doc.addPage(); y = 20; }
+    doc.text(lines[i], m, y);
+    y += 4;
+  }
+  return y + 2;
+}
+
+function _pdfFirmas(doc, y, nombreEmpresa, nombreCliente) {
+  var w = doc.internal.pageSize.getWidth();
+  var m = 18;
+  var pageH = doc.internal.pageSize.getHeight();
+  if (y > pageH - 60) { doc.addPage(); y = 30; }
+  y += 15;
+  var col1 = m + 20, col2 = w / 2 + 20;
+  doc.setDrawColor(100, 100, 100);
+  doc.line(col1 - 15, y, col1 + 60, y);
+  doc.line(col2 - 15, y, col2 + 60, y);
+  y += 5;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('EL ACREDITANTE', col1 + 22, y, { align: 'center' });
+  doc.text('EL ACREDITADO', col2 + 22, y, { align: 'center' });
+  y += 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(nombreEmpresa, col1 + 22, y, { align: 'center' });
+  doc.text(nombreCliente, col2 + 22, y, { align: 'center' });
+  y += 4;
+  doc.text('Representante Legal', col1 + 22, y, { align: 'center' });
+  return y + 10;
+}
+
+function _pdfPie(doc) {
+  var totalPages = doc.internal.getNumberOfPages();
+  for (var p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    var w = doc.internal.pageSize.getWidth();
+    var h = doc.internal.pageSize.getHeight();
+    doc.setFontSize(7);
+    doc.setTextColor(150, 150, 150);
+    doc.setFont('helvetica', 'normal');
+    doc.text(EMPRESA.razonSocial + ' — Documento generado el ' + new Date().toLocaleDateString('es-MX'), 18, h - 8);
+    doc.text('Página ' + p + ' de ' + totalPages, w - 18, h - 8, { align: 'right' });
+  }
+}
+
+function _getCreditoYCliente(id) {
+  var c = getStore('creditos').find(function(cr) { return cr.id === id; });
+  if (!c) { toast('Crédito no encontrado', 'error'); return null; }
+  var cli = getStore('clientes').find(function(cl) { return cl.id === c.clienteId; });
+  if (!cli) { toast('Cliente no encontrado', 'error'); return null; }
+  return { c: c, cli: cli };
+}
+
+var _periLabel = { mensual: 'Mensual', quincenal: 'Quincenal', semanal: 'Semanal', diario: 'Diario' };
+
+// ════════════════════════════════════════════════════════════════
+//  1. CONTRATO DE CRÉDITO / ARRENDAMIENTO PDF
+// ════════════════════════════════════════════════════════════════
+function generarContratoPDF(id) {
+  var data = _getCreditoYCliente(id);
+  if (!data) return;
+  var c = data.c, cli = data.cli;
+  if (!window.jspdf) return toast('jsPDF no cargada', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('p', 'mm', 'letter');
+  var w = doc.internal.pageSize.getWidth();
+  var m = 18;
+  var maxW = w - m * 2;
+
+  var esArrendamiento = c.tipo === 'arrendamiento';
+  var tipoContrato = esArrendamiento ? 'CONTRATO DE ARRENDAMIENTO FINANCIERO' : 'CONTRATO DE CRÉDITO SIMPLE';
+  var fechaHoy = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  var montoTxt = '$' + Number(c.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+  var montoLetras = numeroALetras(c.monto);
+  var tasaPct = (c.tasa * 100).toFixed(2);
+  var tasaMoraPct = ((c.tasaMoratoria || c.tasa * 1.5) * 100).toFixed(2);
+  var vrPct = (c.valorResidual || 0).toFixed(2);
+
+  // ── Encabezado ──
+  var y = _pdfHeader(doc, tipoContrato, 'Contrato: ' + c.numero);
+
+  // ── Preámbulo ──
+  y = _pdfSeccion(doc, y, 'DECLARACIONES', m);
+  y = _pdfParrafo(doc, y, 'En la ciudad de México, a ' + fechaHoy + ', celebran el presente ' + tipoContrato.toLowerCase() + ', por una parte ' + EMPRESA.razonSocial + ' (en lo sucesivo "EL ACREDITANTE"), y por la otra ' + cli.nombre + ' con RFC ' + cli.rfc + (cli.curp ? ', CURP ' + cli.curp : '') + (cli.direccion ? ', con domicilio en ' + cli.direccion + (cli.ciudad ? ', ' + cli.ciudad : '') + (cli.estado ? ', ' + cli.estado : '') + (cli.cp ? ', C.P. ' + cli.cp : '') : '') + ' (en lo sucesivo "EL ACREDITADO"), conforme a las siguientes:', m, maxW);
+
+  // ── Cláusula 1: Objeto ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA PRIMERA — OBJETO', m);
+  if (esArrendamiento) {
+    y = _pdfParrafo(doc, y, 'EL ACREDITANTE se obliga a otorgar en arrendamiento financiero a EL ACREDITADO, el(los) bien(es) descrito(s) a continuación, con un valor total de ' + montoTxt + ' (' + montoLetras + '), quien se obliga a pagar las rentas convenidas durante el plazo forzoso del presente contrato.', m, maxW);
+    if (c.valorEquipo) {
+      y = _pdfParrafo(doc, y, 'Valor del equipo: $' + Number(c.valorEquipo).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + '. Descripción del equipo: [Especificar marca, modelo, serie y características del equipo arrendado].', m, maxW);
+    }
+  } else {
+    y = _pdfParrafo(doc, y, 'EL ACREDITANTE se obliga a otorgar a EL ACREDITADO un crédito simple por la cantidad de ' + montoTxt + ' (' + montoLetras + '), que se destinará al fin que EL ACREDITADO determine, obligándose este último a la devolución de dicha cantidad más los accesorios pactados en el presente contrato.', m, maxW);
+  }
+
+  // ── Cláusula 2: Condiciones ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA SEGUNDA — CONDICIONES FINANCIERAS', m);
+  var condiciones = [
+    ['Número de contrato:', c.numero],
+    ['Monto del crédito:', montoTxt],
+    ['Tasa de interés anual fija:', tasaPct + '%'],
+    ['Tasa de interés moratoria:', tasaMoraPct + '%'],
+    ['Plazo:', c.plazo + ' meses'],
+    ['Periodicidad de pago:', _periLabel[c.periodicidad] || c.periodicidad],
+    ['Fecha de inicio:', new Date(c.fechaInicio).toLocaleDateString('es-MX')],
+    ['Fecha de vencimiento:', c.fechaVencimiento ? new Date(c.fechaVencimiento).toLocaleDateString('es-MX') : 'N/A'],
+    ['Pago periódico estimado:', '$' + Number(c.pago).toLocaleString('es-MX', { minimumFractionDigits: 2 })],
+    ['Moneda:', c.moneda || 'MXN']
+  ];
+  if (esArrendamiento) {
+    condiciones.push(['Valor residual:', vrPct + '% sobre monto original']);
+  }
+  if (c.comision) {
+    condiciones.push(['Comisión por apertura:', '$' + Number(c.comision).toLocaleString('es-MX', { minimumFractionDigits: 2 })]);
+  }
+  condiciones.forEach(function(row) {
+    if (y > doc.internal.pageSize.getHeight() - 25) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[0], m + 2, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(row[1], m + 58, y);
+    y += 5;
+  });
+  y += 3;
+
+  // ── Cláusula 3: Forma de pago ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA TERCERA — FORMA DE PAGO', m);
+  y = _pdfParrafo(doc, y, 'EL ACREDITADO se obliga a realizar los pagos correspondientes de manera ' + (_periLabel[c.periodicidad] || c.periodicidad).toLowerCase() + ', de acuerdo con la tabla de amortización anexa al presente contrato, la cual forma parte integral del mismo. Los pagos deberán realizarse mediante transferencia electrónica a la cuenta que EL ACREDITANTE designe para tal efecto.', m, maxW);
+
+  // ── Cláusula 4: Intereses moratorios ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA CUARTA — INTERESES MORATORIOS', m);
+  y = _pdfParrafo(doc, y, 'En caso de mora en el pago de cualquiera de las amortizaciones, EL ACREDITADO pagará intereses moratorios a una tasa anual del ' + tasaMoraPct + '%, calculados sobre el saldo vencido desde la fecha de vencimiento de cada pago hasta la fecha en que se realice el pago efectivo. Los intereses moratorios se calcularán sobre saldos insolutos vencidos y serán exigibles sin necesidad de requerimiento alguno.', m, maxW);
+
+  // ── Cláusula 5: Vencimiento anticipado ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA QUINTA — VENCIMIENTO ANTICIPADO', m);
+  y = _pdfParrafo(doc, y, 'EL ACREDITANTE podrá dar por vencido anticipadamente el presente contrato y exigir el pago total del saldo insoluto más accesorios, sin necesidad de declaración judicial, en los siguientes casos: a) Falta de pago de una o más amortizaciones en los términos convenidos. b) Si EL ACREDITADO proporciona información falsa. c) Si EL ACREDITADO es declarado en concurso mercantil o insolvencia. d) Si las garantías otorgadas sufren menoscabo significativo.', m, maxW);
+
+  // ── Cláusula 6: Pago anticipado ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA SEXTA — PAGO ANTICIPADO', m);
+  y = _pdfParrafo(doc, y, 'EL ACREDITADO podrá realizar pagos anticipados parciales o totales en cualquier momento durante la vigencia del contrato, sin penalización alguna, los cuales se aplicarán al saldo insoluto del capital.', m, maxW);
+
+  // ── Cláusula 7: Arrendamiento (si aplica) ──
+  if (esArrendamiento) {
+    y = _pdfSeccion(doc, y, 'CLÁUSULA SÉPTIMA — OPCIÓN DE COMPRA', m);
+    y = _pdfParrafo(doc, y, 'Al término del plazo forzoso del arrendamiento, EL ACREDITADO tendrá derecho a ejercer la opción de compra del bien arrendado, pagando el valor residual equivalente al ' + vrPct + '% del valor original del equipo, es decir, $' + (c.monto * (c.valorResidual || 0) / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + '. Las partes acuerdan que los intereses se calculan bajo el método flat (sobre monto original) y el IVA aplicable se calculará conforme a la legislación vigente.', m, maxW);
+  }
+
+  // ── Cláusula: Jurisdicción ──
+  y = _pdfSeccion(doc, y, esArrendamiento ? 'CLÁUSULA OCTAVA — JURISDICCIÓN' : 'CLÁUSULA SÉPTIMA — JURISDICCIÓN', m);
+  y = _pdfParrafo(doc, y, 'Para la interpretación y cumplimiento del presente contrato, las partes se someten a la jurisdicción de los tribunales competentes de la Ciudad de México, renunciando expresamente a cualquier otro fuero que por razón de sus domicilios presentes o futuros pudiera corresponderles.', m, maxW);
+
+  // ── Cláusula: Ley aplicable ──
+  y = _pdfSeccion(doc, y, esArrendamiento ? 'CLÁUSULA NOVENA — LEY APLICABLE' : 'CLÁUSULA OCTAVA — LEY APLICABLE', m);
+  y = _pdfParrafo(doc, y, 'El presente contrato se regirá e interpretará de conformidad con la legislación mercantil y financiera aplicable de los Estados Unidos Mexicanos, incluyendo la Ley General de Organizaciones y Actividades Auxiliares del Crédito y las disposiciones que emita la Comisión Nacional Bancaria y de Valores.', m, maxW);
+
+  // ── Firmas ──
+  y = _pdfFirmas(doc, y, EMPRESA.nombreCorto, cli.nombre);
+
+  // ── Nota legal ──
+  if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage(); y = 20; }
+  doc.setFontSize(7);
+  doc.setTextColor(130, 130, 130);
+  y += 5;
+  y = _pdfParrafo(doc, y, 'Este documento ha sido generado electrónicamente y constituye un borrador de contrato. Las partes deberán revisar y, en su caso, adecuar las cláusulas antes de su firma definitiva. Se recomienda consultar a un asesor legal para su formalización.', m, maxW);
+
+  // ── Pie de página ──
+  _pdfPie(doc);
+
+  doc.save('Contrato_' + c.numero + '.pdf');
+  toast('Contrato PDF generado: ' + c.numero, 'success');
+  addAudit('Contrato PDF generado', 'Créditos', c.numero + ' — ' + cli.nombre);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  2. PAGARÉ PDF
+// ════════════════════════════════════════════════════════════════
+function generarPagarePDF(id) {
+  var data = _getCreditoYCliente(id);
+  if (!data) return;
+  var c = data.c, cli = data.cli;
+  if (!window.jspdf) return toast('jsPDF no cargada', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('p', 'mm', 'letter');
+  var w = doc.internal.pageSize.getWidth();
+  var m = 20;
+  var maxW = w - m * 2;
+
+  var montoTotal = c.monto;
+  // Calcular monto total a pagar (capital + intereses) desde amortización
+  if (c.amortizacion && c.amortizacion.length > 0) {
+    montoTotal = c.amortizacion.reduce(function(sum, a) { return sum + (a.pagoTotal || 0); }, 0);
+  }
+  var montoTxt = '$' + Number(montoTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+  var montoLetras = numeroALetras(montoTotal);
+  var fechaVenc = c.fechaVencimiento ? new Date(c.fechaVencimiento).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) : 'Al vencimiento del contrato ' + c.numero;
+  var fechaHoy = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  var tasaMoraPct = ((c.tasaMoratoria || c.tasa * 1.5) * 100).toFixed(2);
+
+  var y = 20;
+
+  // ── Marco decorativo ──
+  doc.setDrawColor(27, 42, 74);
+  doc.setLineWidth(1.5);
+  doc.rect(10, 10, w - 20, doc.internal.pageSize.getHeight() - 20);
+  doc.setLineWidth(0.5);
+  doc.rect(12, 12, w - 24, doc.internal.pageSize.getHeight() - 24);
+
+  // ── Título ──
+  y = 28;
+  doc.setFillColor(27, 42, 74);
+  doc.rect(m, y - 6, maxW, 14, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(20);
+  doc.setFont('helvetica', 'bold');
+  doc.text('PAGARÉ', w / 2, y + 3, { align: 'center' });
+  y += 16;
+
+  // ── Línea de monto ──
+  doc.setTextColor(27, 42, 74);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('BUENO POR:', m, y);
+  doc.setFontSize(14);
+  doc.setTextColor(200, 16, 46);
+  doc.text(montoTxt, m + 30, y);
+  doc.setFontSize(9);
+  doc.setTextColor(27, 42, 74);
+  doc.setFont('helvetica', 'normal');
+  doc.text('No. Crédito: ' + c.numero, w - m, y, { align: 'right' });
+  y += 10;
+
+  // ── Lugar y fecha ──
+  doc.setFontSize(10);
+  doc.setTextColor(50, 50, 50);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Lugar y fecha de suscripción: Ciudad de México, a ' + fechaHoy, m, y);
+  y += 8;
+
+  // ── Cuerpo del pagaré ──
+  doc.setFontSize(10);
+  var cuerpo = 'Debo y pagaré incondicionalmente a la orden de ' + EMPRESA.razonSocial + ', en la Ciudad de México, el día ' + fechaVenc + ', la cantidad de ' + montoTxt + ' (' + montoLetras + '), valor recibido a mi entera satisfacción.';
+  y = _pdfParrafo(doc, y, cuerpo, m, maxW);
+  y += 2;
+
+  var cuerpo2 = 'Este pagaré está vinculado al contrato de crédito número ' + c.numero + ' celebrado entre las partes, por un monto original de $' + Number(c.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + ', con una tasa de interés anual del ' + (c.tasa * 100).toFixed(2) + '% y un plazo de ' + c.plazo + ' meses.';
+  y = _pdfParrafo(doc, y, cuerpo2, m, maxW);
+  y += 2;
+
+  var cuerpo3 = 'En caso de falta de pago oportuno, el suscriptor se obliga a pagar intereses moratorios a una tasa anual del ' + tasaMoraPct + '%, calculados sobre el saldo vencido. El suscriptor acepta que este pagaré podrá ser protestado en los términos de la Ley General de Títulos y Operaciones de Crédito.';
+  y = _pdfParrafo(doc, y, cuerpo3, m, maxW);
+  y += 2;
+
+  var cuerpo4 = 'El suscriptor renuncia expresamente a los beneficios de orden y excusión previstos en la legislación aplicable, así como al domicilio y jurisdicción que por razón de su domicilio presente o futuro pudiera corresponderle.';
+  y = _pdfParrafo(doc, y, cuerpo4, m, maxW);
+  y += 8;
+
+  // ── Datos del suscriptor ──
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(27, 42, 74);
+  doc.text('DATOS DEL SUSCRIPTOR:', m, y);
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(50, 50, 50);
+  doc.setFontSize(9);
+  var datosS = [
+    ['Nombre:', cli.nombre],
+    ['RFC:', cli.rfc],
+    ['CURP:', cli.curp || 'N/A'],
+    ['Domicilio:', (cli.direccion || '') + (cli.ciudad ? ', ' + cli.ciudad : '') + (cli.estado ? ', ' + cli.estado : '') + (cli.cp ? ', C.P. ' + cli.cp : '')],
+    ['Teléfono:', cli.telefono || 'N/A'],
+    ['Correo:', cli.email || 'N/A']
+  ];
+  datosS.forEach(function(row) {
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[0], m + 2, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(String(row[1] || 'N/A'), m + 28, y);
+    y += 5;
+  });
+  y += 5;
+
+  // ── Datos del beneficiario ──
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(27, 42, 74);
+  doc.text('BENEFICIARIO:', m, y);
+  y += 6;
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(50, 50, 50);
+  doc.text(EMPRESA.razonSocial, m + 2, y);
+  y += 12;
+
+  // ── Firma del suscriptor ──
+  var centroFirma = w / 2;
+  doc.setDrawColor(100, 100, 100);
+  doc.line(centroFirma - 45, y, centroFirma + 45, y);
+  y += 5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9);
+  doc.setTextColor(27, 42, 74);
+  doc.text('ACEPTO — SUSCRIPTOR', centroFirma, y, { align: 'center' });
+  y += 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.text(cli.nombre, centroFirma, y, { align: 'center' });
+  y += 4;
+  doc.text('RFC: ' + cli.rfc, centroFirma, y, { align: 'center' });
+
+  // ── Avales (placeholder para 2 avales) ──
+  y += 15;
+  if (y < doc.internal.pageSize.getHeight() - 50) {
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(27, 42, 74);
+    doc.text('AVAL 1:', m, y);
+    doc.text('AVAL 2:', w / 2 + 5, y);
+    y += 12;
+    doc.setDrawColor(100, 100, 100);
+    doc.line(m, y, m + 70, y);
+    doc.line(w / 2 + 5, y, w / 2 + 75, y);
+    y += 4;
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(8);
+    doc.text('Nombre y firma', m + 35, y, { align: 'center' });
+    doc.text('Nombre y firma', w / 2 + 40, y, { align: 'center' });
+    y += 4;
+    doc.text('RFC: ____________________', m, y);
+    doc.text('RFC: ____________________', w / 2 + 5, y);
+  }
+
+  // ── Pie ──
+  doc.setFontSize(7);
+  doc.setTextColor(150, 150, 150);
+  doc.text(EMPRESA.razonSocial + ' — Pagaré generado electrónicamente', w / 2, doc.internal.pageSize.getHeight() - 14, { align: 'center' });
+
+  doc.save('Pagare_' + c.numero + '.pdf');
+  toast('Pagaré PDF generado: ' + c.numero, 'success');
+  addAudit('Pagaré PDF generado', 'Créditos', c.numero + ' — ' + cli.nombre + ' — $' + Number(montoTotal).toLocaleString('es-MX'));
+}
+
+// ════════════════════════════════════════════════════════════════
+//  3. TABLA DE AMORTIZACIÓN PDF
+// ════════════════════════════════════════════════════════════════
+function generarTablaAmortPDF(id) {
+  var data = _getCreditoYCliente(id);
+  if (!data) return;
+  var c = data.c, cli = data.cli;
+  if (!window.jspdf) return toast('jsPDF no cargada', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('l', 'mm', 'letter');
+  var w = doc.internal.pageSize.getWidth();
+  var m = 14;
+
+  // ── Encabezado ──
+  doc.setFillColor(27, 42, 74);
+  doc.rect(0, 0, w, 30, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TABLA DE AMORTIZACIÓN', m, 12);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(EMPRESA.nombre, m, 20);
+  doc.setFontSize(9);
+  doc.text('Contrato: ' + c.numero + '  |  Cliente: ' + cli.nombre + '  |  RFC: ' + cli.rfc, m, 27);
+
+  // ── Resumen ──
+  var y = 36;
+  doc.setTextColor(50, 50, 50);
+  doc.setFontSize(9);
+  var esArr = c.tipo === 'arrendamiento';
+  var resumen = 'Monto: $' + Number(c.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })
+    + '  |  Tasa: ' + (c.tasa * 100).toFixed(2) + '%'
+    + '  |  Plazo: ' + c.plazo + ' meses'
+    + '  |  Periodicidad: ' + (_periLabel[c.periodicidad] || c.periodicidad)
+    + '  |  Inicio: ' + new Date(c.fechaInicio).toLocaleDateString('es-MX')
+    + (esArr ? '  |  VR: ' + (c.valorResidual || 0) + '%' : '')
+    + '  |  Pago: $' + Number(c.pago).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+  doc.text(resumen, m, y);
+  y += 6;
+
+  // ── Tabla ──
+  var amort = c.amortizacion || [];
+  if (amort.length === 0) {
+    doc.text('No hay tabla de amortización disponible para este crédito.', m, y + 10);
+    doc.save('TablaAmort_' + c.numero + '.pdf');
+    return;
+  }
+
+  var headCols = ['#', 'Fecha', 'Saldo Inicial', 'Capital', 'Interés'];
+  if (esArr) headCols.push('IVA');
+  headCols.push('Pago Total', 'Saldo Final', 'Estado');
+
+  var bodyRows = amort.map(function(a) {
+    var row = [
+      a.numero,
+      fmtDate(a.fecha),
+      '$' + Number(a.saldoInicial).toLocaleString('es-MX', { minimumFractionDigits: 2 }),
+      '$' + Number(a.capital).toLocaleString('es-MX', { minimumFractionDigits: 2 }),
+      '$' + Number(a.interes).toLocaleString('es-MX', { minimumFractionDigits: 2 })
+    ];
+    if (esArr) row.push('$' + Number(a.iva || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 }));
+    row.push(
+      '$' + Number(a.pagoTotal).toLocaleString('es-MX', { minimumFractionDigits: 2 }),
+      '$' + Number(a.saldoFinal).toLocaleString('es-MX', { minimumFractionDigits: 2 }),
+      a.pagado ? 'PAGADO' : 'PENDIENTE'
+    );
+    return row;
+  });
+
+  // Totales
+  var totCapital = amort.reduce(function(s, a) { return s + (a.capital || 0); }, 0);
+  var totInteres = amort.reduce(function(s, a) { return s + (a.interes || 0); }, 0);
+  var totIva = amort.reduce(function(s, a) { return s + (a.iva || 0); }, 0);
+  var totPago = amort.reduce(function(s, a) { return s + (a.pagoTotal || 0); }, 0);
+  var totalRow = ['', 'TOTALES', '',
+    '$' + totCapital.toLocaleString('es-MX', { minimumFractionDigits: 2 }),
+    '$' + totInteres.toLocaleString('es-MX', { minimumFractionDigits: 2 })
+  ];
+  if (esArr) totalRow.push('$' + totIva.toLocaleString('es-MX', { minimumFractionDigits: 2 }));
+  totalRow.push('$' + totPago.toLocaleString('es-MX', { minimumFractionDigits: 2 }), '', '');
+  bodyRows.push(totalRow);
+
+  doc.autoTable({
+    startY: y,
+    head: [headCols],
+    body: bodyRows,
+    theme: 'grid',
+    styles: { fontSize: 7.5, cellPadding: 1.5, halign: 'right', font: 'helvetica' },
+    headStyles: { fillColor: [27, 42, 74], textColor: 255, halign: 'center', fontStyle: 'bold' },
+    columnStyles: {
+      0: { halign: 'center', cellWidth: 10 },
+      1: { halign: 'center', cellWidth: 22 }
+    },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    didParseCell: function(data) {
+      // Última fila (totales) en negrita
+      if (data.row.index === bodyRows.length - 1) {
+        data.cell.styles.fontStyle = 'bold';
+        data.cell.styles.fillColor = [230, 235, 245];
+      }
+      // Estado con color
+      var colEstado = esArr ? 8 : 7;
+      if (data.column.index === colEstado && data.section === 'body') {
+        if (data.cell.raw === 'PAGADO') {
+          data.cell.styles.textColor = [16, 150, 80];
+          data.cell.styles.fontStyle = 'bold';
+        } else if (data.cell.raw === 'PENDIENTE') {
+          data.cell.styles.textColor = [200, 120, 0];
+        }
+      }
+    },
+    margin: { left: m, right: m }
+  });
+
+  // ── Pie con firmas ──
+  var finalY = doc.lastAutoTable.finalY + 10;
+  var h = doc.internal.pageSize.getHeight();
+  if (finalY > h - 30) { doc.addPage(); finalY = 20; }
+  doc.setFontSize(8);
+  doc.setTextColor(100, 100, 100);
+  doc.text('Acepto las condiciones de pago establecidas en la presente tabla de amortización.', m, finalY);
+  finalY += 12;
+  doc.setDrawColor(100, 100, 100);
+  doc.line(m, finalY, m + 60, finalY);
+  doc.line(w / 2 + 10, finalY, w / 2 + 70, finalY);
+  finalY += 4;
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.text('EL ACREDITANTE', m + 30, finalY, { align: 'center' });
+  doc.text('EL ACREDITADO', w / 2 + 40, finalY, { align: 'center' });
+  finalY += 3;
+  doc.setFont('helvetica', 'normal');
+  doc.text(EMPRESA.nombreCorto, m + 30, finalY, { align: 'center' });
+  doc.text(cli.nombre, w / 2 + 40, finalY, { align: 'center' });
+
+  _pdfPie(doc);
+
+  doc.save('TablaAmort_' + c.numero + '.pdf');
+  toast('Tabla de amortización PDF generada: ' + c.numero, 'success');
+  addAudit('Tabla amort. PDF generada', 'Créditos', c.numero + ' — ' + cli.nombre);
 }
 
 // ============================================================
@@ -13078,7 +13696,7 @@ function exportarRiesgoPDF() {
     }
   });
 
-  doc.save('AP_Reporte_Riesgo_' + new Date().toISOString().split('T')[0] + '.pdf');
+  doc.save('AP_Reporte_Riesgo_' + hoyLocal() + '.pdf');
   toast('Reporte de riesgo PDF generado', 'success');
 }
 
@@ -13166,7 +13784,9 @@ function recalcularUmbralesPLD() {
   var aviso = Math.round(1605 * uma);
   setInputMiles('pldUmbralAviso', aviso);
   setInputMiles('pldUmbralEfectivo', aviso);
-  toast('Umbrales recalculados desde UMA $' + uma + ': Aviso=' + fmt(aviso), 'info');
+  // Guardar automáticamente para que no se pierdan al recargar
+  guardarConfigPLD();
+  toast('Umbrales recalculados y guardados desde UMA $' + uma + ': Aviso=' + fmt(aviso), 'info');
 }
 
 function cargarConfigPLD() {
@@ -13755,7 +14375,7 @@ function exportarPLDCSV() {
   var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
   var a = document.createElement('a');
   a.href = URL.createObjectURL(blob);
-  a.download = 'PLD_Operaciones_' + new Date().toISOString().split('T')[0] + '.csv';
+  a.download = 'PLD_Operaciones_' + hoyLocal() + '.csv';
   a.click();
   URL.revokeObjectURL(a.href);
   toast('CSV exportado con ' + pldStore.length + ' operaciones', 'success');
@@ -13845,7 +14465,7 @@ function renderRiesgoClientes() {
 function marcarRevisionPLD(clienteId) {
   var clientes = getStore('clientes');
   clientes = clientes.map(function(c) {
-    if (c.id === clienteId) c.ultimaRevisionPLD = new Date().toISOString().split('T')[0];
+    if (c.id === clienteId) c.ultimaRevisionPLD = hoyLocal();
     return c;
   });
   setStore('clientes', clientes);
@@ -14237,7 +14857,7 @@ function abrirModalGarantia(creditoId) {
   document.getElementById('garEstado').value = 'vigente';
   document.getElementById('garDescripcion').value = '';
   document.getElementById('garValor').value = '';
-  document.getElementById('garFechaAvaluo').value = new Date().toISOString().split('T')[0];
+  document.getElementById('garFechaAvaluo').value = hoyLocal();
   document.getElementById('garUbicacion').value = '';
   document.getElementById('garDocumento').value = '';
   document.getElementById('garNotas').value = '';
@@ -14586,7 +15206,7 @@ function ejecutarPagoAprobado(sol) {
 
         if (esArrendRecalcAp) {
           var capFijoArrAp = +((saldoNuevoAp - vrMontoAp) / nuevoPeriodosAp).toFixed(2);
-          var intFlatArrAp = +(saldoNuevoAp * tasaPerAp).toFixed(2);
+          var intFlatArrAp = +(cr.monto * tasaPerAp).toFixed(2);
           nuevoPagoAp = capFijoArrAp + intFlatArrAp;
         } else {
           var montoFinAp = saldoNuevoAp - vrMontoAp / Math.pow(1 + tasaPerAp, nuevoPeriodosAp);
