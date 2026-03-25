@@ -1529,6 +1529,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
               <label class="form-label">Tipo de datos a importar</label>
               <select class="form-input form-select" id="importTipo" onchange="onImportTipoChange()">
                 <option value="clientes">Clientes</option>
+                <option value="creditos">Créditos</option>
                 <option value="fondeos">Fondeos</option>
               </select>
             </div>
@@ -10704,6 +10705,32 @@ var IMPORT_COLUMNS = {
       'notas': ['notas', 'notes', 'observaciones', 'comentarios']
     }
   },
+  creditos: {
+    required: ['cliente_rfc', 'tipo_credito', 'monto', 'tasa', 'plazo', 'periodicidad', 'fecha_inicio'],
+    optional: ['tasa_mora', 'valor_residual', 'valor_equipo', 'comision', 'fondeo', 'moneda', 'garantia', 'pagos_realizados', 'saldo_actual', 'estado_credito', 'dias_mora', 'fecha_ultimo_pago', 'notas'],
+    aliases: {
+      'cliente_rfc': ['cliente_rfc', 'rfc', 'rfc_cliente', 'cliente (rfc)', 'cliente rfc', 'rfc cliente'],
+      'tipo_credito': ['tipo_credito', 'tipo', 'tipo credito', 'tipo crédito', 'producto', 'tipo_producto'],
+      'monto': ['monto', 'amount', 'importe', 'capital', 'monto_credito'],
+      'tasa': ['tasa', 'tasa_anual', 'tasa anual', 'tasa anual (%)', 'rate', 'interes', 'interés'],
+      'tasa_mora': ['tasa_mora', 'tasa mora', 'mora', 'tasa moratoria', 'tasa mora (%)'],
+      'plazo': ['plazo', 'plazo (meses)', 'term', 'meses', 'periodos'],
+      'periodicidad': ['periodicidad', 'frecuencia', 'frequency', 'periodo'],
+      'fecha_inicio': ['fecha_inicio', 'fecha inicio', 'fecha', 'date', 'inicio'],
+      'valor_residual': ['valor_residual', 'valor residual', 'vr', 'residual', 'valor residual (%)'],
+      'valor_equipo': ['valor_equipo', 'valor equipo', 'equipo', 'valor del equipo'],
+      'comision': ['comision', 'comisión', 'comision apertura', 'comisión apertura'],
+      'fondeo': ['fondeo', 'fuente', 'linea_fondeo', 'línea fondeo'],
+      'moneda': ['moneda', 'currency', 'divisa'],
+      'garantia': ['garantia', 'garantía', 'collateral'],
+      'pagos_realizados': ['pagos_realizados', 'pagos realizados', 'pagos', 'cuotas_pagadas', 'cuotas pagadas', 'periodos_pagados'],
+      'saldo_actual': ['saldo_actual', 'saldo actual', 'saldo', 'saldo_insoluto', 'saldo insoluto', 'balance'],
+      'estado_credito': ['estado_credito', 'estado', 'status', 'estado crédito', 'estado credito'],
+      'dias_mora': ['dias_mora', 'días mora', 'dias mora', 'mora_dias', 'atraso'],
+      'fecha_ultimo_pago': ['fecha_ultimo_pago', 'fecha último pago', 'fecha ultimo pago', 'ultimo_pago', 'último pago', 'last_payment'],
+      'notas': ['notas', 'notes', 'observaciones', 'comentarios']
+    }
+  },
   fondeos: {
     required: ['fondeador', 'monto', 'tasa', 'plazo', 'fecha_inicio'],
     optional: ['tipo', 'periodicidad', 'garantia', 'notas'],
@@ -10748,9 +10775,25 @@ function readExcelFile(file, tipo) {
   reader.onload = function(e) {
     try {
       var wb = XLSX.read(e.target.result, { type: 'array', cellDates: true });
-      var ws = wb.Sheets[wb.SheetNames[0]];
+      // Intentar encontrar hoja que coincida con el tipo seleccionado
+      var sheetMap = { clientes: 'Clientes', creditos: 'Créditos', fondeos: 'Fondeos' };
+      var targetSheet = sheetMap[tipo];
+      var ws;
+      if (targetSheet && wb.Sheets[targetSheet]) {
+        ws = wb.Sheets[targetSheet];
+      } else {
+        // Buscar por nombre parcial (sin acentos)
+        var found = wb.SheetNames.find(function(sn) {
+          return sn.toLowerCase().replace(/[éè]/g, 'e').indexOf(tipo.replace('creditos','credito')) !== -1;
+        });
+        ws = found ? wb.Sheets[found] : wb.Sheets[wb.SheetNames[0]];
+      }
       var rawData = XLSX.utils.sheet_to_json(ws, { defval: '' });
-      if (rawData.length === 0) return toast('El archivo está vacío', 'error');
+      // Filtrar filas completamente vacías (ej: filas preparadas sin datos)
+      rawData = rawData.filter(function(row) {
+        return Object.values(row).some(function(v) { return v !== '' && v !== null && v !== undefined; });
+      });
+      if (rawData.length === 0) return toast('El archivo está vacío o la hoja no tiene datos', 'error');
       processImportData(rawData, tipo);
     } catch (err) {
       toast('Error al leer el archivo: ' + err.message, 'error');
@@ -10853,6 +10896,65 @@ function processImportData(rawData, tipo) {
       if (row.rfc && (existentes.some(function(c) { return c.rfc === row.rfc; }) || prevImported.indexOf(row.rfc) !== -1)) {
         errors.push('RFC duplicado: ' + row.rfc);
       }
+    } else if (tipo === 'creditos') {
+      // Validar RFC del cliente y que exista
+      row.cliente_rfc = (row.cliente_rfc || '').toUpperCase().trim();
+      if (!row.cliente_rfc || (row.cliente_rfc.length !== 12 && row.cliente_rfc.length !== 13)) {
+        errors.push('RFC cliente inválido (' + row.cliente_rfc.length + ' chars)');
+      } else {
+        var clientesExist = getStore('clientes');
+        var clienteMatch = clientesExist.find(function(c) { return c.rfc === row.cliente_rfc; });
+        if (!clienteMatch) errors.push('Cliente con RFC ' + row.cliente_rfc + ' no encontrado. Impórtalo primero.');
+        else row._clienteId = clienteMatch.id;
+      }
+      // Tipo de crédito
+      var tiposValidos = ['credito_simple', 'arrendamiento', 'nomina', 'cuenta_corriente'];
+      var tipoAliases = {
+        'crédito simple': 'credito_simple', 'credito simple': 'credito_simple', 'simple': 'credito_simple', 'cs': 'credito_simple',
+        'arrendamiento': 'arrendamiento', 'leasing': 'arrendamiento', 'ar': 'arrendamiento',
+        'nómina': 'nomina', 'nomina': 'nomina', 'nm': 'nomina',
+        'cuenta corriente': 'cuenta_corriente', 'revolvente': 'cuenta_corriente', 'cc': 'cuenta_corriente'
+      };
+      var tipoRaw = (row.tipo_credito || '').toLowerCase().trim();
+      row.tipo_credito = tipoAliases[tipoRaw] || tipoRaw;
+      if (tiposValidos.indexOf(row.tipo_credito) === -1) errors.push('Tipo crédito inválido: ' + row.tipo_credito + '. Usa: Crédito Simple, Arrendamiento, Nómina o Cuenta Corriente');
+      // Monto
+      row.monto = parseFloat(String(row.monto).replace(/[,$\s]/g, '')) || 0;
+      if (row.monto <= 0) errors.push('Monto debe ser > 0');
+      // Tasa (viene como %, ej: 24 = 24%)
+      row.tasa = parseFloat(String(row.tasa).replace(/[%,\s]/g, '')) || 0;
+      if (row.tasa <= 0 || row.tasa > 100) errors.push('Tasa inválida (0.01-100%)');
+      // Tasa mora
+      row.tasa_mora = parseFloat(String(row.tasa_mora || '0').replace(/[%,\s]/g, '')) || 0;
+      // Plazo
+      row.plazo = parseInt(row.plazo) || 0;
+      if (row.plazo < 1 || row.plazo > 360) errors.push('Plazo debe ser entre 1 y 360');
+      // Periodicidad
+      var perValidas = ['mensual', 'quincenal', 'semanal'];
+      var perRaw = (row.periodicidad || 'mensual').toLowerCase().trim();
+      if (perValidas.indexOf(perRaw) === -1) errors.push('Periodicidad inválida: ' + perRaw);
+      else row.periodicidad = perRaw;
+      // Fecha inicio
+      if (!row.fecha_inicio) errors.push('Fecha inicio obligatoria');
+      // Valor residual y equipo (para arrendamiento)
+      row.valor_residual = parseFloat(String(row.valor_residual || '0').replace(/[%,\s]/g, '')) || 0;
+      row.valor_equipo = parseFloat(String(row.valor_equipo || '0').replace(/[,$\s]/g, '')) || 0;
+      if (row.tipo_credito === 'arrendamiento' && row.valor_equipo <= 0) errors.push('Arrendamiento requiere valor equipo > 0');
+      // Comisión
+      row.comision = parseFloat(String(row.comision || '0').replace(/[,$\s]/g, '')) || 0;
+      // Moneda
+      row.moneda = (row.moneda || 'MXN').toUpperCase().trim();
+      if (['MXN', 'USD'].indexOf(row.moneda) === -1) row.moneda = 'MXN';
+      // Campos de progreso
+      row.pagos_realizados = parseInt(row.pagos_realizados) || 0;
+      if (row.pagos_realizados > row.plazo) errors.push('Pagos realizados (' + row.pagos_realizados + ') > plazo (' + row.plazo + ')');
+      row.saldo_actual = parseFloat(String(row.saldo_actual || '0').replace(/[,$\s]/g, '')) || 0;
+      var estadosValidos = ['vigente', 'vencido', 'reestructurado', 'liquidado'];
+      row.estado_credito = (row.estado_credito || 'vigente').toLowerCase().trim();
+      if (estadosValidos.indexOf(row.estado_credito) === -1) row.estado_credito = 'vigente';
+      row.dias_mora = parseInt(row.dias_mora) || 0;
+      row.fecha_ultimo_pago = row.fecha_ultimo_pago || '';
+      if (row.fecha_ultimo_pago instanceof Date) row.fecha_ultimo_pago = row.fecha_ultimo_pago.toISOString().split('T')[0];
     } else if (tipo === 'fondeos') {
       if (!row.fondeador || row.fondeador.length < 2) errors.push('Fondeador inválido');
       row.monto = parseFloat(String(row.monto).replace(/[,$\s]/g, '')) || 0;
@@ -10995,6 +11097,78 @@ function ejecutarImport() {
     });
     addAudit('Importar', 'Clientes', imported + ' clientes importados');
 
+  } else if (tipo === 'creditos') {
+    var creditos = getStore('creditos');
+    validRows.forEach(function(row) {
+      var id = nextId('creditos');
+      var prefixMap = { credito_simple: 'CS', arrendamiento: 'AR', nomina: 'NM', cuenta_corriente: 'CC' };
+      var prefix = prefixMap[row.tipo_credito] || 'XX';
+      var numero = prefix + '-' + String(id).padStart(3, '0');
+      // Parsear fecha
+      var fechaInicio = row.fecha_inicio;
+      if (fechaInicio instanceof Date) fechaInicio = fechaInicio.toISOString().split('T')[0];
+      else if (typeof fechaInicio === 'string' && fechaInicio.indexOf('/') !== -1) {
+        var parts = fechaInicio.split('/');
+        if (parts.length === 3) fechaInicio = parts[2] + '-' + parts[1].padStart(2, '0') + '-' + parts[0].padStart(2, '0');
+      }
+      // Tasa: en la plantilla viene como %, convertir a decimal
+      var tasaDecimal = row.tasa / 100;
+      var tasaMoraDecimal = row.tasa_mora / 100;
+      var credito;
+      if (row.tipo_credito === 'cuenta_corriente') {
+        // Cuenta corriente: saldo = disposiciones - pagos
+        var saldoCC = row.saldo_actual || 0;
+        credito = {
+          id: id, numero: numero, clienteId: row._clienteId, tipo: row.tipo_credito,
+          monto: row.monto, tasa: tasaDecimal, tasaMoratoria: tasaMoraDecimal,
+          plazo: row.plazo, periodicidad: 'diario', fechaInicio: fechaInicio,
+          estado: row.estado_credito || 'vigente', saldo: saldoCC, limite: row.monto,
+          disponible: row.monto - saldoCC, disposiciones: [], comision: row.comision,
+          fechaVencimiento: addMonths(new Date(fechaInicio), row.plazo),
+          esRevolvente: true, moneda: row.moneda || 'MXN',
+          diasMora: row.dias_mora || 0,
+          notas: row.notas || '', createdAt: new Date().toISOString()
+        };
+      } else {
+        credito = crearCreditoObj(id, numero, row._clienteId, row.tipo_credito, row.monto, tasaDecimal, tasaMoraDecimal, row.plazo, row.periodicidad, fechaInicio, row.valor_residual, row.valor_equipo, row.comision);
+        credito.moneda = row.moneda || 'MXN';
+        // ── Marcar pagos realizados y ajustar saldo ──
+        if (row.pagos_realizados > 0 && credito.amortizacion && credito.amortizacion.length > 0) {
+          var pagosHechos = Math.min(row.pagos_realizados, credito.amortizacion.length);
+          for (var pi = 0; pi < pagosHechos; pi++) {
+            credito.amortizacion[pi].pagado = true;
+          }
+          // Actualizar saldo: usar saldo_actual del Excel si se proporcionó, sino calcular del schedule
+          if (row.saldo_actual > 0) {
+            credito.saldo = row.saldo_actual;
+          } else {
+            // Saldo = saldoFinal del último periodo pagado
+            credito.saldo = credito.amortizacion[pagosHechos - 1].saldoFinal;
+          }
+        }
+        // Aplicar estado y mora del Excel
+        credito.estado = row.estado_credito || 'vigente';
+        credito.diasMora = row.dias_mora || 0;
+        if (row.fecha_ultimo_pago) credito.fechaUltimoPago = row.fecha_ultimo_pago;
+      }
+      // Vincular fondeo si se especificó
+      if (row.fondeo) {
+        var fondeosList = getStore('fondeos');
+        var fondeoMatch = fondeosList.find(function(f) {
+          return f.fondeador && f.fondeador.toLowerCase().indexOf(row.fondeo.toLowerCase()) !== -1;
+        }) || fondeosList.find(function(f) {
+          return f.numero && f.numero.toLowerCase() === row.fondeo.toLowerCase();
+        });
+        if (fondeoMatch) credito.fondeoId = fondeoMatch.id;
+      }
+      credito.garantia = row.garantia || '';
+      if (row.notas) credito.notas = row.notas;
+      creditos.push(credito);
+      setStore('creditos', creditos);
+      imported++;
+    });
+    addAudit('Importar', 'Créditos', imported + ' créditos importados');
+
   } else if (tipo === 'fondeos') {
     var fondeos = getStore('fondeos');
     validRows.forEach(function(row) {
@@ -11041,7 +11215,7 @@ function ejecutarImport() {
     (skipped > 0 ? '<br><span style="color:var(--orange)">' + skipped + ' fila(s) omitida(s) por errores</span>' : '') +
     '</p>' +
     '<div style="display:flex;gap:10px;justify-content:center">' +
-    '<button class="btn btn-primary" onclick="showPage(\'admin\');setAdminTab(\'' + tipo + '\' === \'clientes\' ? \'usuarios\' : \'usuarios\');showPage(\'' + tipo + '\')">Ver ' + (tipo === 'clientes' ? 'Clientes' : 'Fondeos') + '</button>' +
+    '<button class="btn btn-primary" onclick="showPage(\'' + tipo + '\')">Ver ' + (tipo === 'clientes' ? 'Clientes' : tipo === 'creditos' ? 'Créditos' : 'Fondeos') + '</button>' +
     '<button class="btn btn-outline" onclick="cancelarImport();document.getElementById(\'importFile\').value=\'\'">Nueva Importación</button>' +
     '</div></div>';
 
@@ -11066,6 +11240,13 @@ function descargarPlantilla(tipo) {
       ['María López Hernández', 'LOHM850315ABC', 'fisica', 'LOHM850315MNLLRR01', '5523456789', 'maria.lopez@gmail.com', 'Col. Roma Norte #123', 'CDMX', 'CDMX', '06700', 45000, 680, 'Servicios', 'Cliente referido']
     ];
     sheetName = 'Clientes';
+  } else if (tipo === 'creditos') {
+    headers = ['cliente_rfc', 'tipo_credito', 'monto', 'tasa', 'tasa_mora', 'plazo', 'periodicidad', 'fecha_inicio', 'valor_residual', 'valor_equipo', 'comision', 'moneda', 'garantia', 'pagos_realizados', 'saldo_actual', 'estado_credito', 'dias_mora', 'fecha_ultimo_pago', 'fondeo', 'notas'];
+    sampleData = [
+      ['GIN200101ABC', 'credito_simple', 1500000, 24, 36, 24, 'mensual', '2025-01-15', 0, 0, 15000, 'MXN', 'Inmueble', 14, 662500, 'vigente', 0, '2026-03-15', '', 'Capital de trabajo'],
+      ['LOHM850315ABC', 'arrendamiento', 800000, 18, 28, 36, 'mensual', '2025-03-01', 10, 900000, 8000, 'MXN', 'Equipo', 12, 540000, 'vigente', 0, '2026-03-01', '', 'Leasing - 12 pagos hechos']
+    ];
+    sheetName = 'Créditos';
   } else if (tipo === 'fondeos') {
     headers = ['fondeador', 'monto', 'tasa', 'plazo', 'fecha_inicio', 'tipo', 'periodicidad', 'garantia', 'notas'];
     sampleData = [
