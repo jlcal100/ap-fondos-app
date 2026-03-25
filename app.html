@@ -11979,7 +11979,7 @@ function calcularScoring() {
 
   // Botones
   html += '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px">';
-  html += '<button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir</button>';
+  html += '<button class="btn btn-outline" onclick="exportarScoringPDF()">📄 Exportar PDF</button>';
   html += '<button class="btn btn-primary" onclick="guardarScoring()">💾 Guardar Evaluación</button>';
   html += '</div>';
   html += '</div>';
@@ -12112,6 +12112,215 @@ function exportarScoringExcel() {
   XLSX.utils.book_append_sheet(wb, ws, 'Evaluaciones');
   XLSX.writeFile(wb, 'Evaluaciones_Scoring_AP.xlsx');
   toast('Excel exportado', 'success');
+}
+
+function exportarScoringPDF() {
+  var ev = window._lastScoring;
+  if (!ev) return toast('Primero calcula el score', 'error');
+  if (!window.jspdf) return toast('Librería jsPDF no cargada', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('p', 'mm', 'letter');
+  var w = doc.internal.pageSize.getWidth();
+  var margin = 18;
+  var y = 20;
+
+  // ── Encabezado ──
+  doc.setFillColor(27, 42, 74);
+  doc.rect(0, 0, w, 38, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(18);
+  doc.setFont('helvetica', 'bold');
+  doc.text('AP Operadora de Fondos, S.A. de C.V.', margin, 16);
+  doc.setFontSize(12);
+  doc.setFont('helvetica', 'normal');
+  doc.text('Evaluación Crediticia — Scoring Integral', margin, 28);
+  doc.setFontSize(9);
+  doc.text('Fecha: ' + new Date(ev.fecha).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }), w - margin, 16, { align: 'right' });
+  doc.text('Analista: ' + (ev.analista || 'admin'), w - margin, 24, { align: 'right' });
+
+  y = 48;
+  doc.setTextColor(0, 0, 0);
+
+  // ── Score principal ──
+  var color = ev.score >= 650 ? [16, 185, 129] : ev.score >= 500 ? [245, 158, 11] : [239, 68, 68];
+  doc.setFillColor(color[0], color[1], color[2]);
+  doc.roundedRect(margin, y, w - margin * 2, 32, 4, 4, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(28);
+  doc.setFont('helvetica', 'bold');
+  doc.text(String(ev.score), margin + 12, y + 20);
+  doc.setFontSize(16);
+  doc.text(ev.resultado, margin + 55, y + 15);
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.text(ev.recomendacion, margin + 55, y + 25, { maxWidth: w - margin * 2 - 60 });
+  y += 40;
+
+  // ── Datos del solicitante ──
+  doc.setTextColor(27, 42, 74);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Datos del Solicitante', margin, y);
+  y += 6;
+  doc.setDrawColor(27, 42, 74);
+  doc.line(margin, y, w - margin, y);
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(60, 60, 60);
+  var datos = [
+    ['Nombre:', ev.nombre, 'RFC:', ev.rfc],
+    ['Tipo Persona:', ev.tipoPersona === 'moral' ? 'Persona Moral' : 'Persona Física', 'Sector:', ev.sector || 'No especificado'],
+    ['Ingresos Mensuales:', '$' + Number(ev.ingresos).toLocaleString('es-MX'), 'Gastos Fijos:', '$' + Number(ev.gastos).toLocaleString('es-MX')],
+    ['Deuda Actual:', '$' + Number(ev.deudaActual).toLocaleString('es-MX'), 'Patrimonio:', '$' + Number(ev.patrimonio).toLocaleString('es-MX')],
+    ['Antigüedad:', (ev.antiguedad || 0) + ' años', 'Score Buró:', ev.tieneBuro ? String(ev.scoreBuro) : 'No disponible']
+  ];
+  datos.forEach(function(row) {
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[0], margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(row[1], margin + 38, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[2], w / 2 + 5, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(row[3], w / 2 + 38, y);
+    y += 5.5;
+  });
+  y += 4;
+
+  // ── Crédito Solicitado ──
+  doc.setTextColor(27, 42, 74);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Crédito Solicitado', margin, y);
+  y += 6;
+  doc.line(margin, y, w - margin, y);
+  y += 6;
+
+  doc.setFontSize(10);
+  doc.setTextColor(60, 60, 60);
+  var tipoLabels = { credito_simple: 'Crédito Simple', arrendamiento: 'Arrendamiento', nomina: 'Nómina', cuenta_corriente: 'Cuenta Corriente' };
+  var credData = [
+    ['Monto Solicitado:', '$' + Number(ev.montoSolicitado).toLocaleString('es-MX'), 'Plazo:', ev.plazoSolicitado + ' meses'],
+    ['Tipo:', tipoLabels[ev.tipoCredito] || ev.tipoCredito, 'Destino:', (ev.destino || '').replace(/_/g, ' ')],
+    ['Garantía:', ev.garantia || 'Ninguna', 'Valor Garantía:', ev.valorGarantia ? '$' + Number(ev.valorGarantia).toLocaleString('es-MX') : '$0']
+  ];
+  credData.forEach(function(row) {
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[0], margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(row[1], margin + 38, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[2], w / 2 + 5, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(row[3], w / 2 + 38, y);
+    y += 5.5;
+  });
+  y += 4;
+
+  // ── Indicadores Clave ──
+  doc.setTextColor(27, 42, 74);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Indicadores Clave', margin, y);
+  y += 6;
+  doc.line(margin, y, w - margin, y);
+  y += 6;
+
+  var indData = [
+    ['Cuota Estimada:', '$' + Number(ev.cuotaEstimada || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 }), 'Flujo Disponible:', '$' + Number(ev.ingresos - ev.gastos - ev.pagoDeudas).toLocaleString('es-MX')],
+    ['PTI (Cuota/Ingreso):', (ev.pti * 100).toFixed(1) + '%', 'DTI (Deuda/Ingreso):', (ev.dti * 100).toFixed(1) + '%'],
+    ['Cobertura de Flujo:', (ev.cobertura || 0).toFixed(2) + 'x', 'Monto Máx Sugerido:', '$' + Number(ev.montoMaxSugerido || 0).toLocaleString('es-MX', { maximumFractionDigits: 0 })]
+  ];
+  doc.setFontSize(10);
+  doc.setTextColor(60, 60, 60);
+  indData.forEach(function(row) {
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[0], margin, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(row[1], margin + 42, y);
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[2], w / 2 + 5, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(row[3], w / 2 + 42, y);
+    y += 5.5;
+  });
+  y += 4;
+
+  // ── Tabla de desglose ──
+  doc.setTextColor(27, 42, 74);
+  doc.setFontSize(13);
+  doc.setFont('helvetica', 'bold');
+  doc.text('Desglose del Score', margin, y);
+  y += 3;
+
+  if (ev.detalles && ev.detalles.length > 0) {
+    var tableData = ev.detalles.map(function(d) {
+      var pct = d.max > 0 ? Math.round(d.pts / d.max * 100) : 0;
+      return [d.cat, d.factor, String(d.pts), String(d.max), pct + '%'];
+    });
+
+    doc.autoTable({
+      startY: y + 2,
+      head: [['Categoría', 'Factor Evaluado', 'Pts', 'Máx', '%']],
+      body: tableData,
+      theme: 'grid',
+      margin: { left: margin, right: margin },
+      styles: { fontSize: 9, cellPadding: 2.5 },
+      headStyles: { fillColor: [27, 42, 74], textColor: 255, fontStyle: 'bold', fontSize: 9 },
+      columnStyles: {
+        0: { cellWidth: 30, fontStyle: 'bold' },
+        1: { cellWidth: 'auto' },
+        2: { cellWidth: 14, halign: 'right' },
+        3: { cellWidth: 14, halign: 'right' },
+        4: { cellWidth: 16, halign: 'right' }
+      },
+      didParseCell: function(data) {
+        if (data.section === 'body' && data.column.index === 4) {
+          var pct = parseInt(data.cell.raw);
+          if (pct >= 70) data.cell.styles.textColor = [5, 150, 105];
+          else if (pct >= 40) data.cell.styles.textColor = [217, 119, 6];
+          else data.cell.styles.textColor = [220, 38, 38];
+        }
+      }
+    });
+    y = doc.lastAutoTable.finalY + 8;
+  }
+
+  // ── Notas ──
+  if (ev.notas) {
+    if (y > 240) { doc.addPage(); y = 20; }
+    doc.setTextColor(27, 42, 74);
+    doc.setFontSize(11);
+    doc.setFont('helvetica', 'bold');
+    doc.text('Notas del Analista:', margin, y);
+    y += 5;
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.setTextColor(60, 60, 60);
+    var splitNotas = doc.splitTextToSize(ev.notas, w - margin * 2);
+    doc.text(splitNotas, margin, y);
+    y += splitNotas.length * 4.5 + 6;
+  }
+
+  // ── Pie de página ──
+  var totalPages = doc.internal.getNumberOfPages();
+  for (var p = 1; p <= totalPages; p++) {
+    doc.setPage(p);
+    var h = doc.internal.pageSize.getHeight();
+    doc.setDrawColor(200);
+    doc.line(margin, h - 15, w - margin, h - 15);
+    doc.setFontSize(8);
+    doc.setTextColor(150);
+    doc.text('AP Operadora de Fondos — Evaluación Crediticia — Confidencial', margin, h - 10);
+    doc.text('Página ' + p + ' de ' + totalPages, w - margin, h - 10, { align: 'right' });
+  }
+
+  // Guardar
+  var filename = 'Scoring_' + ev.rfc + '_' + new Date().toISOString().split('T')[0] + '.pdf';
+  doc.save(filename);
+  toast('PDF exportado: ' + filename, 'success');
 }
 
 // Poblar select de clientes al navegar a scoring
