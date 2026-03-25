@@ -545,6 +545,10 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 1l4 4-4 4"/><path d="M3 11V9a4 4 0 0 1 4-4h14"/><path d="M7 23l-4-4 4-4"/><path d="M21 13v2a4 4 0 0 1-4 4H3"/></svg>
       Conciliación
     </div>
+    <div class="nav-item" onclick="showPage('scoring')" data-page="scoring">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+      Scoring
+    </div>
     <div class="nav-item" onclick="showPage('pld')" data-page="pld">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       PLD
@@ -1452,6 +1456,238 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
             <thead><tr><th>Mov. Bancario</th><th>Fecha</th><th>Monto Banco</th><th>↔</th><th>Registro Interno</th><th>Monto Sistema</th><th>Diferencia</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody id="tbConciliacion"></tbody>
           </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===================== SCORING CREDITICIO ===================== -->
+    <div class="page" id="page-scoring">
+      <div class="tabs">
+        <div class="tab active" onclick="setScoringTab('nueva')">Nueva Evaluación</div>
+        <div class="tab" onclick="setScoringTab('historial')">Historial</div>
+      </div>
+
+      <!-- Tab: Nueva Evaluación -->
+      <div id="scoringNueva">
+        <div class="card" style="margin-bottom:20px">
+          <div class="card-header"><span class="card-title">📊 Evaluación Crediticia — Scoring Integral</span></div>
+          <div style="padding:20px">
+
+            <!-- PASO 1: Seleccionar o registrar cliente -->
+            <div style="background:var(--blue-light);border:1px solid var(--blue);border-radius:10px;padding:16px;margin-bottom:20px">
+              <h4 style="margin:0 0 12px;color:var(--blue)">1. Datos del Solicitante</h4>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Cliente existente</label>
+                  <select class="form-input form-select" id="scorCliente" onchange="onScorClienteChange()">
+                    <option value="">— Nuevo solicitante —</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Nombre / Razón Social *</label>
+                  <input type="text" class="form-input" id="scorNombre" placeholder="Nombre completo">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">RFC *</label>
+                  <input type="text" class="form-input" id="scorRFC" maxlength="13" placeholder="RFC con homoclave" style="text-transform:uppercase">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tipo Persona</label>
+                  <select class="form-input form-select" id="scorTipoPersona">
+                    <option value="fisica">Persona Física</option>
+                    <option value="moral">Persona Moral</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- PASO 2: Información financiera -->
+            <div style="background:#F0FDF4;border:1px solid var(--green);border-radius:10px;padding:16px;margin-bottom:20px">
+              <h4 style="margin:0 0 12px;color:#065F46">2. Situación Financiera</h4>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Ingresos Mensuales Comprobables *</label>
+                  <input type="text" class="form-input" id="scorIngresos" placeholder="$0" oninput="fmtMiles(this)">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Gastos Fijos Mensuales *</label>
+                  <input type="text" class="form-input" id="scorGastos" placeholder="$0" oninput="fmtMiles(this)">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Deuda Total Actual (otros créditos) *</label>
+                  <input type="text" class="form-input" id="scorDeudaActual" placeholder="$0" oninput="fmtMiles(this)">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Pago Mensual de Deudas Existentes</label>
+                  <input type="text" class="form-input" id="scorPagoDeudas" placeholder="$0" oninput="fmtMiles(this)">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Patrimonio / Activos Totales</label>
+                  <input type="text" class="form-input" id="scorPatrimonio" placeholder="$0" oninput="fmtMiles(this)">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Antigüedad Laboral/Empresarial (años)</label>
+                  <input type="number" class="form-input" id="scorAntiguedad" min="0" max="99" placeholder="0">
+                </div>
+              </div>
+            </div>
+
+            <!-- PASO 3: Historial crediticio -->
+            <div style="background:#FEF3C7;border:1px solid var(--orange);border-radius:10px;padding:16px;margin-bottom:20px">
+              <h4 style="margin:0 0 12px;color:#92400E">3. Historial Crediticio</h4>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Score Buró de Crédito *</label>
+                  <input type="number" class="form-input" id="scorBuro" min="300" max="850" placeholder="300-850">
+                  <small style="color:var(--gray-400);font-size:11px">300 = Muy bajo · 550 = Regular · 650 = Bueno · 750+ = Excelente</small>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Créditos Vigentes en Buró</label>
+                  <input type="number" class="form-input" id="scorCreditosVigentes" min="0" max="50" placeholder="0">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Atrasos últimos 12 meses (Buró)</label>
+                  <select class="form-input form-select" id="scorAtrasos">
+                    <option value="0">Ninguno</option>
+                    <option value="1">1 atraso menor (1-29 días)</option>
+                    <option value="2">2-3 atrasos menores</option>
+                    <option value="3">Atrasos moderados (30-89 días)</option>
+                    <option value="4">Atrasos graves (90+ días)</option>
+                    <option value="5">Cartera castigada / Incobrable</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Experiencia crediticia (años)</label>
+                  <input type="number" class="form-input" id="scorExpCredito" min="0" max="50" placeholder="0">
+                  <small style="color:var(--gray-400);font-size:11px">Antigüedad del primer crédito en buró</small>
+                </div>
+              </div>
+              <!-- Historial interno (auto-calculado) -->
+              <div id="scorHistorialInterno" style="display:none;margin-top:14px;padding:12px;background:white;border-radius:8px;border:1px solid #E5E7EB">
+              </div>
+            </div>
+
+            <!-- PASO 4: Crédito solicitado -->
+            <div style="background:#F5F3FF;border:1px solid #8B5CF6;border-radius:10px;padding:16px;margin-bottom:20px">
+              <h4 style="margin:0 0 12px;color:#5B21B6">4. Crédito Solicitado</h4>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Monto Solicitado *</label>
+                  <input type="text" class="form-input" id="scorMontoSolicitado" placeholder="$0" oninput="fmtMiles(this)">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Plazo Solicitado (meses) *</label>
+                  <input type="number" class="form-input" id="scorPlazoSolicitado" min="1" max="360" placeholder="12">
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Tipo de Crédito</label>
+                  <select class="form-input form-select" id="scorTipoCredito">
+                    <option value="credito_simple">Crédito Simple</option>
+                    <option value="arrendamiento">Arrendamiento</option>
+                    <option value="nomina">Nómina</option>
+                    <option value="cuenta_corriente">Cuenta Corriente</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Destino del Crédito</label>
+                  <select class="form-input form-select" id="scorDestino">
+                    <option value="capital_trabajo">Capital de Trabajo</option>
+                    <option value="activo_fijo">Adquisición de Activo Fijo</option>
+                    <option value="reestructura">Reestructura de Deuda</option>
+                    <option value="expansion">Expansión / Crecimiento</option>
+                    <option value="personal">Gasto Personal</option>
+                    <option value="otro">Otro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Garantía Ofrecida</label>
+                  <select class="form-input form-select" id="scorGarantia">
+                    <option value="ninguna">Sin garantía</option>
+                    <option value="inmueble">Inmueble</option>
+                    <option value="equipo">Equipo / Maquinaria</option>
+                    <option value="vehiculo">Vehículo</option>
+                    <option value="deposito">Depósito en garantía</option>
+                    <option value="aval">Aval / Obligado solidario</option>
+                    <option value="pagare">Pagaré</option>
+                    <option value="fideicomiso">Fideicomiso</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Valor de Garantía</label>
+                  <input type="text" class="form-input" id="scorValorGarantia" placeholder="$0" oninput="fmtMiles(this)">
+                </div>
+              </div>
+            </div>
+
+            <!-- PASO 5: Información cualitativa -->
+            <div style="background:#FDF2F8;border:1px solid #EC4899;border-radius:10px;padding:16px;margin-bottom:24px">
+              <h4 style="margin:0 0 12px;color:#9D174D">5. Evaluación Cualitativa</h4>
+              <div class="form-grid">
+                <div class="form-group">
+                  <label class="form-label">Sector / Industria</label>
+                  <select class="form-input form-select" id="scorSector">
+                    <option value="">Seleccionar...</option>
+                    <option value="Manufactura">Manufactura</option>
+                    <option value="Comercio">Comercio</option>
+                    <option value="Servicios">Servicios</option>
+                    <option value="Transporte">Transporte</option>
+                    <option value="Construcción">Construcción</option>
+                    <option value="Agropecuario">Agropecuario</option>
+                    <option value="Tecnología">Tecnología</option>
+                    <option value="Alimentos">Alimentos</option>
+                    <option value="Salud">Salud</option>
+                    <option value="Educación">Educación</option>
+                    <option value="Inmobiliario">Inmobiliario</option>
+                    <option value="Energía">Energía</option>
+                    <option value="Turismo">Turismo</option>
+                    <option value="Gobierno">Gobierno</option>
+                    <option value="Otro">Otro</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label class="form-label">Referencias Comerciales</label>
+                  <select class="form-input form-select" id="scorReferencias">
+                    <option value="0">Sin referencias</option>
+                    <option value="1">1 referencia verificada</option>
+                    <option value="2">2-3 referencias verificadas</option>
+                    <option value="3">4+ referencias o cliente conocido</option>
+                  </select>
+                </div>
+                <div class="form-group" style="grid-column:span 2">
+                  <label class="form-label">Observaciones / Notas del Analista</label>
+                  <textarea class="form-input" id="scorNotas" rows="2" placeholder="Comentarios adicionales sobre el solicitante..."></textarea>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex;gap:12px;justify-content:flex-end">
+              <button class="btn btn-outline" onclick="limpiarScoring()">Limpiar</button>
+              <button class="btn btn-primary" onclick="calcularScoring()" style="min-width:200px;font-size:15px">📊 Calcular Score</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RESULTADO DEL SCORING -->
+        <div class="card" id="scorResultCard" style="display:none;margin-bottom:20px">
+          <div id="scorResultContent"></div>
+        </div>
+      </div>
+
+      <!-- Tab: Historial -->
+      <div id="scoringHistorial" style="display:none">
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">Historial de Evaluaciones</span>
+            <button class="btn btn-outline btn-sm" onclick="exportarScoringExcel()">📥 Exportar Excel</button>
+          </div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr>
+                <th>Fecha</th><th>Solicitante</th><th>RFC</th><th>Monto</th><th>Score</th><th>Resultado</th><th>Analista</th><th>Acciones</th>
+              </tr></thead>
+              <tbody id="tbScoringHistorial"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </div>
@@ -2600,6 +2836,7 @@ const PERMISOS_MODULOS = {
   calendario:    { label: 'Calendario',    acciones: ['ver'] },
   aprobaciones:  { label: 'Aprobaciones',  acciones: ['ver', 'aprobar', 'rechazar'] },
   conciliacion:  { label: 'Conciliación',  acciones: ['ver', 'crear', 'exportar'] },
+  scoring:       { label: 'Scoring',        acciones: ['ver', 'crear', 'exportar'] },
   pld:           { label: 'PLD',            acciones: ['ver', 'crear', 'exportar'] },
   admin:         { label: 'Administración', acciones: ['ver', 'usuarios', 'permisos', 'backup'] }
 };
@@ -3711,7 +3948,7 @@ function showPage(page) {
   document.getElementById('page-' + page).classList.add('active');
   document.querySelector(`[data-page="${page}"]`).classList.add('active');
 
-  const titles = { dashboard: 'Dashboard — Valuación Diaria', clientes: 'Expediente de Clientes', creditos: 'Gestión de Créditos', pagos: 'Registro de Pagos', cotizador: 'Cotizador Financiero', fondeos: 'Control de Fondeos', contabilidad: 'Contabilidad', reportes: 'Reportes Avanzados', calendario: 'Calendario de Cobranza', aprobaciones: 'Flujos de Aprobación', conciliacion: 'Conciliación Bancaria', pld: 'PLD/FT — Prevención de Lavado de Dinero (LFPIORPI)', admin: 'Administración' };
+  const titles = { dashboard: 'Dashboard — Valuación Diaria', clientes: 'Expediente de Clientes', creditos: 'Gestión de Créditos', pagos: 'Registro de Pagos', cotizador: 'Cotizador Financiero', fondeos: 'Control de Fondeos', contabilidad: 'Contabilidad', reportes: 'Reportes Avanzados', calendario: 'Calendario de Cobranza', aprobaciones: 'Flujos de Aprobación', conciliacion: 'Conciliación Bancaria', scoring: 'Scoring Crediticio — Evaluación de Riesgo', pld: 'PLD/FT — Prevención de Lavado de Dinero (LFPIORPI)', admin: 'Administración' };
   document.getElementById('pageTitle').textContent = titles[page] || page;
 
   if (page === 'dashboard') renderDashboard();
@@ -3724,6 +3961,7 @@ function showPage(page) {
   else if (page === 'calendario') renderCalendario();
   else if (page === 'aprobaciones') renderAprobaciones();
   else if (page === 'conciliacion') renderConciliacion();
+  else if (page === 'scoring') { refreshScoringClientes(); setScoringTab('nueva'); }
   else if (page === 'pld') renderPLD();
   else if (page === 'admin') { renderUsuarios(); renderAuditoria(); }
 }
@@ -11262,6 +11500,551 @@ function descargarPlantilla(tipo) {
   XLSX.utils.book_append_sheet(wb, ws, sheetName);
   XLSX.writeFile(wb, 'AP_Plantilla_' + sheetName + '.xlsx');
   toast('Plantilla ' + sheetName + ' descargada', 'success');
+}
+
+// ============================================================
+//  SCORING CREDITICIO — MÓDULO DE EVALUACIÓN
+// ============================================================
+
+function setScoringTab(tab) {
+  ['nueva', 'historial'].forEach(function(t) {
+    var el = document.getElementById('scoring' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (el) el.style.display = t === tab ? '' : 'none';
+  });
+  document.querySelectorAll('#page-scoring .tab').forEach(function(t, i) {
+    t.classList.toggle('active', (i === 0 && tab === 'nueva') || (i === 1 && tab === 'historial'));
+  });
+  if (tab === 'historial') renderScoringHistorial();
+}
+
+function onScorClienteChange() {
+  var sel = document.getElementById('scorCliente').value;
+  if (!sel) {
+    document.getElementById('scorNombre').value = '';
+    document.getElementById('scorRFC').value = '';
+    document.getElementById('scorHistorialInterno').style.display = 'none';
+    return;
+  }
+  var cliente = getStore('clientes').find(function(c) { return c.id == sel; });
+  if (!cliente) return;
+  document.getElementById('scorNombre').value = cliente.nombre || '';
+  document.getElementById('scorRFC').value = cliente.rfc || '';
+  document.getElementById('scorTipoPersona').value = cliente.tipo || 'fisica';
+  if (cliente.ingresos) document.getElementById('scorIngresos').value = Number(cliente.ingresos).toLocaleString('es-MX');
+  if (cliente.score) document.getElementById('scorBuro').value = cliente.score;
+  if (cliente.sector) document.getElementById('scorSector').value = cliente.sector;
+  // Mostrar historial interno
+  mostrarHistorialInterno(cliente.id);
+}
+
+function mostrarHistorialInterno(clienteId) {
+  var creditos = getStore('creditos').filter(function(c) { return c.clienteId == clienteId; });
+  var div = document.getElementById('scorHistorialInterno');
+  if (creditos.length === 0) {
+    div.style.display = 'block';
+    div.innerHTML = '<p style="margin:0;font-size:13px;color:var(--gray-400)">📋 Sin historial crediticio interno. Cliente nuevo.</p>';
+    return;
+  }
+  div.style.display = 'block';
+  var totalCreditos = creditos.length;
+  var vigentes = creditos.filter(function(c) { return c.estado === 'vigente'; }).length;
+  var liquidados = creditos.filter(function(c) { return c.estado === 'liquidado'; }).length;
+  var vencidos = creditos.filter(function(c) { return c.estado === 'vencido'; }).length;
+  var montoTotal = creditos.reduce(function(s, c) { return s + (c.monto || 0); }, 0);
+  var saldoTotal = creditos.reduce(function(s, c) { return s + (c.saldo || 0); }, 0);
+  // Calcular % pagos puntuales
+  var totalPagos = 0, pagosPuntuales = 0;
+  creditos.forEach(function(cr) {
+    if (cr.amortizacion) {
+      cr.amortizacion.forEach(function(a) {
+        if (a.pagado) { totalPagos++; pagosPuntuales++; }
+      });
+    }
+  });
+  var pctPuntual = totalPagos > 0 ? Math.round(pagosPuntuales / totalPagos * 100) : 0;
+  var maxMora = Math.max.apply(null, creditos.map(function(c) { return c.diasMora || 0; }).concat([0]));
+
+  div.innerHTML =
+    '<p style="margin:0 0 8px;font-size:13px;font-weight:600;color:#92400E">📋 Historial Interno del Cliente</p>' +
+    '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px">' +
+    '<div style="text-align:center;padding:8px;background:#F0FDF4;border-radius:6px"><div style="font-size:20px;font-weight:700;color:var(--green)">' + totalCreditos + '</div><div style="font-size:11px;color:var(--gray-400)">Créditos Total</div></div>' +
+    '<div style="text-align:center;padding:8px;background:#DBEAFE;border-radius:6px"><div style="font-size:20px;font-weight:700;color:var(--blue)">' + vigentes + '</div><div style="font-size:11px;color:var(--gray-400)">Vigentes</div></div>' +
+    '<div style="text-align:center;padding:8px;background:#F0FDF4;border-radius:6px"><div style="font-size:20px;font-weight:700;color:var(--green)">' + liquidados + '</div><div style="font-size:11px;color:var(--gray-400)">Liquidados</div></div>' +
+    (vencidos > 0 ? '<div style="text-align:center;padding:8px;background:#FEF2F2;border-radius:6px"><div style="font-size:20px;font-weight:700;color:var(--red)">' + vencidos + '</div><div style="font-size:11px;color:var(--gray-400)">Vencidos</div></div>' : '') +
+    '<div style="text-align:center;padding:8px;background:#FEF3C7;border-radius:6px"><div style="font-size:20px;font-weight:700;color:#92400E">' + fmt(montoTotal) + '</div><div style="font-size:11px;color:var(--gray-400)">Monto Total</div></div>' +
+    '<div style="text-align:center;padding:8px;background:#F5F3FF;border-radius:6px"><div style="font-size:20px;font-weight:700;color:#5B21B6">' + pctPuntual + '%</div><div style="font-size:11px;color:var(--gray-400)">Pagos Puntuales</div></div>' +
+    '</div>';
+}
+
+function limpiarScoring() {
+  ['scorCliente','scorNombre','scorRFC','scorIngresos','scorGastos','scorDeudaActual','scorPagoDeudas',
+   'scorPatrimonio','scorAntiguedad','scorBuro','scorCreditosVigentes','scorExpCredito',
+   'scorMontoSolicitado','scorPlazoSolicitado','scorValorGarantia','scorNotas'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  document.getElementById('scorAtrasos').value = '0';
+  document.getElementById('scorReferencias').value = '0';
+  document.getElementById('scorTipoPersona').value = 'fisica';
+  document.getElementById('scorTipoCredito').value = 'credito_simple';
+  document.getElementById('scorGarantia').value = 'ninguna';
+  document.getElementById('scorDestino').value = 'capital_trabajo';
+  document.getElementById('scorResultCard').style.display = 'none';
+  document.getElementById('scorHistorialInterno').style.display = 'none';
+}
+
+// ── MODELO DE SCORING: 5 C's del Crédito ──
+// Puntaje máximo: 1000 puntos
+// 1. Carácter (historial crediticio):     250 pts
+// 2. Capacidad (capacidad de pago):       250 pts
+// 3. Capital (patrimonio/respaldo):       150 pts
+// 4. Colateral (garantías):               150 pts
+// 5. Condiciones (factores externos):     100 pts
+// + Bonificación historial interno:       +100 pts
+function calcularScoring() {
+  // Validaciones
+  var nombre = document.getElementById('scorNombre').value.trim();
+  var rfc = document.getElementById('scorRFC').value.trim().toUpperCase();
+  var ingresos = parseMiles('scorIngresos') || 0;
+  var gastos = parseMiles('scorGastos') || 0;
+  var deudaActual = parseMiles('scorDeudaActual') || 0;
+  var pagoDeudas = parseMiles('scorPagoDeudas') || 0;
+  var patrimonio = parseMiles('scorPatrimonio') || 0;
+  var antiguedad = parseFloat(document.getElementById('scorAntiguedad').value) || 0;
+  var scoreBuro = parseInt(document.getElementById('scorBuro').value) || 0;
+  var creditosVigentes = parseInt(document.getElementById('scorCreditosVigentes').value) || 0;
+  var atrasos = parseInt(document.getElementById('scorAtrasos').value) || 0;
+  var expCredito = parseFloat(document.getElementById('scorExpCredito').value) || 0;
+  var montoSolicitado = parseMiles('scorMontoSolicitado') || 0;
+  var plazoSolicitado = parseInt(document.getElementById('scorPlazoSolicitado').value) || 0;
+  var tipoCredito = document.getElementById('scorTipoCredito').value;
+  var garantia = document.getElementById('scorGarantia').value;
+  var valorGarantia = parseMiles('scorValorGarantia') || 0;
+  var sector = document.getElementById('scorSector').value;
+  var referencias = parseInt(document.getElementById('scorReferencias').value) || 0;
+  var destino = document.getElementById('scorDestino').value;
+  var notas = document.getElementById('scorNotas').value;
+
+  // Validaciones mínimas
+  if (!nombre || nombre.length < 3) return toast('Ingresa el nombre del solicitante', 'error');
+  if (!rfc || (rfc.length !== 12 && rfc.length !== 13)) return toast('RFC inválido', 'error');
+  if (ingresos <= 0) return toast('Ingresa los ingresos mensuales', 'error');
+  if (scoreBuro < 300 || scoreBuro > 850) return toast('Score Buró debe ser entre 300 y 850', 'error');
+  if (montoSolicitado <= 0) return toast('Ingresa el monto solicitado', 'error');
+  if (plazoSolicitado < 1) return toast('Ingresa el plazo solicitado', 'error');
+
+  var detalles = [];
+  var score = 0;
+
+  // ═══ 1. CARÁCTER — 250 pts máx ═══
+  var ptsCaracter = 0;
+  // Score Buró (hasta 150 pts)
+  var buroPts = 0;
+  if (scoreBuro >= 750) buroPts = 150;
+  else if (scoreBuro >= 700) buroPts = 130;
+  else if (scoreBuro >= 650) buroPts = 110;
+  else if (scoreBuro >= 600) buroPts = 85;
+  else if (scoreBuro >= 550) buroPts = 60;
+  else if (scoreBuro >= 500) buroPts = 40;
+  else if (scoreBuro >= 450) buroPts = 20;
+  else buroPts = 0;
+  ptsCaracter += buroPts;
+  detalles.push({ cat: 'Carácter', factor: 'Score Buró (' + scoreBuro + ')', pts: buroPts, max: 150 });
+
+  // Historial de pagos — atrasos (hasta 60 pts)
+  var atrasosPts = [60, 50, 30, 10, 0, 0][atrasos] || 0;
+  ptsCaracter += atrasosPts;
+  var atrasosLabel = ['Sin atrasos', '1 atraso menor', '2-3 atrasos menores', 'Atrasos moderados', 'Atrasos graves', 'Cartera castigada'][atrasos];
+  detalles.push({ cat: 'Carácter', factor: 'Historial pagos: ' + atrasosLabel, pts: atrasosPts, max: 60 });
+
+  // Experiencia crediticia (hasta 40 pts)
+  var expPts = Math.min(expCredito * 5, 40);
+  ptsCaracter += expPts;
+  detalles.push({ cat: 'Carácter', factor: 'Experiencia crediticia (' + expCredito + ' años)', pts: Math.round(expPts), max: 40 });
+
+  // ═══ 2. CAPACIDAD — 250 pts máx ═══
+  var ptsCapacidad = 0;
+  var disponible = ingresos - gastos - pagoDeudas;
+  // Tasa estimada para calcular cuota
+  var tasaEstimada = 0.24; // 24% default
+  var cuotaEstimada = montoSolicitado * (tasaEstimada / 12) / (1 - Math.pow(1 + tasaEstimada / 12, -plazoSolicitado));
+  var cuotaConIVA = cuotaEstimada * 1.05; // aprox con IVA sobre intereses
+
+  // PTI: Payment-to-Income ratio (cuota / ingresos)
+  var pti = ingresos > 0 ? cuotaConIVA / ingresos : 1;
+  var ptiPts = 0;
+  if (pti <= 0.20) ptiPts = 100;
+  else if (pti <= 0.30) ptiPts = 80;
+  else if (pti <= 0.40) ptiPts = 55;
+  else if (pti <= 0.50) ptiPts = 30;
+  else if (pti <= 0.60) ptiPts = 10;
+  else ptiPts = 0;
+  ptsCapacidad += ptiPts;
+  detalles.push({ cat: 'Capacidad', factor: 'PTI — Cuota/Ingreso (' + (pti * 100).toFixed(1) + '%)', pts: ptiPts, max: 100 });
+
+  // DTI: Debt-to-Income total (deudas totales + nueva cuota / ingresos)
+  var dti = ingresos > 0 ? (pagoDeudas + cuotaConIVA) / ingresos : 1;
+  var dtiPts = 0;
+  if (dti <= 0.30) dtiPts = 80;
+  else if (dti <= 0.40) dtiPts = 65;
+  else if (dti <= 0.50) dtiPts = 45;
+  else if (dti <= 0.60) dtiPts = 25;
+  else if (dti <= 0.70) dtiPts = 10;
+  else dtiPts = 0;
+  ptsCapacidad += dtiPts;
+  detalles.push({ cat: 'Capacidad', factor: 'DTI — Deuda Total/Ingreso (' + (dti * 100).toFixed(1) + '%)', pts: dtiPts, max: 80 });
+
+  // Flujo disponible vs cuota
+  var cobertura = disponible > 0 ? disponible / cuotaConIVA : 0;
+  var cobPts = 0;
+  if (cobertura >= 2.0) cobPts = 70;
+  else if (cobertura >= 1.5) cobPts = 55;
+  else if (cobertura >= 1.2) cobPts = 40;
+  else if (cobertura >= 1.0) cobPts = 25;
+  else if (cobertura >= 0.8) cobPts = 10;
+  else cobPts = 0;
+  ptsCapacidad += cobPts;
+  detalles.push({ cat: 'Capacidad', factor: 'Cobertura flujo (' + cobertura.toFixed(2) + 'x)', pts: cobPts, max: 70 });
+
+  // ═══ 3. CAPITAL — 150 pts máx ═══
+  var ptsCapital = 0;
+  // Patrimonio vs monto solicitado
+  var ratioPatrimonio = montoSolicitado > 0 ? patrimonio / montoSolicitado : 0;
+  var patPts = 0;
+  if (ratioPatrimonio >= 5) patPts = 80;
+  else if (ratioPatrimonio >= 3) patPts = 65;
+  else if (ratioPatrimonio >= 2) patPts = 50;
+  else if (ratioPatrimonio >= 1) patPts = 35;
+  else if (ratioPatrimonio >= 0.5) patPts = 15;
+  else patPts = 0;
+  ptsCapital += patPts;
+  detalles.push({ cat: 'Capital', factor: 'Patrimonio/Monto (' + ratioPatrimonio.toFixed(1) + 'x)', pts: patPts, max: 80 });
+
+  // Antigüedad laboral
+  var antPts = 0;
+  if (antiguedad >= 10) antPts = 40;
+  else if (antiguedad >= 5) antPts = 30;
+  else if (antiguedad >= 3) antPts = 20;
+  else if (antiguedad >= 1) antPts = 10;
+  else antPts = 0;
+  ptsCapital += antPts;
+  detalles.push({ cat: 'Capital', factor: 'Antigüedad laboral (' + antiguedad + ' años)', pts: antPts, max: 40 });
+
+  // Nivel de endeudamiento actual
+  var leverage = ingresos > 0 ? deudaActual / (ingresos * 12) : 99;
+  var levPts = 0;
+  if (leverage <= 0.5) levPts = 30;
+  else if (leverage <= 1) levPts = 22;
+  else if (leverage <= 2) levPts = 14;
+  else if (leverage <= 3) levPts = 7;
+  else levPts = 0;
+  ptsCapital += levPts;
+  detalles.push({ cat: 'Capital', factor: 'Apalancamiento (deuda/' + (leverage < 99 ? leverage.toFixed(1) + 'x ing. anual' : 'N/A') + ')', pts: levPts, max: 30 });
+
+  // ═══ 4. COLATERAL — 150 pts máx ═══
+  var ptsColateral = 0;
+  // Tipo de garantía
+  var garTipos = { ninguna: 0, pagare: 20, aval: 30, deposito: 50, vehiculo: 60, equipo: 70, fideicomiso: 80, inmueble: 90 };
+  var garPts = garTipos[garantia] || 0;
+  ptsColateral += garPts;
+  detalles.push({ cat: 'Colateral', factor: 'Tipo garantía: ' + garantia, pts: garPts, max: 90 });
+
+  // Cobertura de garantía (valor garantía / monto)
+  var ratioGar = montoSolicitado > 0 && valorGarantia > 0 ? valorGarantia / montoSolicitado : 0;
+  var covGarPts = 0;
+  if (ratioGar >= 2) covGarPts = 60;
+  else if (ratioGar >= 1.5) covGarPts = 50;
+  else if (ratioGar >= 1.2) covGarPts = 40;
+  else if (ratioGar >= 1) covGarPts = 30;
+  else if (ratioGar >= 0.5) covGarPts = 15;
+  else covGarPts = 0;
+  ptsColateral += covGarPts;
+  detalles.push({ cat: 'Colateral', factor: 'Cobertura garantía (' + ratioGar.toFixed(1) + 'x)', pts: covGarPts, max: 60 });
+
+  // ═══ 5. CONDICIONES — 100 pts máx ═══
+  var ptsCondiciones = 0;
+  // Sector riesgo
+  var sectoresAltos = ['Construcción', 'Minería', 'Turismo', 'Entretenimiento'];
+  var sectoresMedios = ['Agropecuario', 'Textil', 'Energía', 'Transporte'];
+  var sectoresBajos = ['Tecnología', 'Salud', 'Alimentos', 'Gobierno', 'Educación', 'Manufactura', 'Comercio', 'Servicios', 'Inmobiliario', 'Financiero'];
+  var secPts = 0;
+  if (sectoresBajos.indexOf(sector) !== -1) secPts = 30;
+  else if (sectoresMedios.indexOf(sector) !== -1) secPts = 20;
+  else if (sectoresAltos.indexOf(sector) !== -1) secPts = 10;
+  else secPts = 15;
+  ptsCondiciones += secPts;
+  detalles.push({ cat: 'Condiciones', factor: 'Sector: ' + (sector || 'No especificado'), pts: secPts, max: 30 });
+
+  // Destino del crédito
+  var destPts = { capital_trabajo: 25, activo_fijo: 30, expansion: 25, reestructura: 10, personal: 15, otro: 15 }[destino] || 15;
+  ptsCondiciones += destPts;
+  detalles.push({ cat: 'Condiciones', factor: 'Destino: ' + destino.replace(/_/g, ' '), pts: destPts, max: 30 });
+
+  // Referencias
+  var refPts = [0, 10, 25, 40][referencias] || 0;
+  ptsCondiciones += refPts;
+  detalles.push({ cat: 'Condiciones', factor: 'Referencias (' + referencias + ')', pts: refPts, max: 40 });
+
+  // ═══ BONIFICACIÓN: Historial interno ═══
+  var ptsInterno = 0;
+  var clienteId = document.getElementById('scorCliente').value;
+  if (clienteId) {
+    var creditos = getStore('creditos').filter(function(c) { return c.clienteId == clienteId; });
+    if (creditos.length > 0) {
+      var liquidados = creditos.filter(function(c) { return c.estado === 'liquidado'; }).length;
+      var vencidos = creditos.filter(function(c) { return c.estado === 'vencido'; }).length;
+      var totalPagosI = 0, pagosPuntualesI = 0;
+      creditos.forEach(function(cr) {
+        if (cr.amortizacion) cr.amortizacion.forEach(function(a) {
+          if (a.pagado) { totalPagosI++; pagosPuntualesI++; }
+        });
+      });
+      var pctPuntualI = totalPagosI > 0 ? pagosPuntualesI / totalPagosI : 0;
+      // +50 pts si tiene créditos liquidados sin problemas
+      if (liquidados >= 2) ptsInterno += 50;
+      else if (liquidados >= 1) ptsInterno += 30;
+      // +30 pts por puntualidad
+      if (pctPuntualI >= 0.95) ptsInterno += 30;
+      else if (pctPuntualI >= 0.80) ptsInterno += 15;
+      // +20 pts por ser cliente recurrente sin vencidos
+      if (creditos.length >= 2 && vencidos === 0) ptsInterno += 20;
+      // -30 si tiene vencidos activos
+      if (vencidos > 0) ptsInterno -= 30;
+      detalles.push({ cat: 'Historial Interno', factor: liquidados + ' liquidados, ' + vencidos + ' vencidos, ' + Math.round(pctPuntualI * 100) + '% puntual', pts: Math.max(ptsInterno, -30), max: 100 });
+    } else {
+      detalles.push({ cat: 'Historial Interno', factor: 'Cliente nuevo — sin historial', pts: 0, max: 100 });
+    }
+  }
+
+  // ═══ SCORE FINAL ═══
+  score = Math.round(ptsCaracter + ptsCapacidad + ptsCapital + ptsColateral + ptsCondiciones + Math.max(ptsInterno, 0));
+  score = Math.min(score, 1000);
+  score = Math.max(score, 0);
+
+  // Determinar resultado
+  var resultado, color, emoji, recomendacion;
+  if (score >= 800) {
+    resultado = 'EXCELENTE'; color = '#059669'; emoji = '🟢';
+    recomendacion = 'Aprobación recomendada. Riesgo muy bajo. Puede ofrecerse tasa preferencial.';
+  } else if (score >= 650) {
+    resultado = 'BUENO'; color = '#10B981'; emoji = '🟢';
+    recomendacion = 'Aprobación recomendada con condiciones estándar. Riesgo bajo a moderado.';
+  } else if (score >= 500) {
+    resultado = 'ACEPTABLE'; color = '#F59E0B'; emoji = '🟡';
+    recomendacion = 'Aprobación con condiciones: puede requerirse garantía adicional, plazo más corto o monto reducido.';
+  } else if (score >= 350) {
+    resultado = 'RIESGO ALTO'; color = '#EF4444'; emoji = '🟠';
+    recomendacion = 'No recomendable sin garantía sólida. Si se aprueba, limitar monto y reforzar garantías.';
+  } else {
+    resultado = 'NO RECOMENDABLE'; color = '#991B1B'; emoji = '🔴';
+    recomendacion = 'Rechazo recomendado. Riesgo muy alto de impago. Capacidad de pago insuficiente.';
+  }
+
+  // Monto máximo sugerido (basado en capacidad de pago)
+  var montoMaxSugerido = 0;
+  if (disponible > 0) {
+    var maxCuota = disponible * 0.40; // max 40% del disponible
+    montoMaxSugerido = maxCuota * (1 - Math.pow(1 + tasaEstimada / 12, -plazoSolicitado)) / (tasaEstimada / 12);
+  }
+
+  // ═══ RENDERIZAR RESULTADO ═══
+  var html = '<div style="padding:24px">';
+  // Gauge visual
+  var pct = score / 10;
+  var gaugeColor = score >= 650 ? '#10B981' : score >= 500 ? '#F59E0B' : '#EF4444';
+  html += '<div style="text-align:center;margin-bottom:24px">';
+  html += '<div style="position:relative;width:200px;height:100px;margin:0 auto 12px">';
+  html += '<svg viewBox="0 0 200 100" style="width:200px;height:100px">';
+  html += '<path d="M 10 95 A 90 90 0 0 1 190 95" fill="none" stroke="#E5E7EB" stroke-width="12" stroke-linecap="round"/>';
+  var angle = (pct / 100) * 180;
+  var rad = angle * Math.PI / 180;
+  var x = 100 - 90 * Math.cos(rad);
+  var y = 95 - 90 * Math.sin(rad);
+  var largeArc = angle > 180 ? 1 : 0;
+  html += '<path d="M 10 95 A 90 90 0 ' + largeArc + ' 1 ' + x.toFixed(1) + ' ' + y.toFixed(1) + '" fill="none" stroke="' + gaugeColor + '" stroke-width="12" stroke-linecap="round"/>';
+  html += '</svg>';
+  html += '<div style="position:absolute;bottom:0;left:50%;transform:translateX(-50%);font-size:36px;font-weight:800;color:' + color + '">' + score + '</div>';
+  html += '</div>';
+  html += '<div style="font-size:22px;font-weight:700;color:' + color + '">' + emoji + ' ' + resultado + '</div>';
+  html += '<p style="font-size:14px;color:var(--gray-600);margin:8px 0 0;max-width:500px;margin-left:auto;margin-right:auto">' + recomendacion + '</p>';
+  html += '</div>';
+
+  // KPIs resumen
+  html += '<div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-bottom:24px">';
+  html += '<div style="text-align:center;padding:14px;background:#F0FDF4;border-radius:10px;border:1px solid #D1FAE5"><div style="font-size:11px;color:var(--gray-400)">Cuota Estimada</div><div style="font-size:20px;font-weight:700;color:#065F46">' + fmt(cuotaConIVA) + '</div></div>';
+  html += '<div style="text-align:center;padding:14px;background:#DBEAFE;border-radius:10px;border:1px solid #BFDBFE"><div style="font-size:11px;color:var(--gray-400)">Flujo Disponible</div><div style="font-size:20px;font-weight:700;color:var(--blue)">' + fmt(disponible) + '</div></div>';
+  html += '<div style="text-align:center;padding:14px;background:#FEF3C7;border-radius:10px;border:1px solid #FDE68A"><div style="font-size:11px;color:var(--gray-400)">Monto Máx Sugerido</div><div style="font-size:20px;font-weight:700;color:#92400E">' + fmt(montoMaxSugerido) + '</div></div>';
+  html += '<div style="text-align:center;padding:14px;background:#F5F3FF;border-radius:10px;border:1px solid #DDD6FE"><div style="font-size:11px;color:var(--gray-400)">PTI · DTI</div><div style="font-size:20px;font-weight:700;color:#5B21B6">' + (pti * 100).toFixed(0) + '% · ' + (dti * 100).toFixed(0) + '%</div></div>';
+  html += '</div>';
+
+  // Desglose por categoría
+  html += '<h4 style="margin:0 0 12px;font-size:15px">Desglose del Score</h4>';
+  html += '<table class="data-table" style="font-size:13px"><thead><tr><th>Categoría</th><th>Factor</th><th style="text-align:right">Puntos</th><th style="text-align:right">Máx</th><th style="width:120px">Barra</th></tr></thead><tbody>';
+  var categorias = ['Carácter', 'Capacidad', 'Capital', 'Colateral', 'Condiciones', 'Historial Interno'];
+  categorias.forEach(function(cat) {
+    var items = detalles.filter(function(d) { return d.cat === cat; });
+    if (items.length === 0) return;
+    var catTotal = items.reduce(function(s, i) { return s + i.pts; }, 0);
+    var catMax = items.reduce(function(s, i) { return s + i.max; }, 0);
+    items.forEach(function(item, idx) {
+      var pctBar = item.max > 0 ? Math.max(item.pts / item.max * 100, 0) : 0;
+      var barColor = pctBar >= 70 ? '#10B981' : pctBar >= 40 ? '#F59E0B' : '#EF4444';
+      html += '<tr>';
+      if (idx === 0) html += '<td rowspan="' + items.length + '" style="font-weight:600;vertical-align:top;border-right:2px solid #E5E7EB">' + cat + '<br><span style="font-size:11px;color:var(--gray-400)">' + catTotal + '/' + catMax + '</span></td>';
+      html += '<td>' + item.factor + '</td>';
+      html += '<td style="text-align:right;font-weight:600;color:' + (item.pts >= item.max * 0.7 ? '#059669' : item.pts >= item.max * 0.4 ? '#D97706' : '#DC2626') + '">' + item.pts + '</td>';
+      html += '<td style="text-align:right;color:var(--gray-400)">' + item.max + '</td>';
+      html += '<td><div style="background:#E5E7EB;border-radius:4px;height:8px;overflow:hidden"><div style="width:' + Math.max(pctBar, 0) + '%;height:100%;background:' + barColor + ';border-radius:4px;transition:width 0.5s"></div></div></td>';
+      html += '</tr>';
+    });
+  });
+  html += '</tbody></table>';
+
+  // Botones
+  html += '<div style="display:flex;gap:12px;justify-content:flex-end;margin-top:20px">';
+  html += '<button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir</button>';
+  html += '<button class="btn btn-primary" onclick="guardarScoring()">💾 Guardar Evaluación</button>';
+  html += '</div>';
+  html += '</div>';
+
+  document.getElementById('scorResultCard').style.display = 'block';
+  document.getElementById('scorResultContent').innerHTML = html;
+  document.getElementById('scorResultCard').scrollIntoView({ behavior: 'smooth' });
+
+  // Guardar temporalmente para el botón guardar
+  window._lastScoring = {
+    nombre: nombre, rfc: rfc,
+    tipoPersona: document.getElementById('scorTipoPersona').value,
+    clienteId: document.getElementById('scorCliente').value || null,
+    ingresos: ingresos, gastos: gastos, deudaActual: deudaActual, pagoDeudas: pagoDeudas,
+    patrimonio: patrimonio, antiguedad: antiguedad,
+    scoreBuro: scoreBuro, creditosVigentes: creditosVigentes, atrasos: atrasos, expCredito: expCredito,
+    montoSolicitado: montoSolicitado, plazoSolicitado: plazoSolicitado,
+    tipoCredito: tipoCredito, destino: destino,
+    garantia: garantia, valorGarantia: valorGarantia,
+    sector: sector, referencias: referencias, notas: notas,
+    score: score, resultado: resultado, recomendacion: recomendacion,
+    pti: pti, dti: dti, cobertura: cobertura,
+    cuotaEstimada: cuotaConIVA, montoMaxSugerido: montoMaxSugerido,
+    detalles: detalles, fecha: new Date().toISOString()
+  };
+}
+
+function guardarScoring() {
+  if (!window._lastScoring) return toast('Primero calcula el score', 'error');
+  var evaluaciones = getStore('evaluaciones') || [];
+  var ev = Object.assign({}, window._lastScoring);
+  ev.id = evaluaciones.length > 0 ? Math.max.apply(null, evaluaciones.map(function(e) { return e.id || 0; })) + 1 : 1;
+  ev.analista = window.currentUser || 'admin';
+  evaluaciones.push(ev);
+  setStore('evaluaciones', evaluaciones);
+  addAudit('Scoring', 'Evaluación', ev.nombre + ' — Score: ' + ev.score + ' (' + ev.resultado + ')');
+  toast('Evaluación guardada: ' + ev.nombre + ' — Score ' + ev.score, 'success');
+  window._lastScoring = null;
+}
+
+function renderScoringHistorial() {
+  var evaluaciones = getStore('evaluaciones') || [];
+  var tbody = document.getElementById('tbScoringHistorial');
+  if (evaluaciones.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;color:var(--gray-400);padding:40px">Sin evaluaciones registradas. Realiza tu primera evaluación en la pestaña "Nueva Evaluación".</td></tr>';
+    return;
+  }
+  tbody.innerHTML = evaluaciones.sort(function(a, b) { return new Date(b.fecha) - new Date(a.fecha); }).map(function(ev) {
+    var color = ev.score >= 650 ? '#10B981' : ev.score >= 500 ? '#F59E0B' : '#EF4444';
+    var emoji = ev.score >= 650 ? '🟢' : ev.score >= 500 ? '🟡' : '🔴';
+    return '<tr>' +
+      '<td style="font-size:12px;white-space:nowrap">' + (ev.fecha ? new Date(ev.fecha).toLocaleDateString('es-MX') : '—') + '</td>' +
+      '<td><strong>' + esc(ev.nombre) + '</strong></td>' +
+      '<td style="font-size:12px">' + esc(ev.rfc) + '</td>' +
+      '<td>' + fmt(ev.montoSolicitado) + '</td>' +
+      '<td style="text-align:center"><span style="font-size:18px;font-weight:700;color:' + color + '">' + ev.score + '</span></td>' +
+      '<td>' + emoji + ' ' + ev.resultado + '</td>' +
+      '<td style="font-size:12px">' + esc(ev.analista || '') + '</td>' +
+      '<td><button class="btn btn-outline btn-sm" onclick="verEvaluacion(' + ev.id + ')">Ver</button> <button class="btn btn-outline btn-sm" onclick="eliminarEvaluacion(' + ev.id + ')" style="color:var(--red)">🗑</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function verEvaluacion(id) {
+  var evaluaciones = getStore('evaluaciones') || [];
+  var ev = evaluaciones.find(function(e) { return e.id === id; });
+  if (!ev) return toast('Evaluación no encontrada', 'error');
+  // Restaurar datos en el formulario y recalcular
+  setScoringTab('nueva');
+  document.getElementById('scorNombre').value = ev.nombre || '';
+  document.getElementById('scorRFC').value = ev.rfc || '';
+  document.getElementById('scorTipoPersona').value = ev.tipoPersona || 'fisica';
+  document.getElementById('scorIngresos').value = ev.ingresos ? Number(ev.ingresos).toLocaleString('es-MX') : '';
+  document.getElementById('scorGastos').value = ev.gastos ? Number(ev.gastos).toLocaleString('es-MX') : '';
+  document.getElementById('scorDeudaActual').value = ev.deudaActual ? Number(ev.deudaActual).toLocaleString('es-MX') : '';
+  document.getElementById('scorPagoDeudas').value = ev.pagoDeudas ? Number(ev.pagoDeudas).toLocaleString('es-MX') : '';
+  document.getElementById('scorPatrimonio').value = ev.patrimonio ? Number(ev.patrimonio).toLocaleString('es-MX') : '';
+  document.getElementById('scorAntiguedad').value = ev.antiguedad || '';
+  document.getElementById('scorBuro').value = ev.scoreBuro || '';
+  document.getElementById('scorCreditosVigentes').value = ev.creditosVigentes || '';
+  document.getElementById('scorAtrasos').value = ev.atrasos || '0';
+  document.getElementById('scorExpCredito').value = ev.expCredito || '';
+  document.getElementById('scorMontoSolicitado').value = ev.montoSolicitado ? Number(ev.montoSolicitado).toLocaleString('es-MX') : '';
+  document.getElementById('scorPlazoSolicitado').value = ev.plazoSolicitado || '';
+  document.getElementById('scorTipoCredito').value = ev.tipoCredito || 'credito_simple';
+  document.getElementById('scorDestino').value = ev.destino || 'capital_trabajo';
+  document.getElementById('scorGarantia').value = ev.garantia || 'ninguna';
+  document.getElementById('scorValorGarantia').value = ev.valorGarantia ? Number(ev.valorGarantia).toLocaleString('es-MX') : '';
+  document.getElementById('scorSector').value = ev.sector || '';
+  document.getElementById('scorReferencias').value = ev.referencias || '0';
+  document.getElementById('scorNotas').value = ev.notas || '';
+  if (ev.clienteId) document.getElementById('scorCliente').value = ev.clienteId;
+  calcularScoring();
+}
+
+function eliminarEvaluacion(id) {
+  if (!confirm('¿Eliminar esta evaluación?')) return;
+  var evaluaciones = getStore('evaluaciones') || [];
+  evaluaciones = evaluaciones.filter(function(e) { return e.id !== id; });
+  setStore('evaluaciones', evaluaciones);
+  renderScoringHistorial();
+  toast('Evaluación eliminada', 'success');
+}
+
+function exportarScoringExcel() {
+  if (!window.XLSX) return toast('Librería XLSX no cargada', 'error');
+  var evaluaciones = getStore('evaluaciones') || [];
+  if (evaluaciones.length === 0) return toast('No hay evaluaciones para exportar', 'error');
+  var data = evaluaciones.map(function(ev) {
+    return {
+      'Fecha': ev.fecha ? new Date(ev.fecha).toLocaleDateString('es-MX') : '',
+      'Nombre': ev.nombre, 'RFC': ev.rfc, 'Tipo': ev.tipoPersona,
+      'Ingresos': ev.ingresos, 'Gastos': ev.gastos, 'Deuda Actual': ev.deudaActual,
+      'Score Buró': ev.scoreBuro, 'Monto Solicitado': ev.montoSolicitado,
+      'Plazo': ev.plazoSolicitado, 'Tipo Crédito': ev.tipoCredito,
+      'Score': ev.score, 'Resultado': ev.resultado,
+      'PTI %': (ev.pti * 100).toFixed(1), 'DTI %': (ev.dti * 100).toFixed(1),
+      'Cuota Est.': ev.cuotaEstimada ? ev.cuotaEstimada.toFixed(0) : '',
+      'Monto Máx Sug.': ev.montoMaxSugerido ? ev.montoMaxSugerido.toFixed(0) : '',
+      'Garantía': ev.garantia, 'Analista': ev.analista, 'Notas': ev.notas
+    };
+  });
+  var ws = XLSX.utils.json_to_sheet(data);
+  var wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Evaluaciones');
+  XLSX.writeFile(wb, 'Evaluaciones_Scoring_AP.xlsx');
+  toast('Excel exportado', 'success');
+}
+
+// Poblar select de clientes al navegar a scoring
+var _origShowPageScoring = showPage;
+// Se ejecuta en el refreshNotifications o al navegar
+function refreshScoringClientes() {
+  var sel = document.getElementById('scorCliente');
+  if (!sel) return;
+  var current = sel.value;
+  var clientes = getStore('clientes');
+  sel.innerHTML = '<option value="">— Nuevo solicitante —</option>' +
+    clientes.map(function(c) {
+      return '<option value="' + c.id + '">' + esc(c.nombre) + ' (' + c.rfc + ')</option>';
+    }).join('');
+  if (current) sel.value = current;
 }
 
 // ============================================================
