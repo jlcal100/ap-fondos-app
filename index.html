@@ -5213,6 +5213,7 @@ function verCredito(id) {
         <button class="btn btn-outline btn-sm" onclick="generarPagarePDF(${c.id})">📜 Pagaré</button>
         <button class="btn btn-outline btn-sm" onclick="generarTablaAmortPDF(${c.id})">📊 Tabla Amort. PDF</button>
         <button class="btn btn-outline btn-sm" onclick="generarEstadoCuentaCliente(${c.clienteId})">📋 Estado de Cuenta</button>
+        ${c.estado === 'liquidado' ? '<button class="btn btn-outline btn-sm" style="color:#059669;border-color:#059669;font-weight:600" onclick="generarCartaNoAdeudo(' + c.id + ')">✅ Carta de No Adeudo</button>' : ''}
       </div>`;
 
   let tableHTML = '';
@@ -11998,6 +11999,12 @@ function liquidarCredito(id) {
     renderCreditos();
     refreshNotifications();
     verCredito(id);
+    // Ofrecer generar Carta de No Adeudo automáticamente
+    setTimeout(function() {
+      if (confirm('Crédito liquidado. ¿Desea generar la Carta de No Adeudo?')) {
+        generarCartaNoAdeudo(id);
+      }
+    }, 500);
   });
 }
 
@@ -14592,6 +14599,146 @@ function generarContratoPDF(id) {
   doc.save('Contrato_' + c.numero + '.pdf');
   toast('Contrato PDF generado: ' + c.numero, 'success');
   addAudit('Contrato PDF generado', 'Créditos', c.numero + ' — ' + cli.nombre);
+}
+
+// ════════════════════════════════════════════════════════════════
+//  1-B. CARTA DE NO ADEUDO PDF
+// ════════════════════════════════════════════════════════════════
+function generarCartaNoAdeudo(id) {
+  var data = _getCreditoYCliente(id);
+  if (!data) return;
+  var c = data.c, cli = data.cli;
+  if (c.estado !== 'liquidado') return toast('El crédito debe estar liquidado para generar la carta de no adeudo', 'warning');
+  if (!window.jspdf) return toast('jsPDF no cargada', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('p', 'mm', 'letter');
+  var w = doc.internal.pageSize.getWidth();
+  var h = doc.internal.pageSize.getHeight();
+  var m = 18;
+  var maxW = w - m * 2;
+
+  var esArrendamiento = c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
+  var tipoCredTxt = esArrendamiento ? 'arrendamiento' : 'crédito simple';
+  var fechaHoy = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  var montoTxt = '$' + Number(c.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+
+  // Buscar fecha del último pago para saber cuándo se liquidó
+  var pagos = getStore('pagos').filter(function(p) { return p.creditoId === id; });
+  var ultimoPago = pagos.length > 0 ? pagos.sort(function(a, b) { return (b.fecha || '').localeCompare(a.fecha || ''); })[0] : null;
+  var fechaLiquidacion = ultimoPago ? new Date(ultimoPago.fecha).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) : fechaHoy;
+  var totalPagado = pagos.reduce(function(s, p) { return s + (p.monto || 0); }, 0);
+
+  // Número de folio único para la carta
+  var folio = 'CNA-' + c.numero.replace('CR-', '') + '-' + new Date().getFullYear();
+
+  // ── Encabezado con membrete ──
+  var y = _pdfHeader(doc, 'CARTA DE NO ADEUDO', 'Folio: ' + folio);
+
+  // ── Lugar y fecha ──
+  y += 4;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(50, 50, 50);
+  doc.text('Ciudad de México, a ' + fechaHoy, w - m, y, { align: 'right' });
+  y += 10;
+
+  // ── Destinatario ──
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'bold');
+  doc.text('A QUIEN CORRESPONDA', m, y);
+  y += 10;
+
+  // ── Cuerpo de la carta ──
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(10);
+
+  var parrafo1 = 'Por medio de la presente, ' + EMPRESA.razonSocial + ', con RFC ' + EMPRESA.rfc +
+    ', en su carácter de acreditante, hace constar que:';
+  y = _pdfParrafo(doc, y, parrafo1, m, maxW);
+  y += 2;
+
+  // Datos del cliente y crédito en recuadro
+  doc.setFillColor(245, 247, 250);
+  doc.setDrawColor(200, 210, 220);
+  doc.roundedRect(m, y - 2, maxW, 48, 3, 3, 'FD');
+
+  y += 5;
+  doc.setFontSize(9);
+  var datos = [
+    ['Cliente:', cli.nombre],
+    ['RFC del cliente:', cli.rfc || 'N/A'],
+    ['Número de contrato:', c.numero],
+    ['Tipo de ' + tipoCredTxt + ':', (c.tipo === 'arrendamiento' ? 'Arrendamiento Financiero' : c.tipo === 'arrendamiento_puro' ? 'Arrendamiento Puro' : c.tipo === 'revolvente' ? 'Crédito Revolvente' : 'Crédito Simple')],
+    ['Monto original otorgado:', montoTxt],
+    ['Fecha de otorgamiento:', c.fechaOtorgamiento ? new Date(c.fechaOtorgamiento).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) : (c.fechaInicio ? new Date(c.fechaInicio).toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' }) : 'N/A')],
+    ['Fecha de liquidación:', fechaLiquidacion],
+    ['Total pagado:', '$' + Number(totalPagado).toLocaleString('es-MX', { minimumFractionDigits: 2 })]
+  ];
+  datos.forEach(function(row) {
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[0], m + 5, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(row[1], m + 60, y);
+    y += 5;
+  });
+  y += 8;
+
+  // Declaración formal
+  var parrafo2 = 'Ha liquidado en su totalidad el ' + tipoCredTxt + ' identificado con el número de contrato ' +
+    c.numero + ', por un monto original de ' + montoTxt + ', quedando un saldo pendiente de $0.00 (CERO PESOS 00/100 M.N.).';
+  y = _pdfParrafo(doc, y, parrafo2, m, maxW);
+  y += 3;
+
+  var parrafo3 = 'En consecuencia, ' + EMPRESA.razonSocial + ' declara que no tiene adeudo alguno pendiente de cobro ' +
+    'respecto del contrato antes mencionado, por lo que no existe obligación de pago alguna por parte de ' +
+    (cli.tipo === 'moral' ? 'la empresa ' : 'el(la) C. ') + cli.nombre + ' derivada de dicho contrato.';
+  y = _pdfParrafo(doc, y, parrafo3, m, maxW);
+  y += 3;
+
+  if (esArrendamiento) {
+    var parrafo3b = 'Así mismo, con la liquidación total del presente contrato de arrendamiento, se da por concluida ' +
+      'la relación contractual, y en su caso, se procederá a la transmisión de la propiedad del(los) bien(es) ' +
+      'arrendado(s) conforme a los términos del contrato original.';
+    y = _pdfParrafo(doc, y, parrafo3b, m, maxW);
+    y += 3;
+  }
+
+  var parrafo4 = 'Se extiende la presente carta de no adeudo para los fines legales y administrativos que al interesado convengan, ' +
+    'en la Ciudad de México, a ' + fechaHoy + '.';
+  y = _pdfParrafo(doc, y, parrafo4, m, maxW);
+  y += 5;
+
+  // ── Firma ──
+  if (y > h - 70) { doc.addPage(); y = 30; }
+  y += 15;
+  var centerX = w / 2;
+  doc.setDrawColor(100, 100, 100);
+  doc.line(centerX - 40, y, centerX + 40, y);
+  y += 5;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.text('ATENTAMENTE', centerX, y, { align: 'center' });
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.text(EMPRESA.nombre, centerX, y, { align: 'center' });
+  y += 4;
+  doc.setFontSize(8);
+  doc.text('Representante Legal', centerX, y, { align: 'center' });
+
+  // ── Leyenda legal al pie ──
+  y += 15;
+  doc.setFontSize(7);
+  doc.setTextColor(140, 140, 140);
+  doc.text('Este documento es un comprobante de no adeudo emitido por ' + EMPRESA.razonSocial + '.', m, y);
+  y += 3;
+  doc.text('Para cualquier aclaración, comunicarse al correo: ' + EMPRESA.emailAdmin, m, y);
+
+  // ── Pie de página en todas las páginas ──
+  _pdfPie(doc);
+
+  doc.save('CartaNoAdeudo_' + c.numero + '_' + cli.nombre.replace(/\s+/g, '_').substring(0, 30) + '.pdf');
+  toast('Carta de No Adeudo generada para ' + cli.nombre, 'success');
+  addAudit('Documento', 'Créditos', 'Carta de No Adeudo — ' + c.numero + ' — ' + cli.nombre);
 }
 
 // ════════════════════════════════════════════════════════════════
