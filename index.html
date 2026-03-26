@@ -1487,53 +1487,62 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
 
     <!-- ===================== CONCILIACIÓN BANCARIA ===================== -->
     <div class="page" id="page-conciliacion">
+      <!-- Card 1: Importar Estado de Cuenta Banorte -->
       <div class="card" style="margin-bottom:20px">
         <div class="card-header">
-          <span class="card-title">Importar Movimientos Bancarios</span>
-          <div style="display:flex;gap:8px">
-            <button class="btn btn-outline btn-sm" onclick="agregarMovBancManual()">+ Agregar Manual</button>
-            <label class="btn btn-primary btn-sm" style="cursor:pointer;margin:0">📂 Importar CSV <input type="file" accept=".csv" onchange="importarMovBancCSV(this)" style="display:none"></label>
+          <span class="card-title">Importar Estado de Cuenta — Banorte CSV</span>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-outline btn-sm" onclick="agregarMovBancManual()">+ Manual</button>
+            <label class="btn btn-primary btn-sm" style="cursor:pointer;margin:0">📂 Importar CSV Banorte <input type="file" accept=".csv,.txt" onchange="importarCSVBanorte(this)" style="display:none"></label>
+            <button class="btn btn-outline btn-sm" onclick="limpiarMovBancarios()" title="Limpiar todos los movimientos importados">🗑️ Limpiar</button>
           </div>
         </div>
-        <div class="form-row-3" id="formMovManual" style="display:none;margin-bottom:12px">
-          <div class="form-group">
-            <label class="form-label">Fecha</label>
-            <input type="date" class="form-input" id="movBancFecha">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Concepto</label>
-            <input type="text" class="form-input" id="movBancConcepto" placeholder="Referencia o concepto">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Monto (+ ingreso, - egreso)</label>
-            <div class="input-prefix"><span class="prefix">$</span><input type="number" class="form-input" id="movBancMonto" step="0.01" placeholder="Ej: 15000 o -8500"></div>
-          </div>
+        <div style="padding:0 20px 10px;font-size:12px;color:var(--text-muted);display:flex;justify-content:space-between;align-items:center">
+          <span>Formato: CSV de Banorte (13 columnas). Se extrae cuenta/CLABE de la Descripción Detallada para matching automático. El sistema aprende de tus clasificaciones.</span>
+          <button class="btn btn-outline btn-sm" onclick="limpiarReglasAprendidas()" title="Limpiar reglas aprendidas de clasificación" style="white-space:nowrap;font-size:11px">🧠 Limpiar reglas</button>
         </div>
-        <div id="formMovManual2" style="display:none;margin-bottom:12px" class="form-row-3">
-          <div class="form-group">
-            <label class="form-label">Referencia bancaria</label>
-            <input type="text" class="form-input" id="movBancRef" placeholder="No. referencia">
-          </div>
-          <div class="form-group" style="display:flex;align-items:flex-end">
-            <button class="btn btn-red btn-sm" onclick="guardarMovBancManual()" style="width:100%">Guardar Movimiento</button>
-          </div>
-          <div class="form-group" style="display:flex;align-items:flex-end">
-            <button class="btn btn-outline btn-sm" onclick="document.getElementById('formMovManual').style.display='none';document.getElementById('formMovManual2').style.display='none'" style="width:100%">Cancelar</button>
-          </div>
+        <div class="form-row-3" id="formMovManual" style="display:none;margin-bottom:12px;padding:0 20px">
+          <div class="form-group"><label class="form-label">Fecha</label><input type="date" class="form-input" id="movBancFecha"></div>
+          <div class="form-group"><label class="form-label">Concepto</label><input type="text" class="form-input" id="movBancConcepto" placeholder="Referencia o concepto"></div>
+          <div class="form-group"><label class="form-label">Monto (+ ingreso, - egreso)</label><div class="input-prefix"><span class="prefix">$</span><input type="number" class="form-input" id="movBancMonto" step="0.01" placeholder="Ej: 15000 o -8500"></div></div>
+        </div>
+        <div id="formMovManual2" style="display:none;margin-bottom:12px;padding:0 20px" class="form-row-3">
+          <div class="form-group"><label class="form-label">Referencia bancaria</label><input type="text" class="form-input" id="movBancRef" placeholder="No. referencia / CLABE"></div>
+          <div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-red btn-sm" onclick="guardarMovBancManual()" style="width:100%">Guardar</button></div>
+          <div class="form-group" style="display:flex;align-items:flex-end"><button class="btn btn-outline btn-sm" onclick="document.getElementById('formMovManual').style.display='none';document.getElementById('formMovManual2').style.display='none'" style="width:100%">Cancelar</button></div>
         </div>
         <div class="table-wrapper">
           <table class="data-table">
-            <thead><tr><th>Fecha</th><th>Concepto</th><th>Referencia</th><th>Monto</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Referencia</th><th>Cargo</th><th>Abono</th><th>Saldo</th><th>Identificado</th><th>Acciones</th></tr></thead>
             <tbody id="tbMovBancarios"></tbody>
           </table>
         </div>
         <div id="movBancVacio" style="text-align:center;padding:30px;color:var(--text-muted);display:none">
-          No hay movimientos bancarios. Importa un CSV o agrega manualmente.
+          No hay movimientos bancarios. Importa el CSV de Banorte o agrega manualmente.
         </div>
       </div>
+
+      <!-- Card 2: Movimientos Pendientes de Clasificar -->
+      <div class="card" id="cardPendientes" style="margin-bottom:20px;display:none">
+        <div class="card-header" style="background:linear-gradient(135deg,#F59E0B 0%,#D97706 100%);color:#fff">
+          <span class="card-title" style="color:#fff">Movimientos Pendientes de Clasificar</span>
+          <span class="badge" id="badgePendientes" style="background:#fff;color:#D97706;font-size:13px">0</span>
+        </div>
+        <div style="padding:10px 20px;font-size:13px;color:var(--text-muted);background:#FFFBEB;border-bottom:1px solid #FDE68A">
+          Estos movimientos no pudieron ser identificados automáticamente. Clasifícalos como pago de crédito, fondeo, traspaso, o ignóralos si son erróneos.
+        </div>
+        <div class="table-wrapper">
+          <table class="data-table">
+            <thead><tr><th>Fecha</th><th>Concepto</th><th>Referencia</th><th>Monto</th><th>Sugerencia</th><th>Acción</th></tr></thead>
+            <tbody id="tbPendientesClasificar"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Card 3: Conciliación y Resultados -->
       <div class="card" style="margin-bottom:20px">
         <div class="card-header">
-          <span class="card-title">Conciliación</span>
+          <span class="card-title">Conciliación Bancaria</span>
           <div style="display:flex;gap:8px">
             <button class="btn btn-red btn-sm" onclick="ejecutarConciliacionAuto()">⚡ Conciliar Automático</button>
             <button class="btn btn-outline btn-sm" onclick="exportarConciliacionPDF()">PDF</button>
@@ -2170,6 +2179,16 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         <div class="form-group"><label class="form-label">Score Crediticio</label><input type="number" class="form-input" id="cliScore" min="0" max="850"></div>
       </div>
       <div class="form-group"><label class="form-label">Sector Económico</label><input type="text" class="form-input" id="cliSector"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">CLABE Interbancaria</label><input type="text" class="form-input" id="cliCLABE" maxlength="18" placeholder="18 dígitos"></div>
+        <div class="form-group"><label class="form-label">Cuenta Bancaria</label><input type="text" class="form-input" id="cliCuentaBanco" placeholder="No. cuenta"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Banco</label>
+          <select class="form-select" id="cliBanco"><option value="">— Seleccionar —</option><option value="banorte">Banorte</option><option value="bbva">BBVA</option><option value="santander">Santander</option><option value="hsbc">HSBC</option><option value="scotiabank">Scotiabank</option><option value="banamex">Citibanamex</option><option value="banregio">Banregio</option><option value="otro">Otro</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Beneficiario</label><input type="text" class="form-input" id="cliBeneficiario" placeholder="Nombre del titular"></div>
+      </div>
       <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="cliNotas"></textarea></div>
 
       <!-- Sección de Documentos en el formulario de cliente -->
@@ -2323,6 +2342,10 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         <div class="form-group"><label class="form-label">Fecha Inicio *</label><input type="date" class="form-input" id="fondFechaInicio"></div>
       </div>
       <div class="form-group"><label class="form-label">Garantía</label><input type="text" class="form-input" id="fondGarantia"></div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">CLABE del Fondeador</label><input type="text" class="form-input" id="fondCLABE" maxlength="18" placeholder="18 dígitos"></div>
+        <div class="form-group"><label class="form-label">Cuenta Bancaria</label><input type="text" class="form-input" id="fondCuentaBanco" placeholder="No. cuenta"></div>
+      </div>
       <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="fondNotas"></textarea></div>
     </div>
     <div class="modal-footer">
@@ -2998,9 +3021,9 @@ function initData() {
   // Seed sample data for demo
   if (getStore('clientes').length === 0) {
     setStore('clientes', [
-      { id: 1, tipo: 'moral', nombre: 'Grupo Industrial del Norte SA de CV', rfc: 'GIN200101ABC', curp: '', telefono: '8112345678', email: 'contacto@gin.com', direccion: 'Av. Constitución 456', ciudad: 'Monterrey', estado: 'Nuevo León', cp: '64000', ingresos: 2500000, score: 720, sector: 'Manufactura', notas: '' },
-      { id: 2, tipo: 'fisica', nombre: 'María López Hernández', rfc: 'LOHM850315ABC', curp: 'LOHM850315MNLLRR01', telefono: '5523456789', email: 'maria.lopez@gmail.com', direccion: 'Col. Roma Norte #123', ciudad: 'CDMX', estado: 'CDMX', cp: '06700', ingresos: 45000, score: 680, sector: 'Servicios', notas: '' },
-      { id: 3, tipo: 'moral', nombre: 'Transportes del Pacífico SA', rfc: 'TPA190501XYZ', curp: '', telefono: '3312345678', email: 'admin@transpac.mx', direccion: 'Blvd. Tlaquepaque 789', ciudad: 'Guadalajara', estado: 'Jalisco', cp: '44100', ingresos: 1800000, score: 700, sector: 'Transporte', notas: '' }
+      { id: 1, tipo: 'moral', nombre: 'Grupo Industrial del Norte SA de CV', rfc: 'GIN200101ABC', curp: '', telefono: '8112345678', email: 'contacto@gin.com', direccion: 'Av. Constitución 456', ciudad: 'Monterrey', estado: 'Nuevo León', cp: '64000', ingresos: 2500000, score: 720, sector: 'Manufactura', clabe: '072580001234567890', cuentaBanco: '1234567890', banco: 'banorte', beneficiario: 'Grupo Industrial del Norte SA de CV', notas: '' },
+      { id: 2, tipo: 'fisica', nombre: 'María López Hernández', rfc: 'LOHM850315ABC', curp: 'LOHM850315MNLLRR01', telefono: '5523456789', email: 'maria.lopez@gmail.com', direccion: 'Col. Roma Norte #123', ciudad: 'CDMX', estado: 'CDMX', cp: '06700', ingresos: 45000, score: 680, sector: 'Servicios', clabe: '012180009876543210', cuentaBanco: '9876543210', banco: 'bbva', beneficiario: 'María López Hernández', notas: '' },
+      { id: 3, tipo: 'moral', nombre: 'Transportes del Pacífico SA', rfc: 'TPA190501XYZ', curp: '', telefono: '3312345678', email: 'admin@transpac.mx', direccion: 'Blvd. Tlaquepaque 789', ciudad: 'Guadalajara', estado: 'Jalisco', cp: '44100', ingresos: 1800000, score: 700, sector: 'Transporte', clabe: '072320005551234567', cuentaBanco: '5551234567', banco: 'banorte', beneficiario: 'Transportes del Pacífico SA', notas: '' }
     ]);
   }
   if (getStore('creditos').length === 0) {
@@ -3016,8 +3039,8 @@ function initData() {
   if (getStore('fondeos').length === 0) {
     const hace1a = new Date(); hace1a.setFullYear(hace1a.getFullYear() - 1);
     setStore('fondeos', [
-      { id: 1, numero: 'FD-001', fondeador: 'Banco Nacional', tipo: 'banco', monto: 5000000, saldo: 3500000, tasa: 0.12, plazo: 36, periodicidad: 'mensual', fechaInicio: hace1a.toISOString().split('T')[0], fechaVencimiento: addMonths(hace1a, 36), estado: 'vigente', garantia: 'Cartera de créditos', notas: '' },
-      { id: 2, numero: 'FD-002', fondeador: 'Fondo de Inversión Alpha', tipo: 'fondo', monto: 2000000, saldo: 1800000, tasa: 0.14, plazo: 24, periodicidad: 'trimestral', fechaInicio: new Date(new Date().setMonth(new Date().getMonth() - 4)).toISOString().split('T')[0], fechaVencimiento: addMonths(new Date(new Date().setMonth(new Date().getMonth() - 4)), 24), estado: 'vigente', garantia: '', notas: '' }
+      { id: 1, numero: 'FD-001', fondeador: 'Banco Nacional', tipo: 'banco', monto: 5000000, saldo: 3500000, tasa: 0.12, plazo: 36, periodicidad: 'mensual', fechaInicio: hace1a.toISOString().split('T')[0], fechaVencimiento: addMonths(hace1a, 36), estado: 'vigente', garantia: 'Cartera de créditos', clabe: '072580007778889990', cuentaBanco: '7778889990', notas: '' },
+      { id: 2, numero: 'FD-002', fondeador: 'Fondo de Inversión Alpha', tipo: 'fondo', monto: 2000000, saldo: 1800000, tasa: 0.14, plazo: 24, periodicidad: 'trimestral', fechaInicio: new Date(new Date().setMonth(new Date().getMonth() - 4)).toISOString().split('T')[0], fechaVencimiento: addMonths(new Date(new Date().setMonth(new Date().getMonth() - 4)), 24), estado: 'vigente', garantia: '', clabe: '014320006665554440', cuentaBanco: '6665554440', notas: '' }
     ]);
   }
 }
@@ -4658,6 +4681,10 @@ function guardarCliente() {
     ingresos: parseMiles('cliIngresos'),
     score: parseInt(document.getElementById('cliScore').value) || 0,
     sector: document.getElementById('cliSector').value.trim(),
+    clabe: document.getElementById('cliCLABE').value.trim(),
+    cuentaBanco: document.getElementById('cliCuentaBanco').value.trim(),
+    banco: document.getElementById('cliBanco').value,
+    beneficiario: document.getElementById('cliBeneficiario').value.trim(),
     notas: document.getElementById('cliNotas').value.trim()
   };
 
@@ -4716,6 +4743,10 @@ function editarCliente(id) {
   setInputMiles('cliIngresos', c.ingresos);
   document.getElementById('cliScore').value = c.score;
   document.getElementById('cliSector').value = c.sector;
+  document.getElementById('cliCLABE').value = c.clabe || '';
+  document.getElementById('cliCuentaBanco').value = c.cuentaBanco || '';
+  document.getElementById('cliBanco').value = c.banco || '';
+  document.getElementById('cliBeneficiario').value = c.beneficiario || '';
   document.getElementById('cliNotas').value = c.notas;
   // Reset document upload area
   modalPendingFiles = [];
@@ -7061,23 +7092,74 @@ function renderConciliacion() {
     vacio.style.display = 'none';
     tbMov.innerHTML = movs.sort(function(a, b) { return b.fecha.localeCompare(a.fecha); }).map(function(m) {
       var matchObj = matches.find(function(mt) { return mt.movBancId === m.id; });
-      var estado = matchObj ? '<span class="badge" style="background:#0D9F6E;color:#fff">Conciliado</span>' :
-        '<span class="badge" style="background:#F59E0B;color:#fff">Pendiente</span>';
+      var clasif = m.clasificacion || '';
+      var estadoBadge;
+      if (matchObj) {
+        estadoBadge = '<span class="badge" style="background:#0D9F6E;color:#fff">Conciliado</span>';
+      } else if (clasif === 'ignorar') {
+        estadoBadge = '<span class="badge" style="background:#9CA3AF;color:#fff">Ignorado</span>';
+      } else if (clasif === 'traspaso') {
+        estadoBadge = '<span class="badge" style="background:#6366F1;color:#fff">Traspaso</span>';
+      } else if (clasif === 'comision') {
+        estadoBadge = '<span class="badge" style="background:#8B5CF6;color:#fff">Comisión</span>';
+      } else if (clasif === 'pago_credito' || clasif === 'fondeo_ingreso' || clasif === 'fondeo_pago') {
+        estadoBadge = '<span class="badge" style="background:#0D9F6E;color:#fff">Aplicado</span>';
+      } else if (clasif === 'pendiente_revisar') {
+        estadoBadge = '<span class="badge" style="background:#F59E0B;color:#fff">Revisar</span>';
+      } else {
+        estadoBadge = '<span class="badge" style="background:#F59E0B;color:#fff">Pendiente</span>';
+      }
+
+      var identLabel = '';
+      if (m.clabe && m.clabe.length === 18) {
+        identLabel = '<span style="font-size:10px;color:#0D9F6E" title="CLABE: ' + m.clabe + '">✓ CLABE</span>';
+      } else if (m.cuentaDetectada || (m.clabe && m.clabe.length <= 11)) {
+        var ctaShow = m.cuentaDetectada || m.clabe;
+        identLabel = '<span style="font-size:10px;color:#0D9F6E" title="Cuenta: ' + ctaShow + '">✓ Cuenta</span>';
+      } else if (m.sugerenciaTxt) {
+        identLabel = '<span style="font-size:10px;color:#D97706">💡</span>';
+      } else {
+        identLabel = '<span style="font-size:10px;color:#9CA3AF">—</span>';
+      }
+      var identificado = identLabel;
+
+      var cargo = m.cargo || (m.monto < 0 ? Math.abs(m.monto) : 0);
+      var abono = m.abono || (m.monto > 0 ? m.monto : 0);
+      var saldo = m.saldoBanco || 0;
+
       var acciones = matchObj ? '<button class="btn btn-outline btn-sm" onclick="desvincularConc(' + matchObj.id + ')" title="Desvincular">✕</button>' :
+        (clasif === 'ignorar' || clasif === 'traspaso' || clasif === 'comision' ? '<button class="btn btn-outline btn-sm" onclick="reclasificarMov(' + m.id + ')" title="Reclasificar">↩</button>' :
         '<button class="btn btn-primary btn-sm" onclick="conciliarManual(' + m.id + ')" title="Conciliar">🔗</button> ' +
-        '<button class="btn btn-outline btn-sm" onclick="eliminarMovBanc(' + m.id + ')" title="Eliminar">🗑️</button>';
+        '<button class="btn btn-outline btn-sm" onclick="eliminarMovBanc(' + m.id + ')" title="Eliminar">🗑️</button>');
+
       return '<tr>' +
-        '<td>' + m.fecha + '</td>' +
-        '<td>' + esc(m.concepto) + '</td>' +
-        '<td>' + esc(m.referencia || '—') + '</td>' +
-        '<td style="text-align:right;font-weight:600;color:' + (m.monto >= 0 ? '#0D9F6E' : '#EF4444') + '">' + fmt(Math.abs(m.monto)) + (m.monto < 0 ? ' (E)' : ' (I)') + '</td>' +
-        '<td>' + estado + '</td>' +
-        '<td>' + acciones + '</td></tr>';
+        '<td style="font-size:12px">' + m.fecha + '</td>' +
+        '<td style="font-size:12px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="' + esc(m.concepto) + '">' + esc(m.concepto) + '</td>' +
+        '<td style="font-size:11px">' + esc(m.referencia || '—') + '</td>' +
+        '<td style="text-align:right;color:#EF4444">' + (cargo > 0 ? fmt(cargo) : '') + '</td>' +
+        '<td style="text-align:right;color:#0D9F6E">' + (abono > 0 ? fmt(abono) : '') + '</td>' +
+        '<td style="text-align:right;font-size:12px">' + (saldo ? fmt(saldo) : '') + '</td>' +
+        '<td style="text-align:center">' + identificado + '</td>' +
+        '<td>' + estadoBadge + ' ' + acciones + '</td></tr>';
     }).join('');
   }
 
   // Resumen conciliación
   renderResumenConc(movs, matches);
+  // También actualizar pendientes
+  renderPendientesClasificar();
+}
+
+// Reclasificar un movimiento previamente clasificado
+function reclasificarMov(movId) {
+  var concs = getStore('conciliaciones');
+  var mov = concs.find(function(c) { return c.id === movId; });
+  if (!mov) return;
+  mov.clasificacion = null;
+  mov.sugerenciaTxt = '';
+  setStore('conciliaciones', concs);
+  toast('Movimiento devuelto a pendientes', 'info');
+  renderConciliacion();
 }
 
 function agregarMovBancManual() {
@@ -7108,43 +7190,657 @@ function guardarMovBancManual() {
 }
 
 function importarMovBancCSV(input) {
+  // Legacy — redirige a Banorte
+  importarCSVBanorte(input);
+}
+
+// ==================== PARSER CSV CON CAMPOS ENTRECOMILLADOS ====================
+// Banorte exporta CSV con comillas y montos como "$1,300,000.00" que contienen comas
+function parseCSVLines(text) {
+  var lines = []; var current = ''; var inQuote = false;
+  for (var i = 0; i < text.length; i++) {
+    var ch = text[i];
+    if (ch === '"') { inQuote = !inQuote; current += ch; }
+    else if ((ch === '\n' || ch === '\r') && !inQuote) {
+      if (current.trim()) lines.push(current);
+      current = '';
+      if (ch === '\r' && text[i + 1] === '\n') i++; // skip \r\n
+    } else { current += ch; }
+  }
+  if (current.trim()) lines.push(current);
+  return lines;
+}
+
+function parseCSVRow(line) {
+  var cols = []; var current = ''; var inQuote = false;
+  for (var i = 0; i < line.length; i++) {
+    var ch = line[i];
+    if (ch === '"') {
+      if (inQuote && line[i + 1] === '"') { current += '"'; i++; }
+      else { inQuote = !inQuote; }
+    } else if (ch === ',' && !inQuote) {
+      cols.push(current); current = '';
+    } else { current += ch; }
+  }
+  cols.push(current);
+  return cols;
+}
+
+function cleanBanorteVal(val) {
+  if (!val) return '';
+  return val.replace(/^['"\s]+|['"\s]+$/g, '').trim();
+}
+
+function parseMontoBanorte(val) {
+  if (!val) return 0;
+  var s = val.replace(/['"$\s]/g, '');
+  if (s === '-' || s === '' || s === '0') return 0;
+  return parseFloat(s.replace(/,/g, '')) || 0;
+}
+
+// ==================== IMPORTADOR CSV BANORTE (formato real 13 columnas) ====================
+// Columnas: CUENTA, FECHA DE OPERACIÓN, FECHA, REFERENCIA, DESCRIPCIÓN,
+//           COD. TRANSAC, SUCURSAL, DEPÓSITOS, RETIROS, SALDO,
+//           MOVIMIENTO, DESCRIPCIÓN DETALLADA, CHEQUE
+function importarCSVBanorte(input) {
   var file = input.files[0];
   if (!file) return;
   var reader = new FileReader();
   reader.onload = function(e) {
     var text = e.target.result;
-    var lines = text.split(/\r?\n/).filter(function(l) { return l.trim(); });
+    var lines = parseCSVLines(text);
     if (lines.length < 2) { toast('CSV vacío o sin datos', 'warning'); return; }
 
+    // Parsear encabezados para mapear dinámicamente
+    var headerCols = parseCSVRow(lines[0]).map(function(h) { return cleanBanorteVal(h).toLowerCase(); });
+    var colMap = {};
+    headerCols.forEach(function(h, i) {
+      if (h.indexOf('fecha de oper') !== -1) colMap.fechaOp = i;
+      else if (h === 'fecha') colMap.fecha = i;
+      else if (h === 'referencia') colMap.referencia = i;
+      else if (h.indexOf('descripci') !== -1 && h.indexOf('detallada') !== -1) colMap.detallada = i;
+      else if (h.indexOf('descripci') !== -1) colMap.descripcion = i;
+      else if (h.indexOf('dep') !== -1) colMap.depositos = i;
+      else if (h.indexOf('retiro') !== -1) colMap.retiros = i;
+      else if (h.indexOf('saldo') !== -1) colMap.saldo = i;
+      else if (h.indexOf('movimiento') !== -1) colMap.movimiento = i;
+      else if (h.indexOf('cuenta') !== -1) colMap.cuenta = i;
+      else if (h.indexOf('cod') !== -1 && h.indexOf('transac') !== -1) colMap.codTransac = i;
+      else if (h.indexOf('sucursal') !== -1) colMap.sucursal = i;
+      else if (h.indexOf('cheque') !== -1) colMap.cheque = i;
+    });
+
+    // Validar que encontramos columnas clave
+    if (colMap.depositos === undefined && colMap.retiros === undefined) {
+      toast('No se detectaron columnas de Depósitos/Retiros en el CSV', 'error'); return;
+    }
+
     var concs = getStore('conciliaciones');
+    var reglas = getStore('reglasConciliacion') || [];
     var count = 0;
-    // Calcular ID base desde el array en memoria (no desde store) para evitar duplicados
     var maxIdConc = concs.length > 0 ? Math.max.apply(null, concs.map(function(c) { return c.id || 0; })) : 0;
-    // Intentar detectar formato: fecha, concepto, monto[, referencia]
+
     for (var i = 1; i < lines.length; i++) {
-      var cols = lines[i].split(',').map(function(c) { return c.trim().replace(/^"|"$/g, ''); });
-      if (cols.length < 3) continue;
-      var fecha = cols[0];
-      var concepto = cols[1];
-      var monto = parseFloat(cols[2].replace(/[$,]/g, ''));
-      var ref = cols[3] || '';
-      if (!fecha || !concepto || isNaN(monto)) continue;
-      // Normalizar fecha si viene como dd/mm/yyyy
+      var cols = parseCSVRow(lines[i]);
+      if (cols.length < 7) continue;
+
+      var fecha = cleanBanorteVal(cols[colMap.fecha !== undefined ? colMap.fecha : (colMap.fechaOp !== undefined ? colMap.fechaOp : 2)]);
+      var descripcion = cleanBanorteVal(cols[colMap.descripcion !== undefined ? colMap.descripcion : 4]);
+      var referencia = cleanBanorteVal(cols[colMap.referencia !== undefined ? colMap.referencia : 3]);
+      var detallada = cleanBanorteVal(cols[colMap.detallada !== undefined ? colMap.detallada : 11]);
+      var deposito = parseMontoBanorte(cols[colMap.depositos !== undefined ? colMap.depositos : 7]);
+      var retiro = parseMontoBanorte(cols[colMap.retiros !== undefined ? colMap.retiros : 8]);
+      var saldoLinea = parseMontoBanorte(cols[colMap.saldo !== undefined ? colMap.saldo : 9]);
+      var numMov = cleanBanorteVal(cols[colMap.movimiento !== undefined ? colMap.movimiento : 10]);
+
+      if (!fecha || (deposito === 0 && retiro === 0)) continue;
+
+      // Normalizar fecha dd/mm/yyyy → yyyy-mm-dd
       if (/^\d{2}\/\d{2}\/\d{4}$/.test(fecha)) {
         var parts = fecha.split('/');
         fecha = parts[2] + '-' + parts[1] + '-' + parts[0];
       }
+
+      // Extraer identificadores bancarios de DESCRIPCIÓN DETALLADA
+      var ident = extraerIdentBancarioBanorte(detallada);
+      var concepto = descripcion + (detallada && detallada !== '-' ? ' — ' + detallada.substring(0, 80) : '');
+
+      var monto = deposito > 0 ? deposito : -retiro;
       maxIdConc++;
-      concs.push({ id: maxIdConc, tipo: 'movimiento', fecha: fecha, concepto: concepto, monto: monto, referencia: ref, origen: 'csv', createdAt: new Date().toISOString() });
+      var mov = {
+        id: maxIdConc, tipo: 'movimiento', fecha: fecha,
+        concepto: concepto, descripcionCorta: descripcion, detalleBanorte: detallada,
+        monto: monto, cargo: retiro, abono: deposito, saldoBanco: saldoLinea,
+        referencia: referencia, numMovimiento: numMov,
+        clabe: ident.clabe, cuentaDetectada: ident.cuenta, rfcDetectado: ident.rfc,
+        nombreDetectado: ident.nombre, origen: 'csv_banorte',
+        clasificacion: null, clienteIdMatch: null, fondeoIdMatch: null,
+        createdAt: new Date().toISOString()
+      };
+
+      // Aplicar reglas aprendidas ANTES de agregar
+      var reglaAplicada = buscarReglaAprendida(reglas, ident.cuenta, ident.clabe);
+      if (reglaAplicada) {
+        mov.clasificacion = reglaAplicada.clasificacion;
+        mov.sugerenciaTxt = '🤖 Auto: ' + reglaAplicada.descripcion;
+        if (reglaAplicada.creditoId) mov.creditoSugerido = reglaAplicada.creditoId;
+        if (reglaAplicada.fondeoId) mov.fondeoIdMatch = reglaAplicada.fondeoId;
+        if (reglaAplicada.clienteId) mov.clienteIdMatch = reglaAplicada.clienteId;
+        mov.autoClasificado = true;
+      }
+
+      concs.push(mov);
       count++;
     }
-    setStore('conciliaciones', concs);
-    addAudit('Importar', 'Conciliación', count + ' movimientos importados de CSV');
-    toast(count + ' movimientos importados exitosamente', 'success');
+
+    if (count > 0) {
+      // Ejecutar pre-matching por CLABE/cuenta en clientes y fondeos
+      concs = preConciliarPorCLABE(concs);
+      setStore('conciliaciones', concs);
+      addAudit('Importar', 'Conciliación', count + ' movimientos de CSV Banorte');
+      toast(count + ' movimientos importados de Banorte', 'success');
+    } else {
+      toast('No se encontraron movimientos válidos en el CSV', 'warning');
+    }
     renderConciliacion();
+    renderPendientesClasificar();
   };
-  reader.readAsText(file);
+  reader.readAsText(file, 'ISO-8859-1'); // Banorte usa encoding latino
   input.value = '';
+}
+
+// ==================== EXTRACCIÓN DE IDENTIFICADORES BANCARIOS ====================
+// Analiza la DESCRIPCIÓN DETALLADA del CSV Banorte para extraer:
+// - Cuenta bancaria (10 dígitos) — transferencias Banorte-a-Banorte
+// - CLABE (18 dígitos) — SPEI interbancarios
+// - RFC — cuando viene en la descripción
+// - Nombre del cliente — cuando viene en la descripción
+function extraerIdentBancarioBanorte(texto) {
+  if (!texto) return { clabe: '', cuenta: '', rfc: '', nombre: '' };
+  var t = texto.replace(/\s+/g, ' ').trim();
+  var clabe = '', cuenta = '', rfc = '', nombre = '';
+
+  // 1. Cuenta Banorte: "DE LA CUENTA: 0486813107" o "DE LA CUENTA 1269230520"
+  //    También: "A LA CUENTA: 0171521959"
+  var matchCuenta = t.match(/(?:DE LA CUENTA|A LA CUENTA):?\s*(\d{10})/i);
+  if (matchCuenta) cuenta = matchCuenta[1];
+
+  // 2. CLABE SPEI: "DE LA CLABE 044457228000003029" o "CTA/CLABE: 127180802002838912"
+  var matchClabe = t.match(/(?:DE LA CLABE|CTA\/CLABE:?)\s*(\d{18})/i);
+  if (matchClabe) {
+    clabe = matchClabe[1];
+    // Si no tenemos cuenta, derivar de CLABE (posiciones 6-16)
+    if (!cuenta) cuenta = clabe.substring(6, 16);
+  }
+
+  // 3. RFC: "R.F.C. MDU040615C98" o "CON RFC GAHE5612053M7"
+  var matchRFC = t.match(/(?:R\.?F\.?C\.?|CON RFC)\s+([A-ZÑ&]{3,4}\d{6}[A-Z0-9]{3})/i);
+  if (matchRFC) rfc = matchRFC[1].toUpperCase();
+
+  // 4. Nombre del cliente SPEI: "DEL CLIENTE GARCIA HERNANDEZ EMILIO ISMAEL,"
+  var matchNombre = t.match(/DEL CLIENTE\s+([^,]+)/i);
+  if (matchNombre) nombre = matchNombre[1].trim();
+
+  // 5. Nombre en traspasos Banorte: "DE LA CUENTA: 0486813107, Pago Abel Rios"
+  if (!nombre && matchCuenta) {
+    var afterCuenta = t.substring(t.indexOf(matchCuenta[0]) + matchCuenta[0].length);
+    var matchDescCuenta = afterCuenta.match(/,\s*(.+?)(?:$|,|AL R\.F\.C)/i);
+    if (matchDescCuenta && matchDescCuenta[1].trim().length > 2) {
+      nombre = matchDescCuenta[1].trim();
+    }
+  }
+
+  // Fallback: buscar cualquier secuencia de 18 dígitos (CLABE)
+  if (!clabe && !cuenta) {
+    var fbClabe = t.match(/\b(\d{18})\b/);
+    if (fbClabe) { clabe = fbClabe[1]; cuenta = clabe.substring(6, 16); }
+  }
+  // Fallback: buscar cualquier secuencia de 10 dígitos aislada (cuenta)
+  if (!cuenta && !clabe) {
+    var fbCuenta = t.match(/\b(\d{10})\b/);
+    if (fbCuenta) cuenta = fbCuenta[1];
+  }
+
+  return { clabe: clabe, cuenta: cuenta, rfc: rfc, nombre: nombre };
+}
+
+// Alias retrocompatible
+function extraerIdentBancario(texto) {
+  return extraerIdentBancarioBanorte(texto);
+}
+function extraerCLABE(texto) {
+  var r = extraerIdentBancarioBanorte(texto);
+  return r.clabe || r.cuenta || '';
+}
+
+// ==================== SISTEMA DE APRENDIZAJE DE CLASIFICACIONES ====================
+// Cuando el operador clasifica un movimiento de la cuenta X como tipo Y,
+// se guarda una regla para auto-clasificar TODOS los futuros movimientos de esa cuenta.
+function guardarReglaAprendida(cuentaOrigen, clabeOrigen, clasificacion, extras) {
+  var reglas = getStore('reglasConciliacion') || [];
+  var clave = cuentaOrigen || clabeOrigen || '';
+  if (!clave) return;
+  // Buscar si ya existe regla para esta cuenta
+  var idx = -1;
+  for (var i = 0; i < reglas.length; i++) {
+    if ((reglas[i].cuenta && reglas[i].cuenta === cuentaOrigen) ||
+        (reglas[i].clabe && reglas[i].clabe === clabeOrigen)) { idx = i; break; }
+  }
+  var regla = {
+    cuenta: cuentaOrigen || '', clabe: clabeOrigen || '',
+    clasificacion: clasificacion,
+    creditoId: extras.creditoId || null,
+    fondeoId: extras.fondeoId || null,
+    clienteId: extras.clienteId || null,
+    descripcion: extras.descripcion || clasificacion,
+    creadoEn: new Date().toISOString()
+  };
+  if (idx >= 0) { reglas[idx] = regla; } else { reglas.push(regla); }
+  setStore('reglasConciliacion', reglas);
+}
+
+function buscarReglaAprendida(reglas, cuenta, clabe) {
+  if (!reglas || reglas.length === 0) return null;
+  for (var i = 0; i < reglas.length; i++) {
+    var r = reglas[i];
+    // Match por cuenta (prioridad, caso Banorte-a-Banorte)
+    if (cuenta && r.cuenta && r.cuenta === cuenta) return r;
+    // Match por CLABE
+    if (clabe && r.clabe && r.clabe === clabe) return r;
+    // Match parcial: cuenta derivada de CLABE
+    if (cuenta && r.clabe && r.clabe.substring(6, 16) === cuenta) return r;
+    if (clabe && r.cuenta && clabe.substring(6, 16) === r.cuenta) return r;
+  }
+  return null;
+}
+
+// Aplicar reglas aprendidas a movimientos pendientes que aún no están clasificados
+function aplicarReglasAprendidasMasivo() {
+  var concs = getStore('conciliaciones');
+  var reglas = getStore('reglasConciliacion') || [];
+  if (reglas.length === 0) return;
+  var aplicados = 0;
+  concs.forEach(function(mov) {
+    if (mov.tipo !== 'movimiento' || mov.clasificacion || mov.autoClasificado) return;
+    var regla = buscarReglaAprendida(reglas, mov.cuentaDetectada, mov.clabe);
+    if (regla) {
+      mov.clasificacion = regla.clasificacion;
+      mov.sugerenciaTxt = '🤖 Auto: ' + regla.descripcion;
+      if (regla.creditoId) mov.creditoSugerido = regla.creditoId;
+      if (regla.fondeoId) mov.fondeoIdMatch = regla.fondeoId;
+      if (regla.clienteId) mov.clienteIdMatch = regla.clienteId;
+      mov.autoClasificado = true;
+      aplicados++;
+    }
+  });
+  if (aplicados > 0) {
+    setStore('conciliaciones', concs);
+    toast(aplicados + ' movimientos auto-clasificados por reglas aprendidas', 'info');
+  }
+  return aplicados;
+}
+
+// Pre-conciliación: buscar por CLABE/cuenta en clientes y fondeos.
+// Prioridad: 1) cuenta exacta (más común en Banorte), 2) CLABE exacta, 3) cuenta derivada de CLABE
+function preConciliarPorCLABE(concs) {
+  var clientes = getStore('clientes');
+  var fondeos = getStore('fondeos');
+  var creditos = getStore('creditos');
+
+  // Construir índices múltiples para búsqueda rápida
+  var indiceCLABE = {};   // clabe 18 dígitos → entidad
+  var indiceCuenta = {};  // cuenta 10-11 dígitos → entidad
+  var indiceCuentaDeClabe = {}; // cuenta derivada de CLABE → entidad
+
+  clientes.forEach(function(c) {
+    var ent = { tipo: 'cliente', id: c.id, nombre: c.nombre };
+    if (c.clabe) {
+      indiceCLABE[c.clabe] = ent;
+      // Derivar cuenta de la CLABE (posiciones 7-17)
+      indiceCuentaDeClabe[c.clabe.substring(6, 17)] = ent;
+    }
+    if (c.cuentaBanco) indiceCuenta[c.cuentaBanco] = ent;
+  });
+  fondeos.forEach(function(f) {
+    var ent = { tipo: 'fondeo', id: f.id, nombre: f.fondeador, numero: f.numero };
+    if (f.clabe) {
+      indiceCLABE[f.clabe] = ent;
+      indiceCuentaDeClabe[f.clabe.substring(6, 17)] = ent;
+    }
+    if (f.cuentaBanco) indiceCuenta[f.cuentaBanco] = ent;
+  });
+
+  concs.forEach(function(mov) {
+    if (mov.tipo !== 'movimiento' || mov.clasificacion) return;
+
+    // Extraer identificadores del movimiento
+    var ident = extraerIdentBancario((mov.referencia || '') + ' ' + (mov.concepto || ''));
+    // Guardar en el movimiento para referencia visual
+    if (ident.clabe) mov.clabe = ident.clabe;
+    if (ident.cuenta) mov.cuentaDetectada = ident.cuenta;
+    if (!ident.clabe && !ident.cuenta) return;
+
+    // Buscar en orden de prioridad:
+    // 1) Cuenta exacta (caso Banorte-a-Banorte, lo más común)
+    var match = null;
+    if (ident.cuenta) {
+      match = indiceCuenta[ident.cuenta];
+      // También buscar en cuentas derivadas de CLABE
+      if (!match) match = indiceCuentaDeClabe[ident.cuenta];
+    }
+    // 2) CLABE exacta (caso SPEI interbancario)
+    if (!match && ident.clabe) {
+      match = indiceCLABE[ident.clabe];
+    }
+    // 3) Búsqueda parcial: últimos 10 dígitos de CLABE = cuenta
+    if (!match && ident.clabe && ident.clabe.length === 18) {
+      var cta10 = ident.clabe.substring(8, 18);
+      match = indiceCuenta[cta10] || indiceCuentaDeClabe[cta10];
+    }
+
+    if (match) {
+      if (match.tipo === 'cliente') {
+        mov.clienteIdMatch = match.id;
+        if (mov.monto > 0) {
+          var credsCliente = creditos.filter(function(cr) { return cr.clienteId === match.id && cr.estado !== 'liquidado'; });
+          if (credsCliente.length > 0) {
+            mov.clasificacion = 'pago_credito';
+            mov.creditoSugerido = credsCliente[0].id;
+            mov.sugerenciaTxt = 'Pago de ' + match.nombre + ' → Crédito ' + credsCliente[0].numero;
+          } else {
+            mov.clasificacion = 'pendiente_revisar';
+            mov.sugerenciaTxt = 'Abono de ' + match.nombre + ' (sin crédito vigente)';
+          }
+        } else {
+          mov.clasificacion = 'pendiente_revisar';
+          mov.sugerenciaTxt = 'Cargo asociado a ' + match.nombre;
+        }
+      } else if (match.tipo === 'fondeo') {
+        mov.fondeoIdMatch = match.id;
+        if (mov.monto > 0) {
+          mov.clasificacion = 'fondeo_ingreso';
+          mov.sugerenciaTxt = 'Disposición de ' + match.nombre + ' (' + match.numero + ')';
+        } else {
+          mov.clasificacion = 'fondeo_pago';
+          mov.sugerenciaTxt = 'Pago a fondeador ' + match.nombre + ' (' + match.numero + ')';
+        }
+      }
+    }
+  });
+
+  return concs;
+}
+
+// Limpiar todos los movimientos bancarios importados
+function limpiarMovBancarios() {
+  if (!confirm('¿Limpiar todos los movimientos bancarios importados? Esto también elimina las conciliaciones.')) return;
+  setStore('conciliaciones', []);
+  addAudit('Limpiar', 'Conciliación', 'Todos los movimientos eliminados');
+  toast('Movimientos bancarios limpiados', 'success');
+  renderConciliacion();
+  renderPendientesClasificar();
+}
+
+// Limpiar reglas aprendidas de clasificación
+function limpiarReglasAprendidas() {
+  if (!confirm('¿Limpiar todas las reglas aprendidas de clasificación? El sistema volverá a preguntar por cada movimiento.')) return;
+  setStore('reglasConciliacion', []);
+  addAudit('Limpiar', 'Conciliación', 'Reglas de clasificación aprendidas eliminadas');
+  toast('Reglas de clasificación limpiadas', 'success');
+}
+
+// ==================== CLASIFICACIÓN MANUAL DE PENDIENTES ====================
+function renderPendientesClasificar() {
+  var concs = getStore('conciliaciones');
+  var pendientes = concs.filter(function(c) {
+    return c.tipo === 'movimiento' && (!c.clasificacion || c.clasificacion === 'pendiente_revisar') && !c.autoClasificado;
+  });
+
+  var card = document.getElementById('cardPendientes');
+  if (!card) return;
+  if (pendientes.length === 0) { card.style.display = 'none'; return; }
+  card.style.display = '';
+  document.getElementById('badgePendientes').textContent = pendientes.length;
+
+  var creditos = getStore('creditos');
+  var clientes = getStore('clientes');
+  var fondeos = getStore('fondeos');
+
+  var tb = document.getElementById('tbPendientesClasificar');
+  tb.innerHTML = pendientes.map(function(mov) {
+    var montoAbs = Math.abs(mov.monto);
+    var esIngreso = mov.monto > 0;
+    var colorMonto = esIngreso ? '#0D9F6E' : '#EF4444';
+    var tipoMov = esIngreso ? 'Abono' : 'Cargo';
+
+    // Generar opciones de select según tipo
+    var opciones = '<option value="">— Clasificar —</option>';
+    if (esIngreso) {
+      // Para abonos: pago de crédito o ingreso de fondeo
+      creditos.filter(function(cr) { return cr.estado !== 'liquidado'; }).forEach(function(cr) {
+        var cli = clientes.find(function(c) { return c.id === cr.clienteId; });
+        var nombre = cli ? cli.nombre.substring(0, 25) : 'Cliente #' + cr.clienteId;
+        var selected = mov.creditoSugerido === cr.id ? ' selected' : '';
+        opciones += '<option value="pago_' + cr.id + '"' + selected + '>Pago → ' + cr.numero + ' (' + nombre + ')</option>';
+      });
+      fondeos.filter(function(f) { return f.estado === 'vigente'; }).forEach(function(f) {
+        var selected = mov.fondeoIdMatch === f.id ? ' selected' : '';
+        opciones += '<option value="fondeo_in_' + f.id + '"' + selected + '>Disposición ← ' + f.numero + ' (' + f.fondeador.substring(0, 20) + ')</option>';
+      });
+    } else {
+      // Para cargos: pago a fondeador o gasto
+      fondeos.filter(function(f) { return f.estado === 'vigente'; }).forEach(function(f) {
+        var selected = mov.fondeoIdMatch === f.id ? ' selected' : '';
+        opciones += '<option value="fondeo_out_' + f.id + '"' + selected + '>Pago a → ' + f.numero + ' (' + f.fondeador.substring(0, 20) + ')</option>';
+      });
+    }
+    opciones += '<option value="traspaso">Traspaso entre cuentas</option>';
+    opciones += '<option value="comision">Comisión bancaria</option>';
+    opciones += '<option value="ignorar">Ignorar (mov. erróneo)</option>';
+
+    var sugerencia = mov.sugerenciaTxt ? '<div style="font-size:11px;color:#D97706;margin-top:2px">💡 ' + esc(mov.sugerenciaTxt) + '</div>' : '';
+
+    return '<tr style="background:' + (mov.sugerenciaTxt ? '#FFFBEB' : '') + '">' +
+      '<td>' + mov.fecha + '</td>' +
+      '<td style="font-size:12px;max-width:220px;overflow:hidden;text-overflow:ellipsis" title="' + esc(mov.detalleBanorte || mov.concepto) + '">' +
+        esc(mov.descripcionCorta || mov.concepto) +
+        (mov.detalleBanorte && mov.detalleBanorte !== '-' ? '<br><span style="font-size:10px;color:#6B7280">' + esc(mov.detalleBanorte.substring(0, 60)) + '…</span>' : '') + '</td>' +
+      '<td style="font-size:12px">' +
+        (mov.cuentaDetectada ? '<span style="font-weight:600;color:#1F2937">Cta: ' + mov.cuentaDetectada + '</span>' : '') +
+        (mov.clabe && mov.clabe.length === 18 ? '<br><span style="font-size:10px;color:#6B7280">CLABE: ' + mov.clabe + '</span>' : '') +
+        (mov.rfcDetectado ? '<br><span style="font-size:10px;color:#6B7280">RFC: ' + mov.rfcDetectado + '</span>' : '') +
+        (mov.nombreDetectado ? '<br><span style="font-size:10px;color:#4B5563">' + esc(mov.nombreDetectado.substring(0, 30)) + '</span>' : '') +
+        (!mov.cuentaDetectada && !mov.clabe ? esc(mov.referencia || '—') : '') + '</td>' +
+      '<td style="text-align:right;font-weight:600;color:' + colorMonto + '">' + tipoMov + '<br>' + fmt(montoAbs) + '</td>' +
+      '<td style="min-width:180px">' + sugerencia + '</td>' +
+      '<td style="min-width:250px">' +
+        '<div style="display:flex;gap:4px;align-items:center">' +
+          '<select class="form-select" style="font-size:12px;padding:4px 6px" id="clasif_' + mov.id + '" onchange="previewClasificacion(' + mov.id + ')">' + opciones + '</select>' +
+          '<button class="btn btn-primary btn-sm" onclick="aplicarClasificacion(' + mov.id + ')" style="white-space:nowrap">Aplicar</button>' +
+        '</div>' +
+      '</td></tr>';
+  }).join('');
+}
+
+// Preview de clasificación (muestra info adicional)
+function previewClasificacion(movId) {
+  // Opcional: mostrar detalle de crédito/fondeo seleccionado
+}
+
+// Aplicar clasificación a un movimiento
+function aplicarClasificacion(movId) {
+  var sel = document.getElementById('clasif_' + movId);
+  if (!sel) return;
+  var valor = sel.value;
+  if (!valor) { toast('Selecciona una clasificación', 'warning'); return; }
+
+  var concs = getStore('conciliaciones');
+  var mov = concs.find(function(c) { return c.id === movId && c.tipo === 'movimiento'; });
+  if (!mov) return;
+
+  var creditos = getStore('creditos');
+  var fondeos = getStore('fondeos');
+  var pagos = getStore('pagos');
+  var contab = getStore('contabilidad');
+
+  if (valor === 'ignorar') {
+    mov.clasificacion = 'ignorar';
+    mov.sugerenciaTxt = 'Ignorado por operador';
+    // Aprender: futuros movimientos de esta cuenta → ignorar
+    guardarReglaAprendida(mov.cuentaDetectada, mov.clabe, 'ignorar', { descripcion: 'Ignorado' });
+    setStore('conciliaciones', concs);
+    // Auto-clasificar otros pendientes de la misma cuenta
+    aplicarReglasAprendidasMasivo();
+    addAudit('Clasificar', 'Conciliación', 'Mov #' + movId + ' ignorado (erróneo/traspaso)');
+    toast('Movimiento marcado como ignorado. Futuros movimientos de esta cuenta se ignorarán automáticamente.', 'info');
+
+  } else if (valor === 'traspaso') {
+    mov.clasificacion = 'traspaso';
+    mov.sugerenciaTxt = 'Traspaso entre cuentas';
+    // Aprender: futuros movimientos de esta cuenta → traspaso
+    guardarReglaAprendida(mov.cuentaDetectada, mov.clabe, 'traspaso', { descripcion: 'Traspaso entre cuentas' });
+    setStore('conciliaciones', concs);
+    aplicarReglasAprendidasMasivo();
+    addAudit('Clasificar', 'Conciliación', 'Mov #' + movId + ' clasificado como traspaso');
+    toast('Traspaso registrado. Futuros movimientos de esta cuenta se clasificarán igual.', 'info');
+
+  } else if (valor === 'comision') {
+    mov.clasificacion = 'comision';
+    mov.sugerenciaTxt = 'Comisión bancaria';
+    // Registrar en contabilidad como gasto
+    var cidCom = nextId('contabilidad');
+    contab.push({
+      id: cidCom, fecha: mov.fecha, tipo: 'gasto',
+      concepto: 'Comisión bancaria — Banorte',
+      monto: Math.abs(mov.monto), cuentaDebe: '5201', cuentaHaber: '1101',
+      creditoId: null, referencia: mov.referencia, createdAt: new Date().toISOString()
+    });
+    setStore('contabilidad', contab);
+    setStore('conciliaciones', concs);
+    addAudit('Clasificar', 'Conciliación', 'Mov #' + movId + ' = comisión bancaria ' + fmt(Math.abs(mov.monto)));
+    toast('Comisión bancaria registrada en contabilidad', 'success');
+
+  } else if (valor.indexOf('pago_') === 0) {
+    // Aplicar como pago de crédito
+    var creditoId = parseInt(valor.replace('pago_', ''));
+    var cred = creditos.find(function(cr) { return cr.id === creditoId; });
+    if (!cred) { toast('Crédito no encontrado', 'error'); return; }
+
+    var montoAbs = Math.abs(mov.monto);
+    // Calcular distribución capital/interés basado en tabla de amortización
+    var cuotaPendiente = (cred.tablaAmortizacion || []).find(function(q) { return q.estado === 'pendiente' || q.estado === 'Pendiente'; });
+    var capital = cuotaPendiente ? cuotaPendiente.capital : montoAbs;
+    var interes = cuotaPendiente ? cuotaPendiente.interes : 0;
+    // Ajustar si el monto no coincide exactamente
+    if (Math.abs(capital + interes - montoAbs) > 1) {
+      capital = montoAbs; interes = 0;
+    }
+    var iva = +(interes * 0.16).toFixed(2);
+
+    // Registrar pago
+    var pagoId = nextId('pagos');
+    var saldoAnterior = cred.saldo;
+    var saldoNuevo = +(saldoAnterior - capital).toFixed(2);
+    if (saldoNuevo < 0) saldoNuevo = 0;
+    pagos.push({
+      id: pagoId, creditoId: creditoId, fecha: mov.fecha, tipo: 'pago',
+      capital: capital, interes: interes, moratorio: 0, comision: 0, iva: iva,
+      monto: montoAbs, saldoAnterior: saldoAnterior, saldoNuevo: saldoNuevo,
+      metodo: 'transferencia', referencia: mov.referencia || '',
+      notas: 'Aplicado desde conciliación Banorte', createdAt: new Date().toISOString()
+    });
+    setStore('pagos', pagos);
+
+    // Actualizar saldo del crédito
+    cred.saldo = saldoNuevo;
+    if (cuotaPendiente) cuotaPendiente.estado = 'Pagado';
+    if (saldoNuevo <= 0) cred.estado = 'liquidado';
+    setStore('creditos', creditos);
+
+    // Registrar en contabilidad
+    var cidPago = nextId('contabilidad');
+    var ctaCred = (cred.tipo === 'arrendamiento' || cred.tipo === 'arrendamiento_puro') ? '1204' : '1201';
+    contab.push({ id: cidPago, fecha: mov.fecha, tipo: 'pago_recibido', concepto: 'Pago capital ' + cred.numero + ' (Conc. Banorte)', monto: capital, cuentaDebe: '1101', cuentaHaber: ctaCred, creditoId: creditoId, referencia: mov.referencia, createdAt: new Date().toISOString() });
+    if (interes > 0) {
+      var cidInt = nextId('contabilidad');
+      var ctaIng = (cred.tipo === 'arrendamiento' || cred.tipo === 'arrendamiento_puro') ? '4103' : '4101';
+      contab.push({ id: cidInt, fecha: mov.fecha, tipo: 'ingreso_intereses', concepto: 'Intereses ' + cred.numero + ' (Conc. Banorte)', monto: interes, cuentaDebe: '1101', cuentaHaber: ctaIng, creditoId: creditoId, referencia: '', createdAt: new Date().toISOString() });
+    }
+    setStore('contabilidad', contab);
+
+    mov.clasificacion = 'pago_credito';
+    mov.creditoAplicado = creditoId;
+    mov.sugerenciaTxt = 'Pago aplicado → ' + cred.numero + ' ($' + capital.toLocaleString('es-MX') + ' capital)';
+
+    // Aprender: futuros movimientos de esta cuenta → pago de este crédito
+    var cliCred = getStore('clientes').find(function(c) { return c.id === cred.clienteId; });
+    guardarReglaAprendida(mov.cuentaDetectada, mov.clabe, 'pago_credito', {
+      creditoId: creditoId, clienteId: cred.clienteId,
+      descripcion: 'Pago crédito ' + cred.numero + (cliCred ? ' (' + cliCred.nombre.substring(0, 25) + ')' : '')
+    });
+
+    // Crear match automático
+    concs.push({
+      id: nextId('conciliaciones'), tipo: 'match', movBancId: movId,
+      pagoId: 'pago_' + pagoId, montoMovBanc: mov.monto, montoSistema: montoAbs,
+      diferencia: 0, descSistema: 'Pago ' + cred.numero, fechaConc: hoyLocal(),
+      metodo: 'auto_clabe', createdAt: new Date().toISOString()
+    });
+    setStore('conciliaciones', concs);
+    // Auto-clasificar otros pendientes de la misma cuenta
+    aplicarReglasAprendidasMasivo();
+    addAudit('Pago', 'Conciliación', 'Pago ' + fmt(montoAbs) + ' aplicado a ' + cred.numero + ' desde conciliación');
+    toast('Pago de ' + fmt(montoAbs) + ' aplicado a ' + cred.numero + '. Futuros pagos de esta cuenta se aplicarán igual.', 'success');
+
+  } else if (valor.indexOf('fondeo_in_') === 0) {
+    // Disposición de fondeo (ingreso)
+    var fondeoId = parseInt(valor.replace('fondeo_in_', ''));
+    var fond = fondeos.find(function(f) { return f.id === fondeoId; });
+    if (!fond) { toast('Fondeo no encontrado', 'error'); return; }
+    mov.clasificacion = 'fondeo_ingreso';
+    mov.fondeoAplicado = fondeoId;
+    mov.sugerenciaTxt = 'Disposición de ' + fond.fondeador + ' (' + fond.numero + ')';
+    // Aprender: futuros movimientos de esta cuenta → disposición de este fondeo
+    guardarReglaAprendida(mov.cuentaDetectada, mov.clabe, 'fondeo_ingreso', {
+      fondeoId: fondeoId, descripcion: 'Disposición ' + fond.numero + ' (' + fond.fondeador.substring(0, 25) + ')'
+    });
+    // Registrar en contabilidad
+    var cidFond = nextId('contabilidad');
+    contab.push({ id: cidFond, fecha: mov.fecha, tipo: 'fondeo_disposicion', concepto: 'Disposición ' + fond.numero + ' — ' + fond.fondeador, monto: Math.abs(mov.monto), cuentaDebe: '1101', cuentaHaber: '2101', creditoId: null, referencia: mov.referencia, createdAt: new Date().toISOString() });
+    setStore('contabilidad', contab);
+    setStore('conciliaciones', concs);
+    aplicarReglasAprendidasMasivo();
+    addAudit('Clasificar', 'Conciliación', 'Disposición fondeo ' + fond.numero + ' ' + fmt(Math.abs(mov.monto)));
+    toast('Disposición de fondeo registrada. Futuros movimientos de esta cuenta se clasificarán igual.', 'success');
+
+  } else if (valor.indexOf('fondeo_out_') === 0) {
+    // Pago a fondeador (egreso)
+    var fondeoIdOut = parseInt(valor.replace('fondeo_out_', ''));
+    var fondOut = fondeos.find(function(f) { return f.id === fondeoIdOut; });
+    if (!fondOut) { toast('Fondeo no encontrado', 'error'); return; }
+    mov.clasificacion = 'fondeo_pago';
+    mov.fondeoAplicado = fondeoIdOut;
+    mov.sugerenciaTxt = 'Pago a ' + fondOut.fondeador + ' (' + fondOut.numero + ')';
+    // Aprender: futuros movimientos de esta cuenta → pago a este fondeador
+    guardarReglaAprendida(mov.cuentaDetectada, mov.clabe, 'fondeo_pago', {
+      fondeoId: fondeoIdOut, descripcion: 'Pago fondeo ' + fondOut.numero + ' (' + fondOut.fondeador.substring(0, 25) + ')'
+    });
+    // Registrar en contabilidad
+    var cidFondP = nextId('contabilidad');
+    contab.push({ id: cidFondP, fecha: mov.fecha, tipo: 'fondeo_pago', concepto: 'Pago a fondeador ' + fondOut.numero + ' — ' + fondOut.fondeador, monto: Math.abs(mov.monto), cuentaDebe: '2101', cuentaHaber: '1101', creditoId: null, referencia: mov.referencia, createdAt: new Date().toISOString() });
+    setStore('contabilidad', contab);
+    // Reducir saldo del fondeo
+    fondOut.saldo = Math.max(0, (fondOut.saldo || 0) - Math.abs(mov.monto));
+    setStore('fondeos', fondeos);
+    setStore('conciliaciones', concs);
+    aplicarReglasAprendidasMasivo();
+    addAudit('Clasificar', 'Conciliación', 'Pago a fondeador ' + fondOut.numero + ' ' + fmt(Math.abs(mov.monto)));
+    toast('Pago a fondeador registrado. Futuros movimientos de esta cuenta se clasificarán igual.', 'success');
+  }
+
+  renderConciliacion();
+  renderPendientesClasificar();
+  refreshNotifications();
 }
 
 function eliminarMovBanc(id) {
@@ -7162,6 +7858,9 @@ function eliminarMovBanc(id) {
 // Fix #9: Conciliación automática batch con múltiples estrategias de matching
 function ejecutarConciliacionAuto() {
   var concs = getStore('conciliaciones');
+  // Primero ejecutar pre-matching por CLABE en movimientos sin clasificar
+  concs = preConciliarPorCLABE(concs);
+  setStore('conciliaciones', concs);
   var movs = concs.filter(function(c) { return c.tipo === 'movimiento'; });
   var matches = concs.filter(function(c) { return c.tipo === 'match'; });
   var movsConc = matches.map(function(m) { return m.movBancId; });
@@ -7555,6 +8254,8 @@ function abrirNuevoFondeo() {
   document.getElementById('fondPeriodicidad').value = 'mensual';
   document.getElementById('fondFechaInicio').value = '';
   document.getElementById('fondGarantia').value = '';
+  document.getElementById('fondCLABE').value = '';
+  document.getElementById('fondCuentaBanco').value = '';
   document.getElementById('fondNotas').value = '';
   document.querySelector('#modalFondeo .modal-header h3').textContent = 'Nuevo Fondeo';
   V.clearErrors('modalFondeo');
@@ -7575,6 +8276,8 @@ function editarFondeo(id) {
   document.getElementById('fondPeriodicidad').value = f.periodicidad || 'mensual';
   document.getElementById('fondFechaInicio').value = f.fechaInicio || '';
   document.getElementById('fondGarantia').value = f.garantia || '';
+  document.getElementById('fondCLABE').value = f.clabe || '';
+  document.getElementById('fondCuentaBanco').value = f.cuentaBanco || '';
   document.getElementById('fondNotas').value = f.notas || '';
   document.querySelector('#modalFondeo .modal-header h3').textContent = 'Editar Fondeo — ' + f.numero;
   V.clearErrors('modalFondeo');
@@ -7632,6 +8335,8 @@ function guardarFondeo() {
       f.fechaInicio = fechaInicio;
       f.fechaVencimiento = addMonths(new Date(fechaInicio), parseInt(plazoVal));
       f.garantia = document.getElementById('fondGarantia').value;
+      f.clabe = document.getElementById('fondCLABE').value.trim();
+      f.cuentaBanco = document.getElementById('fondCuentaBanco').value.trim();
       f.notas = document.getElementById('fondNotas').value;
       f.moneda = document.getElementById('fondMoneda').value || 'MXN';
       addAudit('Editar', 'Fondeos', f.numero, datosAntes, f);
@@ -7657,6 +8362,8 @@ function guardarFondeo() {
       fechaVencimiento: addMonths(new Date(fechaInicio), parseInt(plazoVal)),
       estado: 'vigente',
       garantia: document.getElementById('fondGarantia').value,
+      clabe: document.getElementById('fondCLABE').value.trim(),
+      cuentaBanco: document.getElementById('fondCuentaBanco').value.trim(),
       notas: document.getElementById('fondNotas').value,
       moneda: document.getElementById('fondMoneda').value || 'MXN'
     };
