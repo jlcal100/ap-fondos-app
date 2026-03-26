@@ -1085,6 +1085,8 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         <div class="tab" onclick="setReporteTab('alertas')">Alertas</div>
         <div class="tab" onclick="setReporteTab('semaforo')" style="border-left:2px solid var(--border);margin-left:8px;padding-left:16px">🚦 Semáforo</div>
         <div class="tab" onclick="setReporteTab('ejecutivo')">📊 Ejecutivo</div>
+        <div class="tab" onclick="setReporteTab('fondeoVsCol')">💰 Fondeo vs Colocación</div>
+        <div class="tab" onclick="setReporteTab('concContable')">🔍 Conc. Contable</div>
       </div>
 
       <!-- TAB: Cartera -->
@@ -1314,6 +1316,47 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         </div>
       </div>
 
+      <!-- Fondeo vs Colocación -->
+      <div id="reporteFondeoVsCol" style="display:none">
+        <div class="search-bar" style="margin-bottom:16px">
+          <h3 style="margin:0;flex:1">Tablero de Fondeo vs Colocación</h3>
+          <button class="btn btn-primary btn-sm" onclick="exportarFondeoVsColPDF()">📄 PDF</button>
+        </div>
+        <div class="kpi-grid" id="fondeoVsColKPIs" style="margin-bottom:16px"></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:16px">
+          <div class="card" style="padding:16px"><canvas id="chartFondeoVsCol" style="max-height:280px"></canvas></div>
+          <div class="card" style="padding:16px"><canvas id="chartSpread" style="max-height:280px"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-header"><span class="card-title">Detalle por Fondeador</span></div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>Fondeador</th><th>Monto Fondeado</th><th>Saldo Vigente</th><th>Tasa Fondeo</th><th>Colocado con ese Fondeo</th><th>Tasa Prom. Coloc.</th><th>Spread</th><th>Estado</th></tr></thead>
+              <tbody id="tbFondeoVsCol"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Conciliación Contable -->
+      <div id="reporteConcContable" style="display:none">
+        <div class="search-bar" style="margin-bottom:16px">
+          <h3 style="margin:0;flex:1">Conciliación Contable Automática</h3>
+          <button class="btn btn-red btn-sm" onclick="ejecutarConcContable()">⚡ Ejecutar Verificación</button>
+        </div>
+        <div class="kpi-grid" id="concContableKPIs" style="margin-bottom:16px"></div>
+        <div class="card" style="margin-bottom:16px">
+          <div class="card-header"><span class="card-title">Resultados de Verificación</span></div>
+          <div class="table-wrapper">
+            <table class="data-table">
+              <thead><tr><th>Verificación</th><th>Cuenta Contable</th><th>Saldo Contabilidad</th><th>Saldo Operativo</th><th>Diferencia</th><th>Estado</th></tr></thead>
+              <tbody id="tbConcContable"></tbody>
+            </table>
+          </div>
+        </div>
+        <div id="concContableDetalle"></div>
+      </div>
+
       <!-- Sprint Y: Tablero Ejecutivo -->
       <div id="reporteEjecutivo" style="display:none">
         <div class="search-bar" style="margin-bottom:16px">
@@ -1457,6 +1500,26 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
             <div class="form-group">
               <label class="form-label">No. Documento / Escritura</label>
               <input type="text" id="garDocumento" class="form-input" placeholder="Número de escritura, factura, etc.">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label class="form-label">No. Póliza / Seguro</label>
+              <input type="text" id="garPoliza" class="form-input" placeholder="Póliza de seguro asociada">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Vencimiento Póliza/Seguro</label>
+              <input type="date" id="garVencPoliza" class="form-input">
+            </div>
+          </div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div class="form-group">
+              <label class="form-label">Aseguradora</label>
+              <input type="text" id="garAseguradora" class="form-input" placeholder="Nombre de la aseguradora">
+            </div>
+            <div class="form-group">
+              <label class="form-label">Vencimiento Avalúo</label>
+              <input type="date" id="garVencAvaluo" class="form-input">
             </div>
           </div>
           <div class="form-group">
@@ -5194,6 +5257,7 @@ function verCredito(id) {
   }
   toolbarHTML += `
         <button class="btn btn-success btn-sm" onclick="irAPagar(${c.id})">💰 Registrar Pago</button>
+        ${c.estado !== 'liquidado' ? '<button class="btn btn-outline btn-sm" style="color:#7C3AED" onclick="calcularLiquidacionAnticipada(' + c.id + ')">🧮 Liquidación Anticipada</button>' : ''}
         <button class="btn btn-outline btn-sm" onclick="liquidarCredito(${c.id})">✅ Liquidar</button>`;
   // Feature 3: Opción a Compra para arrendamiento financiero
   if (c.tipo === 'arrendamiento' && (c.valorResidual || 0) > 0) {
@@ -9843,12 +9907,13 @@ function renderAuditoria() {
 var chartRptTipo, chartRptEstado, chartRptColocacion;
 
 function setReporteTab(tab) {
-  ['reporteCartera','reporteMorosidad','reporteColocacion','reporteFlujo','reporteResultados','reporteGarantias','reporteRiesgo','reporteAlertas','reporteSemaforo','reporteEjecutivo'].forEach(function(id) {
-    document.getElementById(id).style.display = 'none';
+  ['reporteCartera','reporteMorosidad','reporteColocacion','reporteFlujo','reporteResultados','reporteGarantias','reporteRiesgo','reporteAlertas','reporteSemaforo','reporteEjecutivo','reporteFondeoVsCol','reporteConcContable'].forEach(function(id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = 'none';
   });
   document.querySelectorAll('#page-reportes .tab').forEach(function(t) { t.classList.remove('active'); });
   if (typeof event !== 'undefined' && event && event.target) event.target.classList.add('active');
-  var tabMap = { cartera: 'reporteCartera', morosidad: 'reporteMorosidad', colocacion: 'reporteColocacion', flujo: 'reporteFlujo', resultados: 'reporteResultados', garantias: 'reporteGarantias', riesgo: 'reporteRiesgo', alertas: 'reporteAlertas', semaforo: 'reporteSemaforo', ejecutivo: 'reporteEjecutivo' };
+  var tabMap = { cartera: 'reporteCartera', morosidad: 'reporteMorosidad', colocacion: 'reporteColocacion', flujo: 'reporteFlujo', resultados: 'reporteResultados', garantias: 'reporteGarantias', riesgo: 'reporteRiesgo', alertas: 'reporteAlertas', semaforo: 'reporteSemaforo', ejecutivo: 'reporteEjecutivo', fondeoVsCol: 'reporteFondeoVsCol', concContable: 'reporteConcContable' };
   document.getElementById(tabMap[tab]).style.display = 'block';
   if (tab === 'cartera') renderReporteCartera();
   else if (tab === 'morosidad') renderReporteMorosidad();
@@ -9860,6 +9925,8 @@ function setReporteTab(tab) {
   else if (tab === 'alertas') renderReporteAlertas();
   else if (tab === 'semaforo') renderReporteSemaforo();
   else if (tab === 'ejecutivo') renderReporteEjecutivo();
+  else if (tab === 'fondeoVsCol') renderFondeoVsCol();
+  else if (tab === 'concContable') ejecutarConcContable();
 }
 
 // ===== REPORTE DE CARTERA =====
@@ -10397,6 +10464,252 @@ function exportarSemaforoExcel() {
 
 // ===== SPRINT Y: TABLERO EJECUTIVO =====
 var chartEjec1 = null, chartEjec2 = null, chartEjec3 = null;
+
+// ==================== TABLERO FONDEO vs COLOCACIÓN ====================
+function renderFondeoVsCol() {
+  var creditos = getStore('creditos');
+  var fondeos = getStore('fondeos');
+
+  var carteraTotal = creditos.filter(function(c) { return c.estado === 'vigente' || c.estado === 'vencido'; }).reduce(function(s, c) { return s + (c.saldo || 0); }, 0);
+  var fondeoTotal = fondeos.filter(function(f) { return f.estado === 'vigente'; }).reduce(function(s, f) { return s + (f.monto || 0); }, 0);
+  var fondeoSaldo = fondeos.filter(function(f) { return f.estado === 'vigente'; }).reduce(function(s, f) { return s + (f.saldo || f.monto || 0); }, 0);
+
+  // Tasas promedio ponderadas
+  var sumTasaCol = 0, sumMontoCol = 0;
+  creditos.filter(function(c) { return c.estado === 'vigente' || c.estado === 'vencido'; }).forEach(function(c) {
+    var tasa = c.tasa > 1 ? c.tasa : c.tasa * 100;
+    sumTasaCol += tasa * (c.saldo || 0);
+    sumMontoCol += (c.saldo || 0);
+  });
+  var tasaPromCol = sumMontoCol > 0 ? (sumTasaCol / sumMontoCol) : 0;
+
+  var sumTasaFon = 0, sumMontoFon = 0;
+  fondeos.filter(function(f) { return f.estado === 'vigente'; }).forEach(function(f) {
+    var tasa = f.tasa > 1 ? f.tasa : (f.tasa || 0) * 100;
+    sumTasaFon += tasa * (f.saldo || f.monto || 0);
+    sumMontoFon += (f.saldo || f.monto || 0);
+  });
+  var tasaPromFon = sumMontoFon > 0 ? (sumTasaFon / sumMontoFon) : 0;
+
+  var spread = tasaPromCol - tasaPromFon;
+  var capacidadDisp = fondeoTotal - carteraTotal;
+  var ratioApalancamiento = fondeoTotal > 0 ? (carteraTotal / fondeoTotal * 100) : 0;
+
+  // KPIs
+  document.getElementById('fondeoVsColKPIs').innerHTML =
+    '<div class="kpi-card navy"><div class="kpi-label">Cartera Colocada</div><div class="kpi-value">' + fmt(carteraTotal) + '</div></div>' +
+    '<div class="kpi-card blue"><div class="kpi-label">Fondeo Vigente</div><div class="kpi-value">' + fmt(fondeoSaldo) + '</div></div>' +
+    '<div class="kpi-card ' + (spread > 0 ? 'green' : 'red') + '"><div class="kpi-label">Spread (Coloc. - Fondeo)</div><div class="kpi-value">' + spread.toFixed(2) + '% pts</div></div>' +
+    '<div class="kpi-card ' + (capacidadDisp >= 0 ? 'green' : 'red') + '"><div class="kpi-label">Capacidad Disponible</div><div class="kpi-value">' + fmt(Math.abs(capacidadDisp)) + '</div><div class="kpi-sub">' + (capacidadDisp >= 0 ? 'Disponible para colocar' : 'Sobre-apalancado') + '</div></div>' +
+    '<div class="kpi-card yellow"><div class="kpi-label">Tasa Prom. Colocación</div><div class="kpi-value">' + tasaPromCol.toFixed(2) + '%</div></div>' +
+    '<div class="kpi-card orange"><div class="kpi-label">Tasa Prom. Fondeo</div><div class="kpi-value">' + tasaPromFon.toFixed(2) + '%</div></div>';
+
+  // Tabla detalle por fondeador
+  var tb = document.getElementById('tbFondeoVsCol');
+  tb.innerHTML = fondeos.filter(function(f) { return f.estado !== 'liquidado'; }).map(function(f) {
+    var tasaF = f.tasa > 1 ? f.tasa : (f.tasa || 0) * 100;
+    var estadoBadge = f.estado === 'vigente' ? 'badge-green' : 'badge-gray';
+    // Spread individual: tasa promedio de colocación menos tasa de este fondeo
+    var spreadInd = tasaPromCol - tasaF;
+    var spreadColor = spreadInd > 5 ? '#059669' : spreadInd > 0 ? '#D97706' : '#EF4444';
+    return '<tr>' +
+      '<td><strong>' + esc(f.fondeador || f.numero) + '</strong><br><small style="color:var(--gray)">' + esc(f.numero) + '</small></td>' +
+      '<td>' + fmt(f.monto) + '</td>' +
+      '<td>' + fmt(f.saldo || f.monto) + '</td>' +
+      '<td>' + tasaF.toFixed(2) + '%</td>' +
+      '<td>' + fmt(carteraTotal) + '</td>' +
+      '<td>' + tasaPromCol.toFixed(2) + '%</td>' +
+      '<td style="font-weight:700;color:' + spreadColor + '">' + spreadInd.toFixed(2) + '% pts</td>' +
+      '<td><span class="badge ' + estadoBadge + '">' + esc(f.estado) + '</span></td></tr>';
+  }).join('');
+
+  // Gráfica: Fondeo vs Colocación (barras)
+  var ctx1 = document.getElementById('chartFondeoVsCol');
+  if (ctx1 && window.Chart) {
+    if (ctx1._chart) ctx1._chart.destroy();
+    ctx1._chart = new Chart(ctx1, {
+      type: 'bar',
+      data: {
+        labels: ['Fondeo Total', 'Cartera Colocada', 'Disponible'],
+        datasets: [{
+          label: 'Monto',
+          data: [fondeoTotal, carteraTotal, Math.max(0, capacidadDisp)],
+          backgroundColor: ['#3B82F6', '#1E3050', '#10B981']
+        }]
+      },
+      options: { responsive: true, plugins: { title: { display: true, text: 'Fondeo vs Colocación' }, legend: { display: false } }, scales: { y: { ticks: { callback: function(v) { return '$' + (v/1000000).toFixed(1) + 'M'; } } } } }
+    });
+  }
+
+  // Gráfica: Spread por fondeador
+  var ctx2 = document.getElementById('chartSpread');
+  if (ctx2 && window.Chart) {
+    if (ctx2._chart) ctx2._chart.destroy();
+    var fondVig = fondeos.filter(function(f) { return f.estado === 'vigente'; });
+    ctx2._chart = new Chart(ctx2, {
+      type: 'bar',
+      data: {
+        labels: fondVig.map(function(f) { return (f.fondeador || f.numero).substring(0, 15); }),
+        datasets: [
+          { label: 'Tasa Fondeo', data: fondVig.map(function(f) { return f.tasa > 1 ? f.tasa : (f.tasa || 0) * 100; }), backgroundColor: '#EF4444' },
+          { label: 'Tasa Coloc. Prom.', data: fondVig.map(function() { return tasaPromCol; }), backgroundColor: '#10B981' }
+        ]
+      },
+      options: { responsive: true, plugins: { title: { display: true, text: 'Spread: Tasa Colocación vs Fondeo (%)' } }, scales: { y: { ticks: { callback: function(v) { return v + '%'; } } } } }
+    });
+  }
+}
+
+function exportarFondeoVsColPDF() {
+  toast('Exportar a PDF — usar Tablero Ejecutivo para reporte completo', 'info');
+}
+
+// ==================== CONCILIACIÓN CONTABLE AUTOMÁTICA ====================
+function ejecutarConcContable() {
+  var creditos = getStore('creditos');
+  var fondeos = getStore('fondeos');
+  var contab = getStore('contabilidad');
+
+  var verificaciones = [];
+
+  // 1. Verificar cuenta 1201 (Cartera de crédito vigente) = suma de saldos de créditos activos
+  var saldoCreditosOp = creditos.filter(function(c) {
+    return c.estado === 'vigente' || c.estado === 'vencido';
+  }).reduce(function(s, c) { return s + (c.saldo || 0); }, 0);
+
+  // Saldo contable de 1201: suma de movimientos
+  var saldo1201 = 0;
+  contab.forEach(function(e) {
+    if (e.cuentaDebe === '1201') saldo1201 += (e.monto || 0);
+    if (e.cuentaHaber === '1201') saldo1201 -= (e.monto || 0);
+  });
+  var diff1201 = +(saldo1201 - saldoCreditosOp).toFixed(2);
+  verificaciones.push({
+    nombre: 'Cartera de Crédito Vigente',
+    cuenta: '1201',
+    saldoContab: saldo1201,
+    saldoOp: saldoCreditosOp,
+    diferencia: diff1201,
+    ok: Math.abs(diff1201) < 1
+  });
+
+  // 2. Verificar cuenta 1204 (Arrendamientos) = saldos de créditos tipo arrendamiento
+  var saldoArrendOp = creditos.filter(function(c) {
+    return (c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro') && (c.estado === 'vigente' || c.estado === 'vencido');
+  }).reduce(function(s, c) { return s + (c.saldo || 0); }, 0);
+  var saldo1204 = 0;
+  contab.forEach(function(e) {
+    if (e.cuentaDebe === '1204') saldo1204 += (e.monto || 0);
+    if (e.cuentaHaber === '1204') saldo1204 -= (e.monto || 0);
+  });
+  var diff1204 = +(saldo1204 - saldoArrendOp).toFixed(2);
+  verificaciones.push({
+    nombre: 'Cartera de Arrendamientos',
+    cuenta: '1204',
+    saldoContab: saldo1204,
+    saldoOp: saldoArrendOp,
+    diferencia: diff1204,
+    ok: Math.abs(diff1204) < 1
+  });
+
+  // 3. Verificar cuenta 2101 (Fondeos por pagar) = saldos de fondeos vigentes
+  var saldoFondeosOp = fondeos.filter(function(f) {
+    return f.estado === 'vigente';
+  }).reduce(function(s, f) { return s + (f.saldo || f.monto || 0); }, 0);
+  var saldo2101 = 0;
+  contab.forEach(function(e) {
+    if (e.cuentaDebe === '2101') saldo2101 -= (e.monto || 0);
+    if (e.cuentaHaber === '2101') saldo2101 += (e.monto || 0);
+  });
+  var diff2101 = +(saldo2101 - saldoFondeosOp).toFixed(2);
+  verificaciones.push({
+    nombre: 'Fondeos por Pagar',
+    cuenta: '2101',
+    saldoContab: saldo2101,
+    saldoOp: saldoFondeosOp,
+    diferencia: diff2101,
+    ok: Math.abs(diff2101) < 1
+  });
+
+  // 4. Verificar cuenta 4101 (Ingresos por intereses) = suma de pagos de intereses
+  var totalInteresesPagos = getStore('pagos').reduce(function(s, p) { return s + (p.interes || 0); }, 0);
+  var saldo4101 = 0;
+  contab.forEach(function(e) {
+    if (e.cuentaDebe === '4101') saldo4101 -= (e.monto || 0);
+    if (e.cuentaHaber === '4101') saldo4101 += (e.monto || 0);
+  });
+  var diff4101 = +(saldo4101 - totalInteresesPagos).toFixed(2);
+  verificaciones.push({
+    nombre: 'Ingresos por Intereses',
+    cuenta: '4101',
+    saldoContab: saldo4101,
+    saldoOp: totalInteresesPagos,
+    diferencia: diff4101,
+    ok: Math.abs(diff4101) < 1
+  });
+
+  // 5. Verificar cuenta 1101 (Bancos) = balance neto
+  var saldo1101 = 0;
+  contab.forEach(function(e) {
+    if (e.cuentaDebe === '1101') saldo1101 += (e.monto || 0);
+    if (e.cuentaHaber === '1101') saldo1101 -= (e.monto || 0);
+  });
+  verificaciones.push({
+    nombre: 'Bancos (Caja)',
+    cuenta: '1101',
+    saldoContab: saldo1101,
+    saldoOp: null,
+    diferencia: null,
+    ok: true,
+    infoOnly: true
+  });
+
+  // KPIs
+  var totalOK = verificaciones.filter(function(v) { return v.ok; }).length;
+  var totalErr = verificaciones.filter(function(v) { return !v.ok; }).length;
+  var totalDiff = verificaciones.reduce(function(s, v) { return s + Math.abs(v.diferencia || 0); }, 0);
+
+  document.getElementById('concContableKPIs').innerHTML =
+    '<div class="kpi-card ' + (totalErr === 0 ? 'green' : 'red') + '"><div class="kpi-label">Estado General</div><div class="kpi-value">' + (totalErr === 0 ? '✅ Cuadrado' : '⚠️ ' + totalErr + ' diferencias') + '</div></div>' +
+    '<div class="kpi-card green"><div class="kpi-label">Cuentas OK</div><div class="kpi-value">' + totalOK + '</div></div>' +
+    '<div class="kpi-card ' + (totalErr > 0 ? 'red' : 'green') + '"><div class="kpi-label">Con Diferencias</div><div class="kpi-value">' + totalErr + '</div></div>' +
+    '<div class="kpi-card blue"><div class="kpi-label">Suma de Diferencias</div><div class="kpi-value">' + fmt(totalDiff) + '</div></div>';
+
+  // Tabla
+  var tb = document.getElementById('tbConcContable');
+  tb.innerHTML = verificaciones.map(function(v) {
+    var estadoHTML = v.infoOnly ? '<span class="badge badge-blue">Info</span>' :
+      (v.ok ? '<span class="badge badge-green">✅ Cuadra</span>' : '<span class="badge badge-red">❌ Diferencia</span>');
+    var diffColor = v.diferencia === null ? '' : (Math.abs(v.diferencia) < 1 ? 'color:#059669' : 'color:#EF4444;font-weight:700');
+    return '<tr style="background:' + (v.ok ? '' : '#FEF2F2') + '">' +
+      '<td><strong>' + esc(v.nombre) + '</strong></td>' +
+      '<td><code>' + v.cuenta + '</code></td>' +
+      '<td style="text-align:right">' + fmt(v.saldoContab) + '</td>' +
+      '<td style="text-align:right">' + (v.saldoOp !== null ? fmt(v.saldoOp) : '<span style="color:var(--gray)">N/A</span>') + '</td>' +
+      '<td style="text-align:right;' + diffColor + '">' + (v.diferencia !== null ? fmt(v.diferencia) : '—') + '</td>' +
+      '<td>' + estadoHTML + '</td></tr>';
+  }).join('');
+
+  // Detalle de discrepancias
+  var detHTML = '';
+  verificaciones.filter(function(v) { return !v.ok && !v.infoOnly; }).forEach(function(v) {
+    detHTML += '<div class="card" style="margin-bottom:12px;border-left:4px solid #EF4444">' +
+      '<div class="card-header"><span class="card-title" style="color:#EF4444">⚠️ Diferencia en ' + v.nombre + ' (' + v.cuenta + '): ' + fmt(v.diferencia) + '</span></div>' +
+      '<div style="padding:12px 20px;font-size:13px">' +
+      '<p>La contabilidad registra <strong>' + fmt(v.saldoContab) + '</strong> pero el módulo operativo tiene <strong>' + fmt(v.saldoOp) + '</strong>.</p>' +
+      '<p style="color:var(--gray)">Esto puede deberse a: ajustes manuales en contabilidad, pagos no contabilizados, o créditos/fondeos creados sin póliza contable.</p>' +
+      '</div></div>';
+  });
+  if (!detHTML && totalErr === 0) {
+    detHTML = '<div class="card" style="text-align:center;padding:30px;color:#059669;border-left:4px solid #059669">' +
+      '<div style="font-size:20px;margin-bottom:8px">✅</div>' +
+      '<strong>Todas las cuentas cuadran correctamente</strong><br>' +
+      '<span style="color:var(--gray)">La contabilidad está sincronizada con los módulos operativos.</span></div>';
+  }
+  document.getElementById('concContableDetalle').innerHTML = detHTML;
+
+  addAudit('Verificar', 'Contabilidad', 'Conciliación contable: ' + totalOK + ' OK, ' + totalErr + ' diferencias');
+}
 
 function renderReporteEjecutivo() {
   var creditos = getStore('creditos');
@@ -11575,6 +11888,24 @@ function renderDashboardAlertas() {
     }
   });
 
+  // Alertas de garantías: pólizas/avalúos por vencer
+  var garantias = getStore('garantias');
+  garantias.forEach(function(g) {
+    if (g.estado !== 'vigente') return;
+    var credG = creditos.find(function(c) { return c.id === g.creditoId; });
+    var numCred = credG ? credG.numero : '#' + g.creditoId;
+    if (g.vencPoliza) {
+      var diasPoliza = Math.floor((new Date(g.vencPoliza) - hoy) / 86400000);
+      if (diasPoliza < 0) alertas.push({ icon: '🔴', text: 'Póliza VENCIDA: ' + esc(g.descripcion.substring(0, 30)) + ' (' + numCred + ') — venció hace ' + Math.abs(diasPoliza) + ' días' });
+      else if (diasPoliza <= 30) alertas.push({ icon: '⚠️', text: 'Póliza por vencer: ' + esc(g.descripcion.substring(0, 30)) + ' (' + numCred + ') — ' + diasPoliza + ' días' });
+    }
+    if (g.vencAvaluo) {
+      var diasAvaluo = Math.floor((new Date(g.vencAvaluo) - hoy) / 86400000);
+      if (diasAvaluo < 0) alertas.push({ icon: '🔴', text: 'Avalúo VENCIDO: ' + esc(g.descripcion.substring(0, 30)) + ' (' + numCred + ')' });
+      else if (diasAvaluo <= 30) alertas.push({ icon: '⚠️', text: 'Avalúo por vencer: ' + esc(g.descripcion.substring(0, 30)) + ' (' + numCred + ') — ' + diasAvaluo + ' días' });
+    }
+  });
+
   var el = document.getElementById('dashAlertas');
   if (!el) return;
   if (alertas.length === 0) {
@@ -12024,6 +12355,190 @@ function marcarVencido(id) {
   verCredito(id);
 }
 
+
+// ============================================================
+//  CALCULADORA DE LIQUIDACIÓN ANTICIPADA
+// ============================================================
+function calcularLiquidacionAnticipada(id) {
+  var c = getStore('creditos').find(function(x) { return x.id === id; });
+  if (!c) return;
+  var cli = getStore('clientes').find(function(x) { return x.id === c.clienteId; });
+  var pagosHechos = getStore('pagos').filter(function(p) { return p.creditoId === id; });
+
+  var hoy = new Date();
+  var fechaHoyStr = hoyLocal();
+
+  // Calcular intereses devengados hasta hoy (proporcional al período actual)
+  var tabla = c.tablaAmortizacion || [];
+  var cuotasPendientes = tabla.filter(function(q) { return q.estado === 'pendiente' || q.estado === 'Pendiente'; });
+  var cuotasPagadas = tabla.length - cuotasPendientes.length;
+
+  // Saldo de capital insoluto
+  var saldoCapital = c.saldo || 0;
+
+  // Interés devengado del período actual (proporcional a días transcurridos)
+  var interesDevengado = 0;
+  var diasTranscurridos = 0;
+  var diasPeriodo = 30;
+  if (cuotasPendientes.length > 0) {
+    var proximaCuota = cuotasPendientes[0];
+    var fechaCuota = new Date(proximaCuota.fechaPago);
+    // Días desde el último pago o inicio del período
+    var fechaInicioPeriodo;
+    if (cuotasPagadas > 0 && tabla[cuotasPagadas - 1]) {
+      fechaInicioPeriodo = new Date(tabla[cuotasPagadas - 1].fechaPago);
+    } else {
+      fechaInicioPeriodo = new Date(c.fechaOtorgamiento || c.fechaInicio);
+    }
+    diasPeriodo = Math.max(1, Math.round((fechaCuota - fechaInicioPeriodo) / 86400000));
+    diasTranscurridos = Math.max(0, Math.round((hoy - fechaInicioPeriodo) / 86400000));
+    if (diasTranscurridos > diasPeriodo) diasTranscurridos = diasPeriodo;
+
+    // Interés proporcional: (interés del período) * (días transcurridos / días del período)
+    var interesPeriodo = proximaCuota.interes || 0;
+    interesDevengado = +(interesPeriodo * diasTranscurridos / diasPeriodo).toFixed(2);
+  }
+
+  var ivaIntereses = +(interesDevengado * 0.16).toFixed(2);
+
+  // Penalización (configurable, default 0%)
+  var tasaPenalizacion = c.penalizacionAnticipada || 0;
+  var montopenalizacion = +(saldoCapital * tasaPenalizacion / 100).toFixed(2);
+
+  // Intereses moratorios devengados si los hay
+  var moratorios = 0;
+  if ((c.diasMora || 0) > 0) {
+    var tasaMora = c.tasaMoratoria || (c.tasa * 1.5);
+    moratorios = +(saldoCapital * tasaMora / 360 * c.diasMora).toFixed(2);
+  }
+
+  // Total de liquidación
+  var totalLiquidacion = +(saldoCapital + interesDevengado + ivaIntereses + montopenalizacion + moratorios).toFixed(2);
+
+  // Ahorro por liquidar anticipadamente (intereses que ya NO pagará)
+  var interesesRestantes = cuotasPendientes.reduce(function(s, q) { return s + (q.interes || 0); }, 0);
+  var ahorro = +(interesesRestantes - interesDevengado).toFixed(2);
+
+  // Total pagado hasta ahora
+  var totalPagado = pagosHechos.reduce(function(s, p) { return s + (p.monto || 0); }, 0);
+
+  // Renderizar en modal genérico
+  var html = '<div style="padding:20px">' +
+    '<div style="background:#F0FDF4;border:1px solid #BBF7D0;border-radius:8px;padding:16px;margin-bottom:20px">' +
+    '<h3 style="margin:0 0 4px;color:#166534">Cálculo de Liquidación Anticipada</h3>' +
+    '<p style="margin:0;font-size:13px;color:#166534">Crédito ' + esc(c.numero) + (cli ? ' — ' + esc(cli.nombre) : '') + '</p>' +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">' +
+    '<div class="kpi-card navy"><div class="kpi-label">Saldo Capital Insoluto</div><div class="kpi-value">' + fmt(saldoCapital) + '</div></div>' +
+    '<div class="kpi-card blue"><div class="kpi-label">Interés Devengado (' + diasTranscurridos + '/' + diasPeriodo + ' días)</div><div class="kpi-value">' + fmt(interesDevengado) + '</div></div>' +
+    '<div class="kpi-card yellow"><div class="kpi-label">IVA sobre Intereses</div><div class="kpi-value">' + fmt(ivaIntereses) + '</div></div>' +
+    (moratorios > 0 ? '<div class="kpi-card red"><div class="kpi-label">Moratorios (' + c.diasMora + ' días)</div><div class="kpi-value">' + fmt(moratorios) + '</div></div>' : '') +
+    (montopenalizacion > 0 ? '<div class="kpi-card orange"><div class="kpi-label">Penalización (' + tasaPenalizacion + '%)</div><div class="kpi-value">' + fmt(montopenalizacion) + '</div></div>' : '') +
+    '</div>' +
+
+    '<div style="background:#1E3050;color:white;border-radius:8px;padding:20px;margin-bottom:20px;text-align:center">' +
+    '<div style="font-size:12px;text-transform:uppercase;letter-spacing:1px;opacity:0.8;margin-bottom:4px">MONTO TOTAL DE LIQUIDACIÓN</div>' +
+    '<div style="font-size:32px;font-weight:700">' + fmt(totalLiquidacion) + '</div>' +
+    '<div style="font-size:12px;opacity:0.7;margin-top:4px">Al ' + new Date().toLocaleDateString('es-MX', {year:'numeric',month:'long',day:'numeric'}) + '</div>' +
+    '</div>' +
+
+    '<div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:20px">' +
+    '<div style="background:#FEF3C7;border-radius:8px;padding:12px;text-align:center"><div style="font-size:11px;color:#92400E">Cuotas Pagadas</div><div style="font-size:18px;font-weight:700;color:#92400E">' + cuotasPagadas + ' de ' + tabla.length + '</div></div>' +
+    '<div style="background:#DBEAFE;border-radius:8px;padding:12px;text-align:center"><div style="font-size:11px;color:#1E40AF">Total Pagado</div><div style="font-size:18px;font-weight:700;color:#1E40AF">' + fmt(totalPagado) + '</div></div>' +
+    '<div style="background:#D1FAE5;border-radius:8px;padding:12px;text-align:center"><div style="font-size:11px;color:#065F46">Ahorro en Intereses</div><div style="font-size:18px;font-weight:700;color:#065F46">' + fmt(ahorro) + '</div></div>' +
+    '</div>' +
+
+    '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+    '<button class="btn btn-outline" onclick="closeModal(\'modalGenerico\')">Cerrar</button>' +
+    '<button class="btn btn-outline" onclick="generarCartaLiquidacionPDF(' + id + ',' + totalLiquidacion + ',' + interesDevengado + ',' + ivaIntereses + ',' + moratorios + ',' + montopenalizacion + ')">📄 Carta de Liquidación PDF</button>' +
+    '<button class="btn btn-red" onclick="closeModal(\'modalGenerico\');liquidarCredito(' + id + ')">✅ Proceder a Liquidar</button>' +
+    '</div></div>';
+
+  document.getElementById('modalGenericoTitle').textContent = 'Liquidación Anticipada — ' + c.numero;
+  document.getElementById('modalGenericoBody').innerHTML = html;
+  openModal('modalGenerico');
+  addAudit('Consulta', 'Créditos', 'Cálculo liquidación anticipada ' + c.numero + ': ' + fmt(totalLiquidacion));
+}
+
+// Generar carta de liquidación anticipada en PDF
+function generarCartaLiquidacionPDF(id, total, interes, iva, moratorios, penalizacion) {
+  var data = _getCreditoYCliente(id);
+  if (!data) return;
+  var c = data.c, cli = data.cli;
+  if (!window.jspdf) return toast('jsPDF no cargada', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('p', 'mm', 'letter');
+  var w = doc.internal.pageSize.getWidth();
+  var m = 18;
+  var maxW = w - m * 2;
+  var fechaHoy = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+
+  var y = _pdfHeader(doc, 'CARTA DE LIQUIDACIÓN ANTICIPADA', 'Folio: LIQ-' + c.numero.replace('CR-', '') + '-' + new Date().getFullYear());
+  y += 4;
+  doc.setFontSize(10);
+  doc.setFont('helvetica', 'normal');
+  doc.setTextColor(50, 50, 50);
+  doc.text('Ciudad de México, a ' + fechaHoy, w - m, y, { align: 'right' });
+  y += 10;
+  doc.setFont('helvetica', 'bold');
+  doc.text((cli.tipo === 'moral' ? '' : 'C. ') + cli.nombre, m, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(9);
+  if (cli.rfc) { doc.text('RFC: ' + cli.rfc, m, y); y += 4; }
+  doc.text('PRESENTE', m, y);
+  y += 10;
+
+  y = _pdfParrafo(doc, y, 'En atención a su solicitud de liquidación anticipada del crédito que a continuación se detalla, le informamos los importes correspondientes:', m, maxW);
+  y += 4;
+
+  // Tabla de desglose
+  var desglose = [
+    ['Número de contrato:', c.numero],
+    ['Monto original:', '$' + Number(c.monto).toLocaleString('es-MX', {minimumFractionDigits:2})],
+    ['Saldo de capital insoluto:', '$' + Number(c.saldo).toLocaleString('es-MX', {minimumFractionDigits:2})],
+    ['Intereses devengados:', '$' + Number(interes).toLocaleString('es-MX', {minimumFractionDigits:2})],
+    ['IVA sobre intereses:', '$' + Number(iva).toLocaleString('es-MX', {minimumFractionDigits:2})]
+  ];
+  if (moratorios > 0) desglose.push(['Intereses moratorios:', '$' + Number(moratorios).toLocaleString('es-MX', {minimumFractionDigits:2})]);
+  if (penalizacion > 0) desglose.push(['Penalización por liquidación anticipada:', '$' + Number(penalizacion).toLocaleString('es-MX', {minimumFractionDigits:2})]);
+
+  doc.setFillColor(245, 247, 250);
+  doc.setDrawColor(200, 210, 220);
+  var boxH = 8 + desglose.length * 5 + 10;
+  doc.roundedRect(m, y - 2, maxW, boxH, 3, 3, 'FD');
+  y += 5;
+  desglose.forEach(function(row) {
+    doc.setFont('helvetica', 'normal');
+    doc.setFontSize(9);
+    doc.text(row[0], m + 5, y);
+    doc.text(row[1], m + maxW - 10, y, { align: 'right' });
+    y += 5;
+  });
+  y += 2;
+  doc.setDrawColor(27, 42, 74);
+  doc.line(m + 5, y, m + maxW - 5, y);
+  y += 5;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(11);
+  doc.text('TOTAL A LIQUIDAR:', m + 5, y);
+  doc.text('$' + Number(total).toLocaleString('es-MX', {minimumFractionDigits:2}), m + maxW - 10, y, { align: 'right' });
+  y += 10;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'normal');
+
+  y = _pdfParrafo(doc, y, 'El monto anterior es válido únicamente para pago realizado el día ' + fechaHoy + '. De no efectuarse en esta fecha, los importes podrán variar por la acumulación de intereses ordinarios y/o moratorios adicionales.', m, maxW);
+  y += 3;
+  y = _pdfParrafo(doc, y, 'Una vez acreditado el pago total, se emitirá la Carta de No Adeudo correspondiente y se procederá a la liberación de las garantías asociadas, en su caso.', m, maxW);
+
+  y = _pdfFirmas(doc, y, EMPRESA.nombre, cli.nombre);
+  _pdfPie(doc);
+
+  doc.save('CartaLiquidacion_' + c.numero + '_' + cli.nombre.replace(/\s+/g, '_').substring(0, 25) + '.pdf');
+  toast('Carta de liquidación anticipada generada', 'success');
+  addAudit('Documento', 'Créditos', 'Carta liquidación anticipada — ' + c.numero);
+}
 
 // ============================================================
 //  DOCUMENT MANAGEMENT — SPRINT H: EXPEDIENTE DIGITAL
@@ -17575,6 +18090,10 @@ function abrirModalGarantia(creditoId) {
   document.getElementById('garFechaAvaluo').value = hoyLocal();
   document.getElementById('garUbicacion').value = '';
   document.getElementById('garDocumento').value = '';
+  document.getElementById('garPoliza').value = '';
+  document.getElementById('garVencPoliza').value = '';
+  document.getElementById('garAseguradora').value = '';
+  document.getElementById('garVencAvaluo').value = '';
   document.getElementById('garNotas').value = '';
   openModal('modalGarantia');
 }
@@ -17602,8 +18121,12 @@ function guardarGarantia() {
     descripcion: descripcion,
     valor: valor,
     fechaAvaluo: fechaAvaluo,
+    vencAvaluo: document.getElementById('garVencAvaluo').value || '',
     ubicacion: document.getElementById('garUbicacion').value.trim(),
     documento: document.getElementById('garDocumento').value.trim(),
+    poliza: document.getElementById('garPoliza').value.trim(),
+    vencPoliza: document.getElementById('garVencPoliza').value || '',
+    aseguradora: document.getElementById('garAseguradora').value.trim(),
     notas: document.getElementById('garNotas').value.trim(),
     createdAt: new Date().toISOString()
   };
@@ -17681,14 +18204,31 @@ function renderGarantiasHTML(creditoId) {
   if (garantias.length === 0) {
     html += '<div style="text-align:center;padding:20px;color:var(--gray);background:var(--light-bg);border-radius:8px">Sin garantías registradas. <a style="color:var(--primary);cursor:pointer" onclick="abrirModalGarantia(' + creditoId + ')">Agregar una</a></div>';
   } else {
-    html += '<div class="table-wrapper"><table class="table"><thead><tr><th>Tipo</th><th>Descripción</th><th>Valor Avalúo</th><th>Fecha Avalúo</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>';
+    html += '<div class="table-wrapper"><table class="table"><thead><tr><th>Tipo</th><th>Descripción</th><th>Valor Avalúo</th><th>Póliza / Seguro</th><th>Vencimientos</th><th>Estado</th><th>Acciones</th></tr></thead><tbody>';
+    var hoyGar = new Date();
     garantias.forEach(function(g) {
       var estadoBadge = g.estado === 'vigente' ? 'badge-green' : g.estado === 'en_tramite' ? 'badge-yellow' : g.estado === 'vencida' ? 'badge-orange' : 'badge-gray';
+      // Calcular alertas de vencimiento
+      var alertaPoliza = '', alertaAvaluo = '';
+      if (g.vencPoliza && g.estado === 'vigente') {
+        var diasP = Math.floor((new Date(g.vencPoliza) - hoyGar) / 86400000);
+        if (diasP < 0) alertaPoliza = '<span class="badge badge-red" style="font-size:10px">VENCIDA</span>';
+        else if (diasP <= 30) alertaPoliza = '<span class="badge badge-yellow" style="font-size:10px">' + diasP + ' días</span>';
+      }
+      if (g.vencAvaluo && g.estado === 'vigente') {
+        var diasA = Math.floor((new Date(g.vencAvaluo) - hoyGar) / 86400000);
+        if (diasA < 0) alertaAvaluo = '<span class="badge badge-red" style="font-size:10px">VENCIDO</span>';
+        else if (diasA <= 60) alertaAvaluo = '<span class="badge badge-yellow" style="font-size:10px">' + diasA + ' días</span>';
+      }
       html += '<tr>' +
         '<td><span class="badge badge-blue">' + esc(GARANTIA_TIPOS[g.tipo] || g.tipo) + '</span></td>' +
         '<td>' + esc(g.descripcion) + (g.documento ? '<br><small style="color:var(--gray)">Doc: ' + esc(g.documento) + '</small>' : '') + '</td>' +
-        '<td><strong>' + fmt(g.valor) + '</strong></td>' +
-        '<td>' + (g.fechaAvaluo ? fmtDate(g.fechaAvaluo) : '-') + '</td>' +
+        '<td><strong>' + fmt(g.valor) + '</strong>' + (g.fechaAvaluo ? '<br><small style="color:var(--gray)">' + fmtDate(g.fechaAvaluo) + '</small>' : '') + '</td>' +
+        '<td>' + (g.poliza ? esc(g.poliza) : '-') + (g.aseguradora ? '<br><small style="color:var(--gray)">' + esc(g.aseguradora) + '</small>' : '') + '</td>' +
+        '<td style="font-size:12px">' +
+          (g.vencPoliza ? 'Póliza: ' + fmtDate(g.vencPoliza) + ' ' + alertaPoliza + '<br>' : '') +
+          (g.vencAvaluo ? 'Avalúo: ' + fmtDate(g.vencAvaluo) + ' ' + alertaAvaluo : '') +
+          (!g.vencPoliza && !g.vencAvaluo ? '-' : '') + '</td>' +
         '<td><span class="badge ' + estadoBadge + '">' + esc(g.estado) + '</span></td>' +
         '<td>';
       if (g.estado === 'vigente') {
