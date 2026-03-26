@@ -559,6 +559,10 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       PLD
     </div>
+    <div class="nav-item" onclick="showPage('fiscal')" data-page="fiscal">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/></svg>
+      Fiscal SAT
+    </div>
     <div class="nav-item" onclick="showPage('admin')" data-page="admin">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       Administración
@@ -685,6 +689,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
           <option value="">Todos los tipos</option>
           <option value="credito_simple">Crédito Simple</option>
           <option value="arrendamiento">Arrendamiento</option>
+          <option value="arrendamiento_puro">Arrend. Puro</option>
           <option value="nomina">Nómina</option>
           <option value="cuenta_corriente">Cuenta Corriente</option>
         </select>
@@ -917,6 +922,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         <div class="tab" onclick="setContaTab('resultados')">Estado de Resultados</div>
         <div class="tab" onclick="setContaTab('conciliacion')">Conciliación</div>
         <div class="tab" onclick="setContaTab('cierres')">Cierres</div>
+        <div class="tab" onclick="setContaTab('balanza')">Balanza de Comprobación</div>
       </div>
       <div id="contaMovimientos">
         <div class="search-bar">
@@ -946,16 +952,20 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         </div>
       </div>
       <div id="contaBalance" style="display:none">
-        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
           <span style="font-size:13px;color:var(--gray-500);font-weight:600">Corte al:</span>
           <input type="date" class="form-input" id="balanceFecha" style="max-width:180px" onchange="renderBalance()">
+          <button class="btn btn-primary btn-sm" onclick="exportarBalanceGeneralPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarBalanceGeneralExcel()">📊 Excel</button>
         </div>
         <div id="balanceContent"></div>
       </div>
       <div id="contaResultados" style="display:none">
-        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center">
+        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
           <span style="font-size:13px;color:var(--gray-500);font-weight:600">Periodo:</span>
           <input type="month" class="form-input" id="resultadosMes" style="max-width:180px" onchange="renderResultados()">
+          <button class="btn btn-primary btn-sm" onclick="exportarEdoResultadosPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarEdoResultadosExcel()">📊 Excel</button>
         </div>
         <div id="resultadosContent"></div>
       </div>
@@ -974,7 +984,8 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
           <div class="card-header">
             <span class="card-title">Cierres Contables Mensuales</span>
             <button class="btn btn-primary btn-sm" onclick="ejecutarDevengoPeriodico()" style="margin-right:4px">📊 Devengo Periódico</button>
-            <button class="btn btn-primary btn-sm" onclick="ejecutarCierreContable()">🔒 Cerrar Mes Actual</button>
+            <button class="btn btn-primary btn-sm" onclick="ejecutarCierreContable()" style="margin-right:4px">🔒 Cerrar Mes Actual</button>
+            <button class="btn btn-red btn-sm" onclick="ejecutarCierreAnual()">📅 Cierre Anual</button>
           </div>
           <div class="table-wrapper">
             <table>
@@ -983,6 +994,80 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
             </table>
           </div>
           <p style="color:var(--gray-400);font-size:12px;margin-top:8px">Los períodos cerrados no permiten modificar ni agregar registros contables.</p>
+        </div>
+      </div>
+      <!-- Balanza de Comprobación -->
+      <div id="contaBalanza" style="display:none">
+        <div style="display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--gray-500);font-weight:600">Periodo:</span>
+          <input type="month" class="form-input" id="balanzaMes" style="max-width:180px" onchange="renderBalanza()">
+          <button class="btn btn-primary btn-sm" onclick="exportarBalanzaPDF()">📄 PDF</button>
+          <button class="btn btn-outline btn-sm" onclick="exportarBalanzaExcel()">📊 Excel</button>
+        </div>
+        <div id="balanzaContent"></div>
+      </div>
+    </div>
+
+    <!-- ===================== FISCAL SAT ===================== -->
+    <div class="page" id="page-fiscal">
+      <div class="tabs">
+        <div class="tab active" onclick="setFiscalTab('cfdi')">CFDI 4.0</div>
+        <div class="tab" onclick="setFiscalTab('diot')">DIOT</div>
+        <div class="tab" onclick="setFiscalTab('polizas')">Pólizas XML</div>
+      </div>
+
+      <!-- TAB: CFDI 4.0 -->
+      <div id="fiscalCFDI">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Generador CFDI 4.0 Pre-Timbrado</h3>
+          <button class="btn btn-primary btn-sm" onclick="generarCFDIsPeriodo()">📄 Generar CFDI</button>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--gray-500);font-weight:600">Período:</span>
+          <input type="month" class="form-input" id="cfdiPeriodo" style="max-width:180px">
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Cliente</th><th>RFC</th><th>Subtotal Intereses</th><th>IVA (16%)</th><th>Total</th><th>Acciones</th></tr></thead>
+            <tbody id="tbCFDI"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: DIOT -->
+      <div id="fiscalDIOT" style="display:none">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Declaración Informativa de Operaciones con Terceros (DIOT)</h3>
+          <button class="btn btn-primary btn-sm" onclick="generarDIOT()">📄 Generar DIOT</button>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--gray-500);font-weight:600">Período:</span>
+          <input type="month" class="form-input" id="diotPeriodo" style="max-width:180px">
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Tercero (RFC)</th><th>Nombre</th><th>Tipo Operación</th><th>Valor Gravados 16%</th><th>IVA Pagado</th><th>IVA Retenido</th></tr></thead>
+            <tbody id="tbDIOT"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- TAB: Pólizas XML -->
+      <div id="fiscalPolizas" style="display:none">
+        <div class="search-bar">
+          <h3 style="margin:0;flex:1">Anexo 24 - Pólizas Contables XML</h3>
+          <button class="btn btn-primary btn-sm" onclick="generarPolizasXML()">📄 Generar Pólizas</button>
+          <button class="btn btn-outline btn-sm" onclick="descargarCatalogoXML()">📚 Catálogo Cuentas</button>
+        </div>
+        <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
+          <span style="font-size:13px;color:var(--gray-500);font-weight:600">Período:</span>
+          <input type="month" class="form-input" id="polizasPeriodo" style="max-width:180px">
+        </div>
+        <div class="table-wrapper">
+          <table>
+            <thead><tr><th>Póliza</th><th>Fecha</th><th>Tipo</th><th>Concepto</th><th>Total Debe</th><th>Total Haber</th><th>Movimientos</th><th>Acciones</th></tr></thead>
+            <tbody id="tbPolizas"></tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -1633,6 +1718,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
                   <select class="form-input form-select" id="scorTipoCredito">
                     <option value="credito_simple">Crédito Simple</option>
                     <option value="arrendamiento">Arrendamiento</option>
+                    <option value="arrendamiento_puro">Arrendamiento Puro</option>
                     <option value="nomina">Nómina</option>
                     <option value="cuenta_corriente">Cuenta Corriente</option>
                   </select>
@@ -2134,6 +2220,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
           <select class="form-select" id="credTipo" onchange="toggleCreditoFields()">
             <option value="credito_simple">Crédito Simple</option>
             <option value="arrendamiento">Arrendamiento Financiero</option>
+            <option value="arrendamiento_puro">Arrendamiento Puro</option>
             <option value="nomina">Crédito Nómina</option>
             <option value="cuenta_corriente">Cuenta Corriente (Revolvente)</option>
           </select>
@@ -2241,6 +2328,68 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modalFondeo')">Cancelar</button>
       <button class="btn btn-primary" onclick="guardarFondeo()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- Modal Activo Arrendado -->
+<div class="modal-overlay" id="modalActivo">
+  <div class="modal">
+    <div class="modal-header"><h3>Activo Arrendado</h3><button class="modal-close" onclick="closeModal('modalActivo')">&times;</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Tipo de Activo *</label>
+          <select class="form-select" id="activoTipo">
+            <option value="vehiculo">Vehículo</option>
+            <option value="equipo">Equipo</option>
+            <option value="inmueble">Inmueble</option>
+            <option value="maquinaria">Maquinaria</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Marca</label><input type="text" class="form-input" id="activoMarca"></div>
+        <div class="form-group"><label class="form-label">Modelo</label><input type="text" class="form-input" id="activoModelo"></div>
+      </div>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Serie / VIN</label><input type="text" class="form-input" id="activoSerie"></div>
+        <div class="form-group"><label class="form-label">Año</label><input type="number" class="form-input" id="activoAnio" min="1900" max="2099"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Descripción</label><textarea class="form-textarea" id="activoDescripcion" placeholder="Características, especificaciones..."></textarea></div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Valor Original *</label><div class="input-prefix"><span class="prefix">$</span><input type="text" class="form-input" id="activoValorOrig" oninput="formatMiles(this)"></div></div>
+        <div class="form-group"><label class="form-label">Ubicación</label><input type="text" class="form-input" id="activoUbicacion"></div>
+        <div class="form-group"><label class="form-label">Estado</label>
+          <select class="form-select" id="activoEstado">
+            <option value="activo">Activo</option>
+            <option value="devuelto">Devuelto</option>
+            <option value="vendido">Vendido</option>
+            <option value="siniestrado">Siniestrado</option>
+          </select>
+        </div>
+      </div>
+      <h4 style="margin-top:20px;margin-bottom:12px">Información de Seguro</h4>
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">¿Asegurado?</label>
+          <select class="form-select" id="activoSeguro" onchange="document.getElementById('seguroFields').style.display = this.value === 'si' ? 'block' : 'none'">
+            <option value="no">No</option>
+            <option value="si">Sí</option>
+          </select>
+        </div>
+      </div>
+      <div id="seguroFields" style="display:none">
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Aseguradora</label><input type="text" class="form-input" id="activoAseguradora"></div>
+          <div class="form-group"><label class="form-label">Número de Póliza</label><input type="text" class="form-input" id="activoPoliza"></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label class="form-label">Vigencia Póliza</label><input type="date" class="form-input" id="activoVigencia"></div>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="activoNotas"></textarea></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalActivo')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarActivo()">Guardar Activo</button>
     </div>
   </div>
 </div>
@@ -2426,6 +2575,9 @@ const EMPRESA = {
   version: 'v1.0',
   copyright: '© 2026 AP Operadora de Fondos',
   emailAdmin: 'admin@apfondos.com',
+  rfc: 'AOF000101XX0',
+  regimenFiscal: '601',
+  cp: '06600',
   storagePrefix: 'apf_',
   sessionPrefix: 'ap_',
   backupLabel: 'AP Fondos',
@@ -2893,6 +3045,7 @@ const PERMISOS_MODULOS = {
   conciliacion:  { label: 'Conciliación',  acciones: ['ver', 'crear', 'exportar'] },
   scoring:       { label: 'Scoring',        acciones: ['ver', 'crear', 'exportar'] },
   pld:           { label: 'PLD',            acciones: ['ver', 'crear', 'exportar'] },
+  fiscal:        { label: 'Fiscal',        acciones: ['ver', 'crear', 'exportar'] },
   admin:         { label: 'Administración', acciones: ['ver', 'usuarios', 'permisos', 'backup'] }
 };
 
@@ -2908,27 +3061,27 @@ const ROL_PERMISOS_DEFAULT = {
   analista: {
     dashboard: ['ver'], clientes: ['ver', 'crear', 'editar'], creditos: ['ver', 'crear', 'editar'],
     pagos: ['ver', 'crear'], cotizador: ['ver', 'crear', 'exportar'], fondeos: ['ver'],
-    contabilidad: ['ver', 'exportar'], reportes: ['ver', 'exportar'], calendario: ['ver'], aprobaciones: ['ver', 'aprobar', 'rechazar'], conciliacion: ['ver', 'crear', 'exportar'], admin: []
+    contabilidad: ['ver', 'exportar'], reportes: ['ver', 'exportar'], calendario: ['ver'], aprobaciones: ['ver', 'aprobar', 'rechazar'], conciliacion: ['ver', 'crear', 'exportar'], fiscal: ['ver', 'crear', 'exportar'], admin: []
   },
   capturista: {
     dashboard: ['ver'], clientes: ['ver', 'crear'], creditos: ['ver'],
     pagos: ['ver', 'crear'], cotizador: ['ver', 'crear'], fondeos: ['ver'],
-    contabilidad: ['ver'], reportes: ['ver'], calendario: ['ver'], aprobaciones: ['ver'], conciliacion: ['ver'], admin: []
+    contabilidad: ['ver'], reportes: ['ver'], calendario: ['ver'], aprobaciones: ['ver'], conciliacion: ['ver'], fiscal: ['ver'], admin: []
   },
   operador: {
     dashboard: ['ver'], clientes: ['ver', 'crear', 'editar'], creditos: ['ver', 'crear', 'editar'],
     pagos: ['ver', 'crear'], cotizador: ['ver', 'crear', 'exportar'], fondeos: ['ver', 'crear'],
-    contabilidad: ['ver'], reportes: ['ver', 'exportar'], calendario: ['ver'], aprobaciones: ['ver'], conciliacion: ['ver', 'crear'], admin: []
+    contabilidad: ['ver'], reportes: ['ver', 'exportar'], calendario: ['ver'], aprobaciones: ['ver'], conciliacion: ['ver', 'crear'], fiscal: ['ver', 'crear', 'exportar'], admin: []
   },
   viewer: {
     dashboard: ['ver'], clientes: ['ver'], creditos: ['ver'],
     pagos: ['ver'], cotizador: ['ver'], fondeos: ['ver'],
-    contabilidad: ['ver'], reportes: ['ver'], calendario: ['ver'], aprobaciones: ['ver'], conciliacion: ['ver'], admin: []
+    contabilidad: ['ver'], reportes: ['ver'], calendario: ['ver'], aprobaciones: ['ver'], conciliacion: ['ver'], fiscal: ['ver'], admin: []
   },
   soporte: {
     dashboard: [], clientes: [], creditos: [], pagos: [], cotizador: [],
     fondeos: [], contabilidad: [], reportes: [], calendario: [],
-    aprobaciones: [], conciliacion: [], pld: [],
+    aprobaciones: [], conciliacion: [], pld: [], fiscal: [],
     admin: ['ver', 'backup']
   }
 };
@@ -3372,11 +3525,11 @@ function calcPago(monto, tasaAnual, plazoMeses, periodicidad, valorResidualPct =
   const tasaPeriodica = getTasaPeriodica(tasaAnual, periodicidad);
   const vr = monto * (valorResidualPct / 100);
 
-  // ARRENDAMIENTO FINANCIERO: interés flat sobre monto total (no sobre saldo insoluto)
+  // ARRENDAMIENTO FINANCIERO Y PURO: interés flat sobre monto total (no sobre saldo insoluto)
   // Renta = amortización_capital + interés_flat
   // amortización_capital = (monto - VR) / periodos
   // interés_flat = monto * tasa_periódica (constante cada periodo)
-  if (tipoCredito === 'arrendamiento') {
+  if (tipoCredito === 'arrendamiento' || tipoCredito === 'arrendamiento_puro') {
     const amortCapital = (monto - vr) / periodos;
     const interesFlat = monto * tasaPeriodica;
     return amortCapital + interesFlat;
@@ -3447,11 +3600,12 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
   let fecha = new Date(fechaInicio);
   const diaOriginal = fecha.getDate(); // Preservar día original para meses cortos
 
-  // ARRENDAMIENTO FINANCIERO:
+  // ARRENDAMIENTO FINANCIERO Y PURO:
   // - Interés FLAT: se calcula sobre el monto total original, NO sobre saldo insoluto
   // - Capital: distribución lineal de (monto - VR) entre todos los periodos
   // - Renta fija: capital_fijo + interés_flat + IVA_interés
-  if (tipoCredito === 'arrendamiento') {
+  // - arrendamiento_puro: mismo cálculo pero con VR=0 (todo se amortiza)
+  if (tipoCredito === 'arrendamiento' || tipoCredito === 'arrendamiento_puro') {
     const interesFlat = +(monto * tasaPeriodica).toFixed(2);
     const capitalFijo = +((monto - vr) / periodos).toFixed(2);
 
@@ -3863,7 +4017,7 @@ function calcularValuacion() {
     const saldo = c.saldo;
     if (c.tipo === 'cuenta_corriente') carteraCC += saldo;
     else if (c.tipo === 'credito_simple') carteraSimple += saldo;
-    else if (c.tipo === 'arrendamiento') carteraArrend += saldo;
+    else if (c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro') carteraArrend += saldo;
     else cartNomina += saldo;
 
     // Interés devengado (cálculo real día a día)
@@ -3944,7 +4098,7 @@ function calcularValuacion() {
 const fmt = n => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 }).format(n || 0);
 const fmtPct = n => (n * 100).toFixed(2) + '%';
 const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-MX') : '-';
-const tipoLabel = { credito_simple: 'Crédito Simple', arrendamiento: 'Arrendamiento', nomina: 'Nómina', cuenta_corriente: 'Cta. Corriente' };
+const tipoLabel = { credito_simple: 'Crédito Simple', arrendamiento: 'Arrendamiento', arrendamiento_puro: 'Arrend. Puro', nomina: 'Nómina', cuenta_corriente: 'Cta. Corriente' };
 const estadoBadge = { vigente: 'badge-green', vencido: 'badge-red', liquidado: 'badge-gray', castigado: 'badge-red', reestructurado: 'badge-yellow' };
 const contaTipoLabel = { ingreso_intereses: 'Ingreso Intereses', ingreso_arrendamiento: 'Ingreso Arrendamiento', pago_recibido: 'Pago Recibido', colocacion: 'Colocación', pago_fondeo: 'Pago Fondeo', comision: 'Comisión', gasto_operativo: 'Gasto Operativo', quita_reestructura: 'Quita Reestructura', reversa_pago: 'Reversa Pago', liquidacion_credito: 'Liquidación Crédito', iva_trasladado: 'IVA Trasladado', devengo_intereses: 'Devengo Intereses', cobro_devengo: 'Cobro Devengo', provision_cartera: 'Provisión Cartera', otro: 'Otro' };
 
@@ -4022,7 +4176,7 @@ function showPage(page) {
   document.getElementById('page-' + page).classList.add('active');
   document.querySelector(`[data-page="${page}"]`).classList.add('active');
 
-  const titles = { dashboard: 'Dashboard — Valuación Diaria', clientes: 'Expediente de Clientes', creditos: 'Gestión de Créditos', pagos: 'Registro de Pagos', cotizador: 'Cotizador Financiero', fondeos: 'Control de Fondeos', contabilidad: 'Contabilidad', reportes: 'Reportes Avanzados', calendario: 'Calendario de Cobranza', aprobaciones: 'Flujos de Aprobación', conciliacion: 'Conciliación Bancaria', scoring: 'Scoring Crediticio — Evaluación de Riesgo', pld: 'PLD/FT — Prevención de Lavado de Dinero (LFPIORPI)', admin: 'Administración' };
+  const titles = { dashboard: 'Dashboard — Valuación Diaria', clientes: 'Expediente de Clientes', creditos: 'Gestión de Créditos', pagos: 'Registro de Pagos', cotizador: 'Cotizador Financiero', fondeos: 'Control de Fondeos', contabilidad: 'Contabilidad y Estados Financieros', reportes: 'Reportes Avanzados', calendario: 'Calendario de Cobranza', aprobaciones: 'Flujos de Aprobación', conciliacion: 'Conciliación Bancaria', scoring: 'Scoring Crediticio — Evaluación de Riesgo', pld: 'PLD/FT — Prevención de Lavado de Dinero (LFPIORPI)', fiscal: 'Fiscal — Obligaciones SAT', admin: 'Administración' };
   document.getElementById('pageTitle').textContent = titles[page] || page;
 
   if (page === 'dashboard') renderDashboard();
@@ -4037,6 +4191,7 @@ function showPage(page) {
   else if (page === 'conciliacion') renderConciliacion();
   else if (page === 'scoring') { refreshScoringClientes(); setScoringTab('nueva'); }
   else if (page === 'pld') renderPLD();
+  else if (page === 'fiscal') renderFiscal();
   else if (page === 'admin') { renderUsuarios(); renderAuditoria(); }
 }
 
@@ -4749,7 +4904,8 @@ function openModalCredito() {
 }
 
 function toggleCreditoFields() {
-  const isArrend = document.getElementById('credTipo').value === 'arrendamiento';
+  const tipo = document.getElementById('credTipo').value;
+  const isArrend = tipo === 'arrendamiento' || tipo === 'arrendamiento_puro';
   document.getElementById('credArrendFields').style.display = isArrend ? 'grid' : 'none';
 }
 
@@ -4765,8 +4921,8 @@ function guardarCredito() {
   const plazoVal = document.getElementById('credPlazo').value;
   const periodicidad = document.getElementById('credPeriodicidad').value;
   const fechaInicio = document.getElementById('credFechaInicio').value;
-  const vrPctVal = tipo === 'arrendamiento' ? document.getElementById('credVR').value : '0';
-  const valorEquipoVal = tipo === 'arrendamiento' ? String(parseMiles('credValorEquipo')) : '0';
+  const vrPctVal = (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') ? document.getElementById('credVR').value : '0';
+  const valorEquipoVal = (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') ? String(parseMiles('credValorEquipo')) : '0';
   const comisionVal = String(parseMiles('credComision'));
 
   // Validaciones
@@ -4785,7 +4941,7 @@ function guardarCredito() {
     ok = V.check('credFechaInicio', fi >= hace1Anio, 'La fecha no puede ser mayor a 1 año en el pasado') && ok;
     ok = V.check('credFechaInicio', fi <= en30Dias, 'La fecha no puede ser mayor a 30 días en el futuro') && ok;
   }
-  if (tipo === 'arrendamiento') {
+  if (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') {
     ok = V.check('credValorEquipo', V.positiveNum(valorEquipoVal), 'Valor del equipo obligatorio para arrendamiento') && ok;
   }
   ok = V.check('credComision', V.nonNegNum(comisionVal || '0'), 'Comisión no puede ser negativa') && ok;
@@ -4810,7 +4966,7 @@ function guardarCredito() {
   const comision = parseFloat(comisionVal) || 0;
 
   const id = nextId('creditos');
-  const prefixMap = { credito_simple: 'CS', arrendamiento: 'AR', nomina: 'NM', cuenta_corriente: 'CC' };
+  const prefixMap = { credito_simple: 'CS', arrendamiento: 'AR', arrendamiento_puro: 'AP', nomina: 'NM', cuenta_corriente: 'CC' };
   const prefix = prefixMap[tipo] || 'XX';
   const numero = `${prefix}-${String(id).padStart(3, '0')}`;
 
@@ -4825,7 +4981,14 @@ function guardarCredito() {
       esRevolvente: true
     };
   } else {
-    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision);
+    // Para arrendamiento_puro, VR por defecto debe ser 0 (no 1%)
+    var vrPctFinal = vrPct;
+    if (tipo === 'arrendamiento_puro' && vrPct === 0) {
+      vrPctFinal = 0; // Asegurar que sea 0 para arrendamiento_puro
+    } else if (tipo === 'arrendamiento' && vrPct === 0) {
+      vrPctFinal = 0; // VR explícito de 0
+    }
+    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPctFinal, valorEquipo, comision);
   }
   const fondeoId = document.getElementById('credFondeo').value;
   if (fondeoId) credito.fondeoId = parseInt(fondeoId);
@@ -4882,8 +5045,8 @@ function guardarCredito() {
     const contab = getStore('contabilidad');
     var cidC = nextId('contabilidad');
     var cliNombreC = getStore('clientes').find(c => c.id === clienteId);
-    // Asiento 1: Colocación (monto íntegro va a Cartera — 1204 arrendamiento, 1201 créditos)
-    var ctaCarteraCol = tipo === 'arrendamiento' ? '1204' : '1201';
+    // Asiento 1: Colocación (monto íntegro va a Cartera — 1204 arrendamiento/arrendamiento_puro, 1201 créditos)
+    var ctaCarteraCol = (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') ? '1204' : '1201';
     contab.push({ id: cidC++, fecha: fechaInicio, tipo: 'colocacion', concepto: `Colocación ${numero} - ${cliNombreC?.nombre || ''}`, monto, cuentaDebe: ctaCarteraCol, cuentaHaber: '1101', creditoId: id, referencia: numero, createdAt: new Date().toISOString() });
     // Asiento 2: Comisión de apertura (se cobra al cliente, es ingreso)
     if (comision > 0) {
@@ -4944,7 +5107,17 @@ function verCredito(id) {
   }
   toolbarHTML += `
         <button class="btn btn-success btn-sm" onclick="irAPagar(${c.id})">💰 Registrar Pago</button>
-        <button class="btn btn-outline btn-sm" onclick="liquidarCredito(${c.id})">✅ Liquidar</button>
+        <button class="btn btn-outline btn-sm" onclick="liquidarCredito(${c.id})">✅ Liquidar</button>`;
+  // Feature 3: Opción a Compra para arrendamiento financiero
+  if (c.tipo === 'arrendamiento' && (c.valorResidual || 0) > 0) {
+    const vrMonto = c.monto * ((c.valorResidual || 0) / 100);
+    toolbarHTML += `<button class="btn btn-outline btn-sm" style="color:var(--green)" onclick="ejercerOpcionCompra(${c.id})">🛒 Opción Compra (${fmt(vrMonto)})</button>`;
+  }
+  // Feature 3: Renta Extraordinaria para arrendamientos
+  if ((c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro') && (c.estado === 'vigente' || c.estado === 'vencido')) {
+    toolbarHTML += `<button class="btn btn-outline btn-sm" style="color:var(--orange)" onclick="registrarRentaExtraordinaria(${c.id})">📈 Renta Extra.</button>`;
+  }
+  toolbarHTML += `
         ${c.estado === 'vigente' || c.estado === 'vencido' ? '<button class="btn btn-outline btn-sm" style="color:var(--purple,#8B5CF6)" onclick="abrirRestructura(' + c.id + ')">🔄 Reestructurar</button>' : ''}
         ${c.estado === 'vigente' ? '<button class="btn btn-outline btn-sm" style="color:var(--red)" onclick="marcarVencido(' + c.id + ')">⚠️ Marcar Vencido</button>' : ''}
         <button class="btn btn-outline btn-sm" style="color:var(--red)" onclick="eliminarCredito(${c.id})">🗑 Eliminar</button>
@@ -4952,6 +5125,7 @@ function verCredito(id) {
         <button class="btn btn-outline btn-sm" onclick="generarContratoPDF(${c.id})">📄 Contrato</button>
         <button class="btn btn-outline btn-sm" onclick="generarPagarePDF(${c.id})">📜 Pagaré</button>
         <button class="btn btn-outline btn-sm" onclick="generarTablaAmortPDF(${c.id})">📊 Tabla Amort. PDF</button>
+        <button class="btn btn-outline btn-sm" onclick="generarEstadoCuentaCliente(${c.clienteId})">📋 Estado de Cuenta</button>
       </div>`;
 
   let tableHTML = '';
@@ -4976,7 +5150,7 @@ function verCredito(id) {
 
   let pagosHTML = pagos.length > 0 ? `<h4 style="margin:16px 0 12px">Historial de Pagos</h4>
     <div class="table-wrapper"><table><thead><tr><th>Fecha</th><th>Capital</th><th>Interés</th><th>Moratorio</th><th>Total</th><th>Saldo</th></tr></thead>
-    <tbody>${pagos.map(p => `<tr><td>${fmtDate(p.fecha)}</td><td>${fmt(p.capital)}</td><td>${fmt(p.interes)}</td><td>${fmt(p.moratorio)}</td><td>${fmt(p.monto)}</td><td>${fmt(p.saldoNuevo)}</td></tr>`).join('')}</tbody></table></div>` : '';
+    <tbody>${pagos.map(p => `<tr><td>${fmtDate(p.fecha)}</td><td>${fmt(p.capital)}</td><td>${fmt(p.interes)}</td><td>${fmt(p.moratorio)}</td><td>${fmt(p.monto)} ${p.tipoEspecial === 'renta_extraordinaria' ? '<span class="badge badge-orange" style="margin-left:4px">Renta Ext.</span>' : ''} ${p.tipoEspecial === 'opcion_compra' ? '<span class="badge badge-green" style="margin-left:4px">Opción Compra</span>' : ''}</td><td>${fmt(p.saldoNuevo)}</td></tr>`).join('')}</tbody></table></div>` : '';
 
   // Sprint P: Garantías
   let garantiasHTML = renderGarantiasHTML(id);
@@ -4986,8 +5160,354 @@ function verCredito(id) {
   let restructHTML = renderRestructurasHTML(id);
   // Sprint V: Bitácora
   let bitacoraHTML = renderBitacoraHTML(id);
-  document.getElementById('creditoDetalleBody').innerHTML = kpisHTML + toolbarHTML + tableHTML + pagosHTML + garantiasHTML + riesgoHTML + restructHTML + bitacoraHTML;
+  // Feature 2: Activos arrendados
+  let activoHTML = '';
+  if (c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro') {
+    activoHTML = renderActivoArrendado(id);
+  }
+  document.getElementById('creditoDetalleBody').innerHTML = kpisHTML + toolbarHTML + tableHTML + pagosHTML + garantiasHTML + activoHTML + riesgoHTML + restructHTML + bitacoraHTML;
   document.getElementById('creditoDetalle').scrollIntoView({ behavior: 'smooth' });
+}
+
+// ============================================================
+//  ACTIVOS ARRENDADOS (Feature 2)
+// ============================================================
+function renderActivoArrendado(creditoId) {
+  const activos = getStore('activos_arrendamiento') || [];
+  const activo = activos.find(a => a.creditoId === creditoId);
+
+  if (!activo) {
+    return `<h4 style="margin:16px 0 12px">Activo Arrendado</h4>
+      <div style="padding:20px;background:var(--gray-50);border-radius:var(--radius);text-align:center;color:var(--gray-400)">
+        <p>Sin activo registrado</p>
+        <button class="btn btn-primary btn-sm" onclick="openModalActivo(${creditoId})" style="margin-top:8px">➕ Registrar Activo</button>
+      </div>`;
+  }
+
+  const depreciacion = calcDepreciacion(activo);
+  const pctDeprec = activo.valorOriginal > 0 ? ((depreciacion.depreciacionAcumulada / activo.valorOriginal) * 100).toFixed(1) : '0';
+
+  return `<h4 style="margin:16px 0 12px">Activo Arrendado</h4>
+    <div style="padding:16px;background:var(--gray-50);border-radius:var(--radius);border-left:4px solid var(--blue-accent)">
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+        <div><strong>Tipo:</strong> ${activo.tipo === 'vehiculo' ? 'Vehículo' : activo.tipo === 'inmueble' ? 'Inmueble' : activo.tipo === 'maquinaria' ? 'Maquinaria' : activo.tipo === 'equipo' ? 'Equipo' : 'Otro'}</div>
+        <div><strong>Marca/Modelo:</strong> ${esc(activo.marca || '-')} ${esc(activo.modelo || '')}</div>
+        <div><strong>Serie:</strong> ${esc(activo.serie || '-')}</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:12px;margin-bottom:12px">
+        <div><strong>Valor Original:</strong> ${fmt(activo.valorOriginal)}</div>
+        <div><strong>Valor Actual:</strong> ${fmt(depreciacion.valorActual)}</div>
+        <div><strong>Depreciado:</strong> ${pctDeprec}%</div>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div><strong>Ubicación:</strong> ${esc(activo.ubicacion || '-')}</div>
+        <div><strong>Estado:</strong> <span class="badge ${activo.estado === 'activo' ? 'badge-green' : 'badge-gray'}">${activo.estado}</span></div>
+      </div>
+      ${activo.seguro === 'si' ? `<div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+        <div><strong>Aseguradora:</strong> ${esc(activo.aseguradora || '-')}</div>
+        <div><strong>Vigencia:</strong> ${fmtDate(activo.vigenciaSeguro)}</div>
+      </div>` : ''}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid var(--gray-200)">
+        <button class="btn btn-outline btn-sm" onclick="openModalActivo(${creditoId})">✏️ Editar</button>
+        <button class="btn btn-outline btn-sm" style="color:var(--red)" onclick="eliminarActivo(${creditoId})">🗑 Eliminar</button>
+      </div>
+    </div>`;
+}
+
+function openModalActivo(creditoId) {
+  const activos = getStore('activos_arrendamiento') || [];
+  const activo = activos.find(a => a.creditoId === creditoId);
+
+  // Limpiar formulario
+  document.getElementById('activoTipo').value = 'vehiculo';
+  document.getElementById('activoMarca').value = '';
+  document.getElementById('activoModelo').value = '';
+  document.getElementById('activoSerie').value = '';
+  document.getElementById('activoAnio').value = new Date().getFullYear();
+  document.getElementById('activoDescripcion').value = '';
+  document.getElementById('activoValorOrig').value = '';
+  document.getElementById('activoUbicacion').value = '';
+  document.getElementById('activoEstado').value = 'activo';
+  document.getElementById('activoSeguro').value = 'no';
+  document.getElementById('seguroFields').style.display = 'none';
+  document.getElementById('activoAseguradora').value = '';
+  document.getElementById('activoPoliza').value = '';
+  document.getElementById('activoVigencia').value = '';
+  document.getElementById('activoNotas').value = '';
+
+  if (activo) {
+    // Llenar con datos existentes
+    document.getElementById('activoTipo').value = activo.tipo || 'vehiculo';
+    document.getElementById('activoMarca').value = activo.marca || '';
+    document.getElementById('activoModelo').value = activo.modelo || '';
+    document.getElementById('activoSerie').value = activo.serie || '';
+    document.getElementById('activoAnio').value = activo.anio || new Date().getFullYear();
+    document.getElementById('activoDescripcion').value = activo.descripcion || '';
+    setInputMiles('activoValorOrig', activo.valorOriginal || 0);
+    document.getElementById('activoUbicacion').value = activo.ubicacion || '';
+    document.getElementById('activoEstado').value = activo.estado || 'activo';
+    document.getElementById('activoSeguro').value = activo.seguro || 'no';
+    document.getElementById('activoAseguradora').value = activo.aseguradora || '';
+    document.getElementById('activoPoliza').value = activo.polizaSeguro || '';
+    document.getElementById('activoVigencia').value = activo.vigenciaSeguro || '';
+    document.getElementById('activoNotas').value = activo.notas || '';
+    if (activo.seguro === 'si') {
+      document.getElementById('seguroFields').style.display = 'block';
+    }
+  }
+
+  window._activoEdicionCreditoId = creditoId;
+  openModal('modalActivo');
+}
+
+function guardarActivo() {
+  const creditoId = window._activoEdicionCreditoId;
+  if (!creditoId) return toast('Error: No hay crédito asociado', 'error');
+
+  const tipo = document.getElementById('activoTipo').value;
+  const marca = document.getElementById('activoMarca').value.trim();
+  const modelo = document.getElementById('activoModelo').value.trim();
+  const serie = document.getElementById('activoSerie').value.trim();
+  const anio = parseInt(document.getElementById('activoAnio').value) || new Date().getFullYear();
+  const descripcion = document.getElementById('activoDescripcion').value.trim();
+  const valorOriginal = parseFloat(parseMiles('activoValorOrig')) || 0;
+  const ubicacion = document.getElementById('activoUbicacion').value.trim();
+  const estado = document.getElementById('activoEstado').value;
+  const seguro = document.getElementById('activoSeguro').value;
+  const aseguradora = document.getElementById('activoAseguradora').value.trim();
+  const poliza = document.getElementById('activoPoliza').value.trim();
+  const vigencia = document.getElementById('activoVigencia').value;
+  const notas = document.getElementById('activoNotas').value.trim();
+
+  if (valorOriginal <= 0) {
+    return toast('El valor original debe ser mayor a 0', 'error');
+  }
+
+  const activos = getStore('activos_arrendamiento') || [];
+  const creditoData = getStore('creditos').find(c => c.id === creditoId);
+  if (!creditoData) return toast('Crédito no encontrado', 'error');
+
+  const existente = activos.find(a => a.creditoId === creditoId);
+
+  const activo = {
+    id: existente ? existente.id : nextId('activos_arrendamiento'),
+    creditoId,
+    clienteId: creditoData.clienteId,
+    tipo, marca, modelo, serie, anio, descripcion,
+    valorOriginal, valorActual: valorOriginal,
+    depreciacionAnual: 0, // Se calcula según el tipo
+    ubicacion, estado,
+    fechaAlta: existente ? existente.fechaAlta : hoyLocal(),
+    fechaBaja: estado === 'devuelto' || estado === 'vendido' ? hoyLocal() : null,
+    seguro, aseguradora, polizaSeguro: poliza, vigenciaSeguro: vigencia,
+    fotos: existente ? existente.fotos : [],
+    notas,
+    updatedAt: new Date().toISOString()
+  };
+
+  if (existente) {
+    const idx = activos.indexOf(existente);
+    activos[idx] = activo;
+  } else {
+    activos.push(activo);
+  }
+
+  setStore('activos_arrendamiento', activos);
+  closeModal('modalActivo');
+  toast('Activo guardado correctamente', 'success');
+  verCredito(creditoId); // Refrescar el detalle
+}
+
+function calcDepreciacion(activo) {
+  const hoy = new Date();
+  const fechaAlta = new Date(activo.fechaAlta);
+  const diasTranscurridos = Math.max(0, Math.floor((hoy - fechaAlta) / (1000 * 60 * 60 * 24)));
+  const aniosTranscurridos = diasTranscurridos / 365.25;
+
+  // Tasa de depreciación anual según tipo
+  let tasaAnual = 0;
+  switch (activo.tipo) {
+    case 'vehiculo': tasaAnual = 0.25; break; // 25% anual = 4 años
+    case 'inmueble': tasaAnual = 0.05; break; // 5% anual = 20 años
+    case 'maquinaria': tasaAnual = 0.10; break; // 10% anual = 10 años
+    case 'equipo': tasaAnual = 0.10; break; // 10% anual = 10 años
+    default: tasaAnual = 0.10; break; // 10% anual = 10 años
+  }
+
+  // Depreciación lineal
+  const depreciacionAnual = activo.valorOriginal * tasaAnual;
+  const depreciacionAcumulada = depreciacionAnual * aniosTranscurridos;
+  const depreciacionMaxima = activo.valorOriginal; // No puede superar el valor original
+  const depreciacionReal = Math.min(depreciacionAcumulada, depreciacionMaxima);
+
+  return {
+    depreciacionAnual,
+    depreciacionAcumulada: depreciacionReal,
+    valorActual: Math.max(0, activo.valorOriginal - depreciacionReal),
+    aniosTranscurridos
+  };
+}
+
+function eliminarActivo(creditoId) {
+  if (!confirm('¿Eliminar el activo arrendado? Esta acción no se puede deshacer.')) return;
+  const activos = getStore('activos_arrendamiento') || [];
+  const idx = activos.findIndex(a => a.creditoId === creditoId);
+  if (idx >= 0) {
+    activos.splice(idx, 1);
+    setStore('activos_arrendamiento', activos);
+    toast('Activo eliminado', 'success');
+    verCredito(creditoId);
+  }
+}
+
+// ============================================================
+//  OPCIÓN A COMPRA Y RENTAS EXTRAORDINARIAS (Feature 3)
+// ============================================================
+function ejercerOpcionCompra(creditoId) {
+  const c = getStore('creditos').find(cr => cr.id === creditoId);
+  if (!c || c.tipo !== 'arrendamiento') return toast('Solo aplica a arrendamientos financieros', 'error');
+
+  const vrMonto = c.monto * ((c.valorResidual || 0) / 100);
+  if (vrMonto <= 0) return toast('No hay valor residual para cobrar', 'error');
+
+  const msgConfirm = `OPCIÓN A COMPRA\n\nMonto a cobrar: ${fmt(vrMonto)}\nEsta acción:\n- Marca el crédito como liquidado\n- Transfiere el activo al cliente\n- Genera asientos contables\n\n¿Confirma?`;
+
+  if (!confirm(msgConfirm)) return;
+
+  // 1. Registrar pago del VR
+  const fecha = hoyLocal();
+  const pagos = getStore('pagos');
+  const pago = {
+    id: nextId('pagos'),
+    creditoId,
+    fecha,
+    monto: vrMonto,
+    capital: vrMonto,
+    interes: 0,
+    moratorio: 0,
+    comision: 0,
+    iva: 0,
+    saldoAnterior: 0,
+    saldoNuevo: 0,
+    metodo: 'transferencia',
+    referencia: 'OPC-' + c.numero,
+    notas: 'Ejercicio de Opción a Compra',
+    tipoEspecial: 'opcion_compra',
+    createdAt: new Date().toISOString()
+  };
+  pagos.push(pago);
+  setStore('pagos', pagos);
+
+  // 2. Actualizar crédito a liquidado
+  c.estado = 'liquidado';
+  c.saldo = 0;
+  const creditos = getStore('creditos');
+  const idxC = creditos.findIndex(cr => cr.id === creditoId);
+  creditos[idxC] = c;
+  setStore('creditos', creditos);
+
+  // 3. Actualizar activo a vendido
+  const activos = getStore('activos_arrendamiento') || [];
+  const activo = activos.find(a => a.creditoId === creditoId);
+  if (activo) {
+    activo.estado = 'vendido';
+    activo.fechaBaja = fecha;
+  }
+  setStore('activos_arrendamiento', activos);
+
+  // 4. Asientos contables
+  const contab = getStore('contabilidad');
+  const cid = nextId('contabilidad');
+  // Debit 1101 (Cash) Credit 1204 (Arrendamientos por Cobrar)
+  contab.push({
+    id: cid,
+    fecha,
+    tipo: 'pago_recibido',
+    concepto: `Opción a Compra ${c.numero} — VR ${fmt(vrMonto)}`,
+    monto: vrMonto,
+    cuentaDebe: '1101',
+    cuentaHaber: '1204',
+    creditoId,
+    referencia: 'OPC-' + c.numero,
+    createdAt: new Date().toISOString()
+  });
+  setStore('contabilidad', contab);
+
+  addAudit('Opción a Compra', 'Créditos', c.numero + ' — VR: ' + fmt(vrMonto));
+  toast('Opción a Compra ejercida — Crédito liquidado', 'success');
+  renderCreditos();
+  verCredito(creditoId);
+}
+
+function registrarRentaExtraordinaria(creditoId) {
+  const c = getStore('creditos').find(cr => cr.id === creditoId);
+  if (!c) return;
+
+  const monto = prompt('Ingrese el monto de la renta extraordinaria:', '');
+  if (!monto || parseFloat(monto) <= 0) return;
+
+  const montoVal = parseFloat(monto);
+  const concepto = prompt('Concepto/Motivo de la renta extraordinaria:', 'Renta extraordinaria');
+
+  // Registrar pago especial
+  const fecha = hoyLocal();
+  const pagos = getStore('pagos');
+  const nuevoSaldo = Math.max(0, c.saldo - montoVal);
+
+  const pago = {
+    id: nextId('pagos'),
+    creditoId,
+    fecha,
+    monto: montoVal,
+    capital: montoVal,
+    interes: 0,
+    moratorio: 0,
+    comision: 0,
+    iva: 0,
+    saldoAnterior: c.saldo,
+    saldoNuevo: nuevoSaldo,
+    metodo: 'transferencia',
+    referencia: 'REX-' + c.numero,
+    notas: concepto || 'Renta extraordinaria',
+    tipoEspecial: 'renta_extraordinaria',
+    createdAt: new Date().toISOString()
+  };
+  pagos.push(pago);
+  setStore('pagos', pagos);
+
+  // Actualizar crédito
+  c.saldo = nuevoSaldo;
+  if (nuevoSaldo <= 0.01) c.estado = 'liquidado';
+  const creditos = getStore('creditos');
+  const idxC = creditos.findIndex(cr => cr.id === creditoId);
+  creditos[idxC] = c;
+  setStore('creditos', creditos);
+
+  // Asiento contable
+  const contab = getStore('contabilidad');
+  const cid = nextId('contabilidad');
+  // Tipo de ingreso: si es arrendamiento_puro o arrendamiento, usa 4103
+  const tipoIng = (c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro') ? 'ingreso_arrendamiento' : 'ingreso_intereses';
+  const cuentaHaber = (c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro') ? '4103' : '4101';
+
+  contab.push({
+    id: cid,
+    fecha,
+    tipo: tipoIng,
+    concepto: `Renta Extraordinaria ${c.numero} — ${concepto}`,
+    monto: montoVal,
+    cuentaDebe: '1101',
+    cuentaHaber,
+    creditoId,
+    referencia: 'REX-' + c.numero,
+    createdAt: new Date().toISOString()
+  });
+  setStore('contabilidad', contab);
+
+  addAudit('Renta Extraordinaria', 'Créditos', c.numero + ' — ' + fmt(montoVal));
+  toast('Renta extraordinaria registrada', 'success');
+  renderCreditos();
+  verCredito(creditoId);
 }
 
 // ============================================================
@@ -5155,7 +5675,7 @@ function guardarPago() {
   // Bug #13: Proteger contra saldos negativos por decimales
   const saldoNuevo = Math.max(+(saldoAnterior - capital).toFixed(2), 0);
 
-  // Arrendamiento: advertir si el pago liquida el crédito y hay VR pendiente
+  // Arrendamiento: advertir si el pago liquida el crédito y hay VR pendiente (no para arrendamiento_puro que VR=0)
   var vrPactado = c.monto * ((c.valorResidual || 0) / 100);
   if (c.tipo === 'arrendamiento' && vrPactado > 1 && saldoNuevo <= 0.01) {
     if (!confirm('⚠️ ARRENDAMIENTO — VALOR RESIDUAL\n\nEste pago liquida el contrato. El Valor Residual pactado es ' + fmt(vrPactado) + ' (' + (c.valorResidual || 0) + '% del monto original).\n\n¿Confirma que el VR está incluido en este pago o fue cobrado por separado?')) return;
@@ -5245,7 +5765,7 @@ function guardarPago() {
             var nuevoPago;
 
             // Arrendamiento: recalcular con interés FLAT (no francés)
-            var esArrendRecalc = cr.tipo === 'arrendamiento';
+            var esArrendRecalc = cr.tipo === 'arrendamiento' || cr.tipo === 'arrendamiento_puro';
 
             if (!esArrendRecalc && esAnticipado && cr.pagoAnticipadoReducePlazo !== false) {
               if (tasaPeriodica > 0) {
@@ -5320,10 +5840,10 @@ function guardarPago() {
     });
     setStore('creditos', txCreditos);
 
-    // 3. Registro contable (cuenta diferenciada: 1204 para arrendamiento, 1201 para créditos)
+    // 3. Registro contable (cuenta diferenciada: 1204 para arrendamiento/arrendamiento_puro, 1201 para créditos)
     var txContab = getStore('contabilidad');
     var _cid1 = nextId('contabilidad');
-    var esArrend = c.tipo === 'arrendamiento';
+    var esArrend = c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
     var ctaCartera = esArrend ? '1204' : '1201';
     var tipoIngInt = esArrend ? 'ingreso_arrendamiento' : 'ingreso_intereses';
     // Asiento 1: Capital — Banco (debe) → Cartera (haber) — solo la porción de capital
@@ -5453,7 +5973,7 @@ function revertirPago(pagoId) {
             var tasaPerRev = getTasaPeriodica(txCred.tasa, txCred.periodicidad);
             var vrMontoRev = txCred.monto * ((txCred.valorResidual || 0) / 100);
             var saldoRev = pagoOriginal.saldoAnterior;
-            var esArrendRevCalc = txCred.tipo === 'arrendamiento';
+            var esArrendRevCalc = txCred.tipo === 'arrendamiento' || txCred.tipo === 'arrendamiento_puro';
             var nuevoPayRev;
 
             if (esArrendRevCalc) {
@@ -5508,7 +6028,7 @@ function revertirPago(pagoId) {
       var fechaRev = hoyLocal();
       var refRev = 'REV-' + pagoId;
       var conceptoBase = 'REVERSA: Pago #' + pagoId + ' — ' + numCred + ' — ' + razon;
-      var esArrendRev = cred && cred.tipo === 'arrendamiento';
+      var esArrendRev = cred && (cred.tipo === 'arrendamiento' || cred.tipo === 'arrendamiento_puro');
       var ctaCarteraRev = esArrendRev ? '1204' : '1201';
       // Reversa capital: Cartera (debe) → Banco (haber)
       if ((pagoOriginal.capital || 0) > 0) {
@@ -5605,14 +6125,14 @@ function setCotizadorTab(tipo) {
   var secEsc = document.getElementById('seccionEscenarios');
   if (secEsc) secEsc.style.display = esEscenarios ? '' : 'none';
   if (esEscenarios) return;
-  document.getElementById('cotVRGroup').style.display = tipo === 'arrendamiento' ? 'block' : 'none';
+  document.getElementById('cotVRGroup').style.display = (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') ? 'block' : 'none';
   // IVA se muestra para todos los tipos de crédito (16% estándar en México)
   if (tipo === 'nomina') {
     document.getElementById('cotPeriodicidad').value = 'quincenal';
     document.getElementById('cotTasa').value = '36';
     document.getElementById('cotPlazo').value = '12';
     setInputMiles('cotMonto', 80000);
-  } else if (tipo === 'arrendamiento') {
+  } else if (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') {
     document.getElementById('cotPeriodicidad').value = 'mensual';
     document.getElementById('cotTasa').value = '22';
     document.getElementById('cotPlazo').value = '36';
@@ -7318,7 +7838,7 @@ function registrarPagoFondeo(id) {
 //  CONTABILIDAD
 // ============================================================
 function setContaTab(tab) {
-  ['contaMovimientos','contaBalance','contaResultados','contaConciliacion','contaCierres'].forEach(function(id) {
+  ['contaMovimientos','contaBalance','contaResultados','contaConciliacion','contaCierres','contaBalanza'].forEach(function(id) {
     var el = document.getElementById(id); if (el) el.style.display = 'none';
   });
   var target = document.getElementById('conta' + tab.charAt(0).toUpperCase() + tab.slice(1));
@@ -7330,6 +7850,7 @@ function setContaTab(tab) {
   else if (tab === 'resultados') renderResultados();
   else if (tab === 'conciliacion') renderConciliacion();
   else if (tab === 'cierres') renderCierres();
+  else if (tab === 'balanza') renderBalanza();
 }
 
 // Bug #40: Cierre contable mensual
@@ -7368,7 +7889,7 @@ function ejecutarDevengoPeriodico() {
       }
     }
     if (intDevengado > 0) {
-      var esArrend = c.tipo === 'arrendamiento';
+      var esArrend = c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
       entries.push({
         id: cid++, fecha: hoy, tipo: 'devengo_intereses',
         concepto: 'Devengo intereses ' + c.numero + ' (' + periodo + ')',
@@ -7480,6 +8001,508 @@ function ejecutarCierreContable() {
     toast('Período ' + periodo + ' cerrado exitosamente', 'success');
     renderCierres();
   });
+}
+
+// ===== CIERRE ANUAL =====
+function ejecutarCierreAnual() {
+  if (!hasPermiso('contabilidad', 'crear')) return toast('Sin permiso para ejecutar cierre anual', 'error');
+  var anio = new Date().getFullYear() - 1; // Cerrar año anterior
+  var anioStr = String(anio);
+
+  // Verificar que todos los meses del año estén cerrados
+  var mesesFaltantes = [];
+  for (var m = 1; m <= 12; m++) {
+    var periodo = anioStr + '-' + String(m).padStart(2, '0');
+    if (!isPeriodoCerrado(periodo)) {
+      // Verificar si hay movimientos en ese mes
+      var tieneMovs = getStore('contabilidad').some(function(r) { return r.fecha && r.fecha.startsWith(periodo); });
+      if (tieneMovs) mesesFaltantes.push(periodo);
+    }
+  }
+  if (mesesFaltantes.length > 0) {
+    return toast('Faltan cierres mensuales para ' + anioStr + ': ' + mesesFaltantes.join(', ') + '. Cierra todos los meses antes del cierre anual.', 'error');
+  }
+
+  // Calcular resultado del año
+  var contabAnio = getStore('contabilidad').filter(function(r) { return r.fecha && r.fecha.startsWith(anioStr); });
+  var tiposIngreso = ['ingreso_intereses', 'ingreso_arrendamiento', 'comision', 'devengo_intereses'];
+  var tiposEgreso = ['pago_fondeo', 'gasto_operativo', 'quita_reestructura', 'provision_cartera'];
+  var ingresos = contabAnio.filter(function(r) { return tiposIngreso.includes(r.tipo); }).reduce(function(s, r) { return s + (r.monto || 0); }, 0);
+  var egresos = contabAnio.filter(function(r) { return tiposEgreso.includes(r.tipo); }).reduce(function(s, r) { return s + Math.abs(r.monto || 0); }, 0);
+  var resultadoAnual = ingresos - egresos;
+
+  showConfirm('Cierre Anual ' + anioStr,
+    'Se ejecutará el cierre anual del ejercicio ' + anioStr + '.\n\n' +
+    'Ingresos del año: ' + fmt(ingresos) + '\n' +
+    'Egresos del año: ' + fmt(egresos) + '\n' +
+    'Resultado del ejercicio: ' + fmt(resultadoAnual) + '\n\n' +
+    'Se transferirá el resultado a "Resultados de Ejercicios Anteriores" (cuenta 3202).\n\n' +
+    '⚠️ Esta operación es irreversible.',
+    'Sí, ejecutar cierre anual').then(function(ok) {
+    if (!ok) return;
+
+    // Crear asiento contable de cierre anual
+    var contab = getStore('contabilidad');
+    var cid = nextId('contabilidad');
+    var fechaCierre = anioStr + '-12-31';
+
+    if (resultadoAnual >= 0) {
+      // Utilidad: Db 3201 (Resultado Ejercicio) → Cr 3202 (Resultados Anteriores)
+      contab.push({
+        id: cid++, fecha: fechaCierre, tipo: 'otro',
+        concepto: 'Cierre anual ' + anioStr + ': Traspaso utilidad a resultados acumulados',
+        monto: resultadoAnual,
+        cuentaDebe: '3201', cuentaHaber: '3202',
+        referencia: 'CIERRE-ANUAL-' + anioStr,
+        createdAt: new Date().toISOString()
+      });
+    } else {
+      // Pérdida: Db 3202 → Cr 3201
+      contab.push({
+        id: cid++, fecha: fechaCierre, tipo: 'otro',
+        concepto: 'Cierre anual ' + anioStr + ': Traspaso pérdida a resultados acumulados',
+        monto: Math.abs(resultadoAnual),
+        cuentaDebe: '3202', cuentaHaber: '3201',
+        referencia: 'CIERRE-ANUAL-' + anioStr,
+        createdAt: new Date().toISOString()
+      });
+    }
+    setStore('contabilidad', contab);
+
+    // Registrar cierre anual
+    var cierres = getStore('cierres_contables');
+    cierres.push({
+      id: cierres.length + 1,
+      periodo: anioStr + '-ANUAL',
+      fechaCierre: new Date().toISOString(),
+      cerradoPor: currentUser ? currentUser.nombre : 'Admin',
+      ingresos: ingresos,
+      egresos: egresos,
+      resultado: resultadoAnual,
+      registros: contabAnio.length,
+      esAnual: true
+    });
+    setStore('cierres_contables', cierres);
+
+    addAudit('Cierre Anual', 'Contabilidad', 'Ejercicio ' + anioStr + ' cerrado. Resultado: ' + fmt(resultadoAnual) + ' transferido a Resultados Acumulados');
+    toast('Cierre anual ' + anioStr + ' ejecutado. Resultado ' + fmt(resultadoAnual) + ' transferido a cuenta 3202', 'success');
+    renderCierres();
+  });
+}
+
+// ===== EXPORTAR BALANCE GENERAL PDF =====
+function exportarBalanceGeneralPDF() {
+  if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') return toast('Librería PDF no disponible', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('p', 'mm', 'letter');
+  var fechaCorte = document.getElementById('balanceFecha').value || hoyLocal();
+
+  // Rebuild balance data (same logic as renderBalance)
+  var creditos = getStore('creditos');
+  var fondeos = getStore('fondeos');
+  var pagos = getStore('pagos');
+  var contab = getStore('contabilidad');
+  var pagosCorte = pagos.filter(function(p) { return p.fecha && p.fecha <= fechaCorte && !p.reversado; });
+  var contabCorte = contab.filter(function(r) { return r.fecha && r.fecha <= fechaCorte; });
+
+  var carteraVigente = 0, carteraVencida = 0, provisionEstimada = 0;
+  creditos.forEach(function(c) {
+    if (!c.fechaInicio || c.fechaInicio > fechaCorte) return;
+    var pagosC = pagosCorte.filter(function(p) { return p.creditoId === c.id; });
+    var totalCapPagado = pagosC.reduce(function(s, p) { return s + (p.capital || 0); }, 0);
+    var saldoAlCorte = Math.max(c.monto - totalCapPagado, 0);
+    if (saldoAlCorte < 0.01) return;
+    var amort = c.amortizacion || [];
+    var diasMoraCorte = 0;
+    for (var i = 0; i < amort.length; i++) {
+      if (!amort[i].pagado && amort[i].fecha && amort[i].fecha <= fechaCorte) {
+        var d = Math.floor((new Date(fechaCorte) - new Date(amort[i].fecha)) / 86400000);
+        if (d > diasMoraCorte) diasMoraCorte = d;
+      }
+    }
+    if (diasMoraCorte > 90) carteraVencida += saldoAlCorte;
+    else carteraVigente += saldoAlCorte;
+    provisionEstimada += calcProvisionCNBV(saldoAlCorte, diasMoraCorte);
+  });
+
+  var intPorCobrar = creditos.filter(function(c) { return c.estado !== 'liquidado' && c.amortizacion; }).reduce(function(s, c) {
+    return s + (c.amortizacion || []).filter(function(a) { return !a.pagado && a.fecha && a.fecha <= fechaCorte; }).reduce(function(ss, a) { return ss + (a.interes || 0); }, 0);
+  }, 0);
+
+  var totalFondeoRecibido = fondeos.filter(function(f) { return f.fechaInicio && f.fechaInicio <= fechaCorte; }).reduce(function(s, f) { return s + f.monto; }, 0);
+  var totalCobrado = pagosCorte.reduce(function(s, p) { return s + p.monto; }, 0);
+  var totalColocado = creditos.filter(function(c) { return c.fechaInicio && c.fechaInicio <= fechaCorte; }).reduce(function(s, c) { return s + c.monto; }, 0);
+  var totalPagadoFondeos = contabCorte.filter(function(r) { return r.tipo === 'pago_fondeo'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var totalGastosOp = contabCorte.filter(function(r) { return r.tipo === 'gasto_operativo'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var comisionesAp = contabCorte.filter(function(r) { return r.tipo === 'comision' && r.concepto && r.concepto.indexOf('apertura') >= 0; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var ivaComAp = contabCorte.filter(function(r) { return r.tipo === 'iva_trasladado' && r.concepto && r.concepto.indexOf('comisión apertura') >= 0; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var efectivo = totalFondeoRecibido + totalCobrado - totalColocado + comisionesAp + ivaComAp - totalPagadoFondeos - totalGastosOp;
+
+  var saldoFondeos = fondeos.filter(function(f) { return f.estado !== 'liquidado'; }).reduce(function(s, f) { return s + f.saldo; }, 0);
+  var intPorPagar = fondeos.filter(function(f) { return f.estado === 'vigente'; }).reduce(function(s, f) {
+    var pagosF = pagosCorte.filter(function(p) { return p.fondeoId === f.id; });
+    var fechaRef = pagosF.length > 0 ? pagosF[pagosF.length - 1].fecha : (f.fechaInicio || fechaCorte);
+    var dias = Math.max(0, Math.floor((new Date(fechaCorte) - new Date(fechaRef)) / 86400000));
+    return s + ((f.saldo || 0) * (f.tasa || 0) / 360 * dias);
+  }, 0);
+  var ivaPorPagar = contabCorte.filter(function(r) { return r.tipo === 'iva_trasladado'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var totalPasivos = saldoFondeos + intPorPagar + ivaPorPagar;
+  var totalActivos = efectivo + carteraVigente + carteraVencida + intPorCobrar - provisionEstimada;
+  var capital = totalActivos - totalPasivos;
+
+  // PDF
+  doc.setFillColor(30, 48, 80);
+  doc.rect(0, 0, 216, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.text(EMPRESA.nombre, 14, 12);
+  doc.setFontSize(11);
+  doc.text('Balance General al ' + fechaCorte, 14, 20);
+  doc.setFontSize(8);
+  doc.text('Cifras en pesos mexicanos', 14, 25);
+
+  var y = 36;
+  doc.setTextColor(30, 48, 80);
+  doc.setFontSize(12);
+  doc.text('ACTIVOS', 14, y); y += 8;
+  doc.setFontSize(9);
+  var activos = [
+    ['Caja y Bancos', efectivo],
+    ['Cartera de Crédito Vigente', carteraVigente],
+    ['Cartera de Crédito Vencida', carteraVencida],
+    ['Intereses por Cobrar', intPorCobrar],
+    ['(-) Estimación Preventiva', -provisionEstimada]
+  ];
+  activos.forEach(function(a) {
+    doc.text('    ' + a[0], 14, y);
+    doc.text(fmt(a[1]), 190, y, { align: 'right' });
+    y += 6;
+  });
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'bold');
+  doc.line(14, y, 200, y); y += 5;
+  doc.text('Total Activos', 14, y);
+  doc.text(fmt(totalActivos), 190, y, { align: 'right' }); y += 12;
+
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(12);
+  doc.text('PASIVOS', 14, y); y += 8;
+  doc.setFontSize(9);
+  var pasivos = [
+    ['Fondeos por Pagar', saldoFondeos],
+    ['Intereses por Pagar', intPorPagar],
+    ['IVA Trasladado por Pagar', ivaPorPagar]
+  ];
+  pasivos.forEach(function(p) {
+    doc.text('    ' + p[0], 14, y);
+    doc.text(fmt(p[1]), 190, y, { align: 'right' });
+    y += 6;
+  });
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'bold');
+  doc.line(14, y, 200, y); y += 5;
+  doc.text('Total Pasivos', 14, y);
+  doc.text(fmt(totalPasivos), 190, y, { align: 'right' }); y += 12;
+
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(12);
+  doc.text('CAPITAL CONTABLE', 14, y); y += 8;
+  doc.setFontSize(9);
+  doc.text('    Resultado del Ejercicio', 14, y);
+  doc.text(fmt(capital), 190, y, { align: 'right' }); y += 8;
+
+  doc.setFillColor(30, 48, 80);
+  doc.rect(12, y - 2, 190, 10, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(11);
+  doc.setFont(undefined, 'bold');
+  doc.text('TOTAL PASIVO + CAPITAL', 16, y + 5);
+  doc.text(fmt(totalPasivos + capital), 190, y + 5, { align: 'right' });
+
+  doc.save('AP_Balance_General_' + fechaCorte + '.pdf');
+  toast('Balance General PDF generado', 'success');
+}
+
+function exportarBalanceGeneralExcel() {
+  var fechaCorte = document.getElementById('balanceFecha').value || hoyLocal();
+  toast('Usa el botón PDF para exportar el Balance General', 'info');
+}
+
+// ===== EXPORTAR ESTADO DE RESULTADOS PDF =====
+function exportarEdoResultadosPDF() {
+  if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') return toast('Librería PDF no disponible', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('p', 'mm', 'letter');
+  var mes = document.getElementById('resultadosMes').value || hoyLocal().substring(0, 7);
+  var contab = getStore('contabilidad').filter(function(r) { return r.fecha && r.fecha.startsWith(mes); });
+
+  var intCobrados = contab.filter(function(r) { return r.tipo === 'ingreso_intereses' || r.tipo === 'ingreso_arrendamiento' || r.tipo === 'devengo_intereses'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var comisiones = contab.filter(function(r) { return r.tipo === 'comision'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var totalIngresos = intCobrados + comisiones;
+  var intPagados = contab.filter(function(r) { return r.tipo === 'pago_fondeo'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var gastosOp = contab.filter(function(r) { return r.tipo === 'gasto_operativo'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var quitas = contab.filter(function(r) { return r.tipo === 'quita_reestructura'; }).reduce(function(s, r) { return s + Math.abs(r.monto); }, 0);
+  var provisiones = contab.filter(function(r) { return r.tipo === 'provision_cartera'; }).reduce(function(s, r) { return s + Math.abs(r.monto); }, 0);
+  var totalGastos = intPagados + gastosOp + quitas + provisiones;
+  var margenFin = intCobrados - intPagados;
+  var utilidad = totalIngresos - totalGastos;
+
+  var mNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var parts = mes.split('-');
+  var mesLabel = parts.length === 2 ? mNames[parseInt(parts[1]) - 1] + ' ' + parts[0] : mes;
+
+  doc.setFillColor(30, 48, 80);
+  doc.rect(0, 0, 216, 28, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(16);
+  doc.text(EMPRESA.nombre, 14, 12);
+  doc.setFontSize(11);
+  doc.text('Estado de Resultados — ' + mesLabel, 14, 20);
+  doc.setFontSize(8);
+  doc.text('Cifras en pesos mexicanos', 14, 25);
+
+  doc.autoTable({
+    startY: 34,
+    head: [['Concepto', 'Importe']],
+    body: [
+      [{ content: 'INGRESOS FINANCIEROS', styles: { fontStyle: 'bold', fillColor: [240, 249, 255] } }, ''],
+      ['    Intereses Cobrados', fmt(intCobrados)],
+      ['    Comisiones', fmt(comisiones)],
+      [{ content: 'Total Ingresos', styles: { fontStyle: 'bold' } }, { content: fmt(totalIngresos), styles: { fontStyle: 'bold', textColor: [13, 159, 110] } }],
+      ['', ''],
+      [{ content: 'COSTOS Y GASTOS', styles: { fontStyle: 'bold', fillColor: [254, 242, 242] } }, ''],
+      ['    Intereses Pagados (Fondeos)', fmt(intPagados)],
+      ['    Quitas / Estimación Preventiva', fmt(quitas)],
+      ['    Provisiones Cartera', fmt(provisiones)],
+      ['    Gastos de Operación', fmt(gastosOp)],
+      [{ content: 'Total Costos y Gastos', styles: { fontStyle: 'bold' } }, { content: fmt(totalGastos), styles: { fontStyle: 'bold', textColor: [239, 68, 68] } }],
+      ['', ''],
+      ['    Margen Financiero', fmt(margenFin)],
+      [{ content: 'UTILIDAD (PÉRDIDA) DEL PERIODO', styles: { fontStyle: 'bold', fillColor: [30, 48, 80], textColor: [255, 255, 255] } }, { content: fmt(utilidad), styles: { fontStyle: 'bold', fillColor: [30, 48, 80], textColor: [255, 255, 255] } }]
+    ],
+    styles: { fontSize: 9, cellPadding: 3 },
+    headStyles: { fillColor: [30, 48, 80], textColor: 255 },
+    columnStyles: { 0: { cellWidth: 120 }, 1: { halign: 'right', cellWidth: 60 } },
+    theme: 'grid'
+  });
+
+  doc.save('AP_Estado_Resultados_' + mes + '.pdf');
+  toast('Estado de Resultados PDF generado', 'success');
+}
+
+function exportarEdoResultadosExcel() {
+  var mes = document.getElementById('resultadosMes').value || hoyLocal().substring(0, 7);
+  var contab = getStore('contabilidad').filter(function(r) { return r.fecha && r.fecha.startsWith(mes); });
+  var intCobrados = contab.filter(function(r) { return r.tipo === 'ingreso_intereses' || r.tipo === 'ingreso_arrendamiento' || r.tipo === 'devengo_intereses'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var comisiones = contab.filter(function(r) { return r.tipo === 'comision'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var intPagados = contab.filter(function(r) { return r.tipo === 'pago_fondeo'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var gastosOp = contab.filter(function(r) { return r.tipo === 'gasto_operativo'; }).reduce(function(s, r) { return s + r.monto; }, 0);
+  var quitas = contab.filter(function(r) { return r.tipo === 'quita_reestructura'; }).reduce(function(s, r) { return s + Math.abs(r.monto); }, 0);
+  var provisiones = contab.filter(function(r) { return r.tipo === 'provision_cartera'; }).reduce(function(s, r) { return s + Math.abs(r.monto); }, 0);
+  var headers = ['Concepto', 'Importe'];
+  var data = [
+    ['INGRESOS FINANCIEROS', ''],
+    ['Intereses Cobrados', intCobrados],
+    ['Comisiones', comisiones],
+    ['Total Ingresos', intCobrados + comisiones],
+    ['', ''],
+    ['COSTOS Y GASTOS', ''],
+    ['Intereses Pagados', intPagados],
+    ['Quitas', quitas],
+    ['Provisiones', provisiones],
+    ['Gastos Operación', gastosOp],
+    ['Total Costos', intPagados + gastosOp + quitas + provisiones],
+    ['', ''],
+    ['Margen Financiero', intCobrados - intPagados],
+    ['UTILIDAD DEL PERIODO', (intCobrados + comisiones) - (intPagados + gastosOp + quitas + provisiones)]
+  ];
+  exportToExcel(data, headers, 'AP_Edo_Resultados_' + mes + '.xlsx', 'Resultados');
+}
+
+// ===== BALANZA DE COMPROBACIÓN =====
+function renderBalanza() {
+  var mes = document.getElementById('balanzaMes').value || hoyLocal().substring(0, 7);
+  var contab = getStore('contabilidad');
+
+  // Acumular movimientos por cuenta
+  var cuentas = {};
+  Object.keys(CATALOGO_CUENTAS).forEach(function(cod) {
+    cuentas[cod] = { codigo: cod, nombre: CATALOGO_CUENTAS[cod].nombre, tipo: CATALOGO_CUENTAS[cod].tipo, grupo: CATALOGO_CUENTAS[cod].grupo, debeAnterior: 0, haberAnterior: 0, debePeriodo: 0, haberPeriodo: 0 };
+  });
+
+  contab.forEach(function(r) {
+    if (!r.fecha) return;
+    var monto = Math.abs(r.monto || 0);
+    var esPeriodo = r.fecha.startsWith(mes);
+    var esAnterior = r.fecha < mes + '-01';
+
+    if (r.cuentaDebe) {
+      if (!cuentas[r.cuentaDebe]) cuentas[r.cuentaDebe] = { codigo: r.cuentaDebe, nombre: getCuentaNombre(r.cuentaDebe), tipo: 'otro', grupo: 'Otros', debeAnterior: 0, haberAnterior: 0, debePeriodo: 0, haberPeriodo: 0 };
+      if (esPeriodo) cuentas[r.cuentaDebe].debePeriodo += monto;
+      else if (esAnterior) cuentas[r.cuentaDebe].debeAnterior += monto;
+    }
+    if (r.cuentaHaber) {
+      if (!cuentas[r.cuentaHaber]) cuentas[r.cuentaHaber] = { codigo: r.cuentaHaber, nombre: getCuentaNombre(r.cuentaHaber), tipo: 'otro', grupo: 'Otros', debeAnterior: 0, haberAnterior: 0, debePeriodo: 0, haberPeriodo: 0 };
+      if (esPeriodo) cuentas[r.cuentaHaber].haberPeriodo += monto;
+      else if (esAnterior) cuentas[r.cuentaHaber].haberAnterior += monto;
+    }
+  });
+
+  // Ordenar por código de cuenta
+  var lista = Object.values(cuentas).filter(function(c) {
+    return c.debeAnterior > 0.01 || c.haberAnterior > 0.01 || c.debePeriodo > 0.01 || c.haberPeriodo > 0.01;
+  }).sort(function(a, b) { return a.codigo.localeCompare(b.codigo); });
+
+  var totalDebeAnt = 0, totalHaberAnt = 0, totalDebePer = 0, totalHaberPer = 0;
+
+  var mNames = ['Enero','Febrero','Marzo','Abril','Mayo','Junio','Julio','Agosto','Septiembre','Octubre','Noviembre','Diciembre'];
+  var parts = mes.split('-');
+  var mesLabel = parts.length === 2 ? mNames[parseInt(parts[1]) - 1] + ' ' + parts[0] : mes;
+
+  var html = '<div class="card"><div class="card-header"><span class="card-title">Balanza de Comprobación — ' + mesLabel + '</span></div>';
+  html += '<table style="width:100%"><thead><tr style="background:var(--navy);color:white">';
+  html += '<th>Cuenta</th><th>Nombre</th>';
+  html += '<th colspan="2" style="text-align:center;border-left:2px solid rgba(255,255,255,0.3)">Saldo Anterior</th>';
+  html += '<th colspan="2" style="text-align:center;border-left:2px solid rgba(255,255,255,0.3)">Movimientos del Periodo</th>';
+  html += '<th colspan="2" style="text-align:center;border-left:2px solid rgba(255,255,255,0.3)">Saldo Final</th>';
+  html += '</tr><tr style="background:var(--gray-100);font-size:12px">';
+  html += '<th></th><th></th>';
+  html += '<th style="text-align:right;border-left:2px solid var(--gray-300)">Debe</th><th style="text-align:right">Haber</th>';
+  html += '<th style="text-align:right;border-left:2px solid var(--gray-300)">Debe</th><th style="text-align:right">Haber</th>';
+  html += '<th style="text-align:right;border-left:2px solid var(--gray-300)">Debe</th><th style="text-align:right">Haber</th>';
+  html += '</tr></thead><tbody>';
+
+  var grupoActual = '';
+  lista.forEach(function(c) {
+    if (c.grupo !== grupoActual) {
+      grupoActual = c.grupo;
+      html += '<tr style="background:var(--gray-50)"><td colspan="8" style="font-weight:600;color:var(--navy);padding:8px 12px">' + esc(grupoActual) + '</td></tr>';
+    }
+    var saldoFinalDebe = c.debeAnterior + c.debePeriodo;
+    var saldoFinalHaber = c.haberAnterior + c.haberPeriodo;
+    totalDebeAnt += c.debeAnterior; totalHaberAnt += c.haberAnterior;
+    totalDebePer += c.debePeriodo; totalHaberPer += c.haberPeriodo;
+
+    html += '<tr>';
+    html += '<td style="font-family:monospace;font-weight:600">' + c.codigo + '</td>';
+    html += '<td>' + esc(c.nombre) + '</td>';
+    html += '<td style="text-align:right;border-left:2px solid var(--gray-200)">' + (c.debeAnterior > 0.01 ? fmt(c.debeAnterior) : '') + '</td>';
+    html += '<td style="text-align:right">' + (c.haberAnterior > 0.01 ? fmt(c.haberAnterior) : '') + '</td>';
+    html += '<td style="text-align:right;border-left:2px solid var(--gray-200)">' + (c.debePeriodo > 0.01 ? fmt(c.debePeriodo) : '') + '</td>';
+    html += '<td style="text-align:right">' + (c.haberPeriodo > 0.01 ? fmt(c.haberPeriodo) : '') + '</td>';
+    html += '<td style="text-align:right;border-left:2px solid var(--gray-200);font-weight:600">' + (saldoFinalDebe > 0.01 ? fmt(saldoFinalDebe) : '') + '</td>';
+    html += '<td style="text-align:right;font-weight:600">' + (saldoFinalHaber > 0.01 ? fmt(saldoFinalHaber) : '') + '</td>';
+    html += '</tr>';
+  });
+
+  var totalDebeFin = totalDebeAnt + totalDebePer;
+  var totalHaberFin = totalHaberAnt + totalHaberPer;
+  html += '<tr style="background:var(--navy);color:white;font-weight:bold"><td colspan="2">TOTALES</td>';
+  html += '<td style="text-align:right;border-left:2px solid rgba(255,255,255,0.3)">' + fmt(totalDebeAnt) + '</td><td style="text-align:right">' + fmt(totalHaberAnt) + '</td>';
+  html += '<td style="text-align:right;border-left:2px solid rgba(255,255,255,0.3)">' + fmt(totalDebePer) + '</td><td style="text-align:right">' + fmt(totalHaberPer) + '</td>';
+  html += '<td style="text-align:right;border-left:2px solid rgba(255,255,255,0.3)">' + fmt(totalDebeFin) + '</td><td style="text-align:right">' + fmt(totalHaberFin) + '</td>';
+  html += '</tr></tbody></table></div>';
+
+  // Cuadre
+  var difPer = Math.abs(totalDebePer - totalHaberPer);
+  var difFin = Math.abs(totalDebeFin - totalHaberFin);
+  if (difPer > 0.02 || difFin > 0.02) {
+    html += '<div style="margin-top:12px;padding:12px;background:#FEF2F2;border-left:4px solid #EF4444;border-radius:4px;font-size:13px">';
+    html += '<strong style="color:#EF4444">Descuadre detectado:</strong> ';
+    if (difPer > 0.02) html += 'Periodo: ' + fmt(difPer) + ' ';
+    if (difFin > 0.02) html += 'Final: ' + fmt(difFin);
+    html += '</div>';
+  } else {
+    html += '<div style="margin-top:12px;padding:12px;background:#F0FDF4;border-left:4px solid #0D9F6E;border-radius:4px;font-size:13px">';
+    html += '<strong style="color:#0D9F6E">Balanza cuadrada</strong> — Los totales de debe y haber coinciden.';
+    html += '</div>';
+  }
+
+  document.getElementById('balanzaContent').innerHTML = html;
+}
+
+function exportarBalanzaPDF() {
+  if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') return toast('Librería PDF no disponible', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('l', 'mm', 'letter');
+  var hoy = hoyLocal();
+  var mes = document.getElementById('balanzaMes').value || hoy.substring(0, 7);
+  var contab = getStore('contabilidad');
+
+  var cuentas = {};
+  Object.keys(CATALOGO_CUENTAS).forEach(function(cod) {
+    cuentas[cod] = { codigo: cod, nombre: CATALOGO_CUENTAS[cod].nombre, debeAnt: 0, haberAnt: 0, debePer: 0, haberPer: 0 };
+  });
+  contab.forEach(function(r) {
+    if (!r.fecha) return;
+    var monto = Math.abs(r.monto || 0);
+    var esPer = r.fecha.startsWith(mes);
+    var esAnt = r.fecha < mes + '-01';
+    if (r.cuentaDebe) {
+      if (!cuentas[r.cuentaDebe]) cuentas[r.cuentaDebe] = { codigo: r.cuentaDebe, nombre: getCuentaNombre(r.cuentaDebe), debeAnt: 0, haberAnt: 0, debePer: 0, haberPer: 0 };
+      if (esPer) cuentas[r.cuentaDebe].debePer += monto;
+      else if (esAnt) cuentas[r.cuentaDebe].debeAnt += monto;
+    }
+    if (r.cuentaHaber) {
+      if (!cuentas[r.cuentaHaber]) cuentas[r.cuentaHaber] = { codigo: r.cuentaHaber, nombre: getCuentaNombre(r.cuentaHaber), debeAnt: 0, haberAnt: 0, debePer: 0, haberPer: 0 };
+      if (esPer) cuentas[r.cuentaHaber].haberPer += monto;
+      else if (esAnt) cuentas[r.cuentaHaber].haberAnt += monto;
+    }
+  });
+
+  var lista = Object.values(cuentas).filter(function(c) { return c.debeAnt > 0.01 || c.haberAnt > 0.01 || c.debePer > 0.01 || c.haberPer > 0.01; }).sort(function(a, b) { return a.codigo.localeCompare(b.codigo); });
+
+  doc.setFillColor(30, 48, 80);
+  doc.rect(0, 0, 279, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.text(EMPRESA.nombre + ' — Balanza de Comprobación', 14, 10);
+  doc.setFontSize(9);
+  doc.text('Periodo: ' + mes + '   |   Generado: ' + hoy, 14, 17);
+
+  doc.autoTable({
+    startY: 26,
+    head: [['Cuenta', 'Nombre', 'Debe Ant.', 'Haber Ant.', 'Debe Per.', 'Haber Per.', 'Debe Final', 'Haber Final']],
+    body: lista.map(function(c) {
+      return [c.codigo, c.nombre, fmt(c.debeAnt), fmt(c.haberAnt), fmt(c.debePer), fmt(c.haberPer), fmt(c.debeAnt + c.debePer), fmt(c.haberAnt + c.haberPer)];
+    }),
+    styles: { fontSize: 7, cellPadding: 1.5 },
+    headStyles: { fillColor: [30, 48, 80], textColor: 255 },
+    alternateRowStyles: { fillColor: [245, 247, 250] },
+    columnStyles: { 0: { cellWidth: 18 }, 2: { halign: 'right' }, 3: { halign: 'right' }, 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' } }
+  });
+
+  doc.save('AP_Balanza_' + mes + '.pdf');
+  toast('Balanza de comprobación PDF generada', 'success');
+}
+
+function exportarBalanzaExcel() {
+  var mes = document.getElementById('balanzaMes').value || hoyLocal().substring(0, 7);
+  var contab = getStore('contabilidad');
+  var cuentas = {};
+  Object.keys(CATALOGO_CUENTAS).forEach(function(cod) {
+    cuentas[cod] = { codigo: cod, nombre: CATALOGO_CUENTAS[cod].nombre, debeAnt: 0, haberAnt: 0, debePer: 0, haberPer: 0 };
+  });
+  contab.forEach(function(r) {
+    if (!r.fecha) return;
+    var monto = Math.abs(r.monto || 0);
+    var esPer = r.fecha.startsWith(mes);
+    var esAnt = r.fecha < mes + '-01';
+    if (r.cuentaDebe) {
+      if (!cuentas[r.cuentaDebe]) cuentas[r.cuentaDebe] = { codigo: r.cuentaDebe, nombre: r.cuentaDebe, debeAnt: 0, haberAnt: 0, debePer: 0, haberPer: 0 };
+      if (esPer) cuentas[r.cuentaDebe].debePer += monto;
+      else if (esAnt) cuentas[r.cuentaDebe].debeAnt += monto;
+    }
+    if (r.cuentaHaber) {
+      if (!cuentas[r.cuentaHaber]) cuentas[r.cuentaHaber] = { codigo: r.cuentaHaber, nombre: r.cuentaHaber, debeAnt: 0, haberAnt: 0, debePer: 0, haberPer: 0 };
+      if (esPer) cuentas[r.cuentaHaber].haberPer += monto;
+      else if (esAnt) cuentas[r.cuentaHaber].haberAnt += monto;
+    }
+  });
+  var lista = Object.values(cuentas).filter(function(c) { return c.debeAnt > 0.01 || c.haberAnt > 0.01 || c.debePer > 0.01 || c.haberPer > 0.01; }).sort(function(a, b) { return a.codigo.localeCompare(b.codigo); });
+  var headers = ['Cuenta', 'Nombre', 'Debe Anterior', 'Haber Anterior', 'Debe Periodo', 'Haber Periodo', 'Debe Final', 'Haber Final'];
+  var data = lista.map(function(c) { return [c.codigo, c.nombre, c.debeAnt, c.haberAnt, c.debePer, c.haberPer, c.debeAnt + c.debePer, c.haberAnt + c.haberPer]; });
+  exportToExcel(data, headers, 'AP_Balanza_' + mes + '.xlsx', 'Balanza');
 }
 
 function renderContabilidad() {
@@ -10047,7 +11070,7 @@ function liquidarCredito(id) {
     // Reversal contable (cuenta cartera diferenciada: 1204 para arrendamiento)
     if (saldoAnterior > 0) {
       var contab = getStore('contabilidad');
-      var ctaCartLiq = c.tipo === 'arrendamiento' ? '1204' : '1201';
+      var ctaCartLiq = (c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro') ? '1204' : '1201';
       contab.push({ id: nextId('contabilidad'), fecha: hoyLocal(), tipo: 'liquidacion_credito', concepto: 'Liquidación ' + c.numero + ' — Saldo: ' + fmt(saldoAnterior), monto: -saldoAnterior, cuentaDebe: '5202', cuentaHaber: ctaCartLiq, creditoId: id, referencia: c.numero, createdAt: new Date().toISOString() });
       setStore('contabilidad', contab);
     }
@@ -12547,8 +13570,8 @@ function generarContratoPDF(id) {
   var m = 18;
   var maxW = w - m * 2;
 
-  var esArrendamiento = c.tipo === 'arrendamiento';
-  var tipoContrato = esArrendamiento ? 'CONTRATO DE ARRENDAMIENTO FINANCIERO' : 'CONTRATO DE CRÉDITO SIMPLE';
+  var esArrendamiento = c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
+  var tipoContrato = c.tipo === 'arrendamiento' ? 'CONTRATO DE ARRENDAMIENTO FINANCIERO' : (c.tipo === 'arrendamiento_puro' ? 'CONTRATO DE ARRENDAMIENTO PURO' : 'CONTRATO DE CRÉDITO SIMPLE');
   var fechaHoy = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
   var montoTxt = '$' + Number(c.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 });
   var montoLetras = numeroALetras(c.monto);
@@ -12849,13 +13872,13 @@ function generarTablaAmortPDF(id) {
   var y = 36;
   doc.setTextColor(50, 50, 50);
   doc.setFontSize(9);
-  var esArr = c.tipo === 'arrendamiento';
+  var esArr = c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
   var resumen = 'Monto: $' + Number(c.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 })
     + '  |  Tasa: ' + (c.tasa * 100).toFixed(2) + '%'
     + '  |  Plazo: ' + c.plazo + ' meses'
     + '  |  Periodicidad: ' + (_periLabel[c.periodicidad] || c.periodicidad)
     + '  |  Inicio: ' + new Date(c.fechaInicio).toLocaleDateString('es-MX')
-    + (esArr ? '  |  VR: ' + (c.valorResidual || 0) + '%' : '')
+    + (esArr && c.tipo === 'arrendamiento' ? '  |  VR: ' + (c.valorResidual || 0) + '%' : '')
     + '  |  Pago: $' + Number(c.pago).toLocaleString('es-MX', { minimumFractionDigits: 2 });
   doc.text(resumen, m, y);
   y += 6;
@@ -12960,6 +13983,627 @@ function generarTablaAmortPDF(id) {
   doc.save('TablaAmort_' + c.numero + '.pdf');
   toast('Tabla de amortización PDF generada: ' + c.numero, 'success');
   addAudit('Tabla amort. PDF generada', 'Créditos', c.numero + ' — ' + cli.nombre);
+}
+
+// ===== ESTADO DE CUENTA POR CLIENTE (PDF) =====
+function generarEstadoCuentaCliente(clienteId) {
+  if (typeof jspdf === 'undefined' && typeof window.jspdf === 'undefined') return toast('Librería PDF no disponible', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('p', 'mm', 'letter');
+
+  var cliente = getStore('clientes').find(function(c) { return c.id === clienteId; });
+  if (!cliente) return toast('Cliente no encontrado', 'error');
+
+  var creditos = getStore('creditos').filter(function(c) { return c.clienteId === clienteId; });
+  var pagos = getStore('pagos');
+  var hoy = hoyLocal();
+  var mesActual = hoy.substring(0, 7);
+
+  // Header
+  doc.setFillColor(30, 48, 80);
+  doc.rect(0, 0, 216, 32, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14);
+  doc.text(EMPRESA.nombre, 14, 10);
+  doc.setFontSize(10);
+  doc.text('Estado de Cuenta', 14, 17);
+  doc.setFontSize(8);
+  doc.text('Fecha de corte: ' + hoy, 14, 23);
+  doc.text('RFC: ' + (EMPRESA.rfc || 'N/A'), 14, 28);
+  doc.text('Folio: EC-' + clienteId + '-' + mesActual, 150, 10);
+
+  // Datos del cliente
+  var y = 38;
+  doc.setTextColor(30, 48, 80);
+  doc.setFontSize(10);
+  doc.setFont(undefined, 'bold');
+  doc.text('DATOS DEL CLIENTE', 14, y); y += 6;
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(9);
+  doc.text('Nombre: ' + (cliente.nombre || ''), 14, y); y += 5;
+  doc.text('RFC: ' + (cliente.rfc || 'N/A') + '        Tel: ' + (cliente.telefono || 'N/A'), 14, y); y += 5;
+  doc.text('Email: ' + (cliente.email || 'N/A'), 14, y); y += 5;
+  doc.text('Dirección: ' + (cliente.direccion || 'N/A'), 14, y); y += 8;
+
+  // Resumen de créditos
+  var saldoTotal = creditos.filter(function(c) { return c.estado !== 'liquidado'; }).reduce(function(s, c) { return s + (c.saldo || 0); }, 0);
+  var proximoPago = null;
+  creditos.forEach(function(c) {
+    if (c.estado === 'liquidado' || !c.amortizacion) return;
+    var nextCuota = c.amortizacion.find(function(a) { return !a.pagado; });
+    if (nextCuota && (!proximoPago || nextCuota.fecha < proximoPago.fecha)) {
+      proximoPago = { fecha: nextCuota.fecha, monto: nextCuota.pagoTotal, credito: c.numero };
+    }
+  });
+
+  doc.setFillColor(240, 249, 255);
+  doc.rect(12, y - 3, 192, 18, 'F');
+  doc.setFont(undefined, 'bold');
+  doc.setFontSize(10);
+  doc.text('RESUMEN', 14, y + 2);
+  doc.setFont(undefined, 'normal');
+  doc.setFontSize(9);
+  doc.text('Créditos activos: ' + creditos.filter(function(c) { return c.estado !== 'liquidado'; }).length, 14, y + 8);
+  doc.text('Saldo total: ' + fmt(saldoTotal), 80, y + 8);
+  if (proximoPago) {
+    doc.text('Próximo pago: ' + proximoPago.fecha + ' — ' + fmt(proximoPago.monto) + ' (' + proximoPago.credito + ')', 14, y + 13);
+  }
+  y += 22;
+
+  // Detalle por crédito
+  creditos.forEach(function(c) {
+    if (y > 240) { doc.addPage(); y = 20; }
+
+    doc.setFillColor(30, 48, 80);
+    doc.rect(12, y - 3, 192, 8, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'bold');
+    doc.text(c.numero + ' — ' + (tipoLabel[c.tipo] || c.tipo) + ' — ' + c.estado.toUpperCase(), 14, y + 2);
+    doc.text('Saldo: ' + fmt(c.saldo), 170, y + 2, { align: 'right' });
+    y += 10;
+    doc.setTextColor(30, 48, 80);
+    doc.setFont(undefined, 'normal');
+    doc.setFontSize(8);
+    doc.text('Monto original: ' + fmt(c.monto) + '   |   Tasa: ' + ((c.tasa || 0) * 100).toFixed(2) + '%   |   Plazo: ' + (c.plazo || 0) + ' meses   |   Pago: ' + fmt(c.pago), 14, y);
+    y += 6;
+
+    // Pagos del mes para este crédito
+    var pagosCred = pagos.filter(function(p) { return p.creditoId === c.id && p.fecha && p.fecha.startsWith(mesActual) && !p.reversado; });
+    if (pagosCred.length > 0) {
+      doc.autoTable({
+        startY: y,
+        head: [['Fecha', 'Capital', 'Interés', 'Moratorio', 'IVA', 'Total']],
+        body: pagosCred.map(function(p) {
+          return [p.fecha, fmt(p.capital), fmt(p.interes), fmt(p.moratorio || 0), fmt(p.iva || 0), fmt(p.monto)];
+        }),
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [100, 130, 180], textColor: 255 },
+        margin: { left: 14, right: 14 },
+        tableWidth: 'auto'
+      });
+      y = doc.lastAutoTable.finalY + 4;
+    } else {
+      doc.setFontSize(7);
+      doc.setTextColor(150, 150, 150);
+      doc.text('Sin pagos en el periodo actual', 14, y);
+      y += 4;
+    }
+
+    // Próximas cuotas pendientes (max 3)
+    if (c.amortizacion) {
+      var pendientes = c.amortizacion.filter(function(a) { return !a.pagado; }).slice(0, 3);
+      if (pendientes.length > 0) {
+        doc.setTextColor(30, 48, 80);
+        doc.setFontSize(8);
+        doc.text('Próximas cuotas:', 14, y); y += 4;
+        doc.autoTable({
+          startY: y,
+          head: [['#', 'Fecha', 'Capital', 'Interés', 'IVA', 'Total']],
+          body: pendientes.map(function(a) {
+            return [a.numero, a.fecha, fmt(a.capital), fmt(a.interes), fmt(a.iva || 0), fmt(a.pagoTotal)];
+          }),
+          styles: { fontSize: 7, cellPadding: 1.5 },
+          headStyles: { fillColor: [200, 210, 230], textColor: [30, 48, 80] },
+          margin: { left: 14, right: 14 },
+          tableWidth: 'auto'
+        });
+        y = doc.lastAutoTable.finalY + 6;
+      }
+    }
+
+    y += 4;
+  });
+
+  // Footer
+  if (y > 240) { doc.addPage(); y = 20; }
+  doc.setFontSize(7);
+  doc.setTextColor(150, 150, 150);
+  doc.text('Este estado de cuenta es informativo. Para aclaraciones comuníquese con nosotros.', 14, 260);
+  doc.text('Generado automáticamente por ' + EMPRESA.nombre + ' — ' + new Date().toLocaleString('es-MX'), 14, 264);
+
+  doc.save('AP_Estado_Cuenta_' + (cliente.nombre || 'Cliente').replace(/\s+/g, '_') + '_' + mesActual + '.pdf');
+  toast('Estado de cuenta PDF generado para ' + cliente.nombre, 'success');
+}
+
+// ============================================================
+//  MÓDULO FISCAL SAT — CFDI 4.0 / DIOT / PÓLIZAS XML
+// ============================================================
+
+function setFiscalTab(tab) {
+  document.querySelectorAll('#page-fiscal .tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('#page-fiscal > div[id^="fiscal"]').forEach(d => d.style.display = 'none');
+  document.querySelector('[onclick="setFiscalTab(\'' + tab + '\')"]').classList.add('active');
+  document.getElementById('fiscal' + tab.charAt(0).toUpperCase() + tab.slice(1)).style.display = 'block';
+}
+
+function renderFiscal() {
+  const periodo = document.getElementById('cfdiPeriodo');
+  if (!periodo.value) {
+    const hoy = new Date();
+    periodo.value = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
+  }
+  document.getElementById('tbCFDI').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gray-400)">Genera CFDIs para ver la tabla</td></tr>';
+  document.getElementById('tbDIOT').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gray-400)">Genera DIOT para ver la tabla</td></tr>';
+  document.getElementById('tbPolizas').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--gray-400)">Genera Pólizas para ver la tabla</td></tr>';
+}
+
+function generarCFDIsPeriodo() {
+  const periodoInput = document.getElementById('cfdiPeriodo').value;
+  if (!periodoInput) {
+    toast('Selecciona un período primero', 'warning');
+    return;
+  }
+
+  const [year, month] = periodoInput.split('-');
+  const mesNum = parseInt(month);
+  const anoNum = parseInt(year);
+
+  const contabilidad = getStore('contabilidad') || [];
+  const clientes = getStore('clientes') || [];
+  const clientesMap = {};
+  clientes.forEach(c => clientesMap[c.id] = c);
+
+  const cfdisGenerados = {};
+
+  contabilidad.forEach(entry => {
+    if (!entry.fecha) return;
+    const [entryYear, entryMonth] = entry.fecha.split('-');
+    if (parseInt(entryYear) === anoNum && parseInt(entryMonth) === mesNum) {
+      if (['ingreso_intereses', 'ingreso_arrendamiento', 'iva_trasladado'].includes(entry.tipo)) {
+        let clienteId = entry.clienteId || null;
+        if (!clienteId && entry.referencia) {
+          const creditoMatch = getStore('creditos').find(c => c.numero === entry.referencia);
+          if (creditoMatch) clienteId = creditoMatch.clienteId;
+        }
+        if (!clienteId) return;
+
+        if (!cfdisGenerados[clienteId]) {
+          const cliente = clientesMap[clienteId];
+          if (!cliente) return;
+          cfdisGenerados[clienteId] = {
+            id: 'CFDI_' + clienteId + '_' + year + month,
+            clienteId: clienteId,
+            cliente: cliente,
+            periodo: periodoInput,
+            movimientos: [],
+            subtotal: 0,
+            iva: 0,
+            total: 0
+          };
+        }
+
+        const cfdi = cfdisGenerados[clienteId];
+        cfdi.movimientos.push(entry);
+
+        if (entry.tipo === 'ingreso_intereses' || entry.tipo === 'ingreso_arrendamiento') {
+          cfdi.subtotal += entry.monto || 0;
+        } else if (entry.tipo === 'iva_trasladado') {
+          cfdi.iva += entry.monto || 0;
+        }
+      }
+    }
+  });
+
+  cfdi.total = cfdi.subtotal + cfdi.iva;
+
+  const cfdisArray = Object.values(cfdisGenerados);
+  const stored = getStore('fiscal_cfdi') || [];
+  cfdisArray.forEach(cfdi => {
+    const idx = stored.findIndex(c => c.id === cfdi.id);
+    if (idx >= 0) stored[idx] = cfdi;
+    else stored.push(cfdi);
+  });
+  setStore('fiscal_cfdi', stored);
+
+  renderCFDITable(cfdisArray);
+  toast('Se generaron ' + cfdisArray.length + ' CFDIs para ' + periodoInput, 'success');
+}
+
+function renderCFDITable(cfdis) {
+  const tb = document.getElementById('tbCFDI');
+  if (cfdis.length === 0) {
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gray-400)">Sin CFDIs generados</td></tr>';
+    return;
+  }
+  tb.innerHTML = cfdis.map(cfdi => {
+    const cliente = cfdi.cliente || {};
+    return '<tr>' +
+      '<td>' + esc(cliente.nombre || 'Sin nombre') + '</td>' +
+      '<td>' + esc(cliente.rfc || 'N/D') + '</td>' +
+      '<td style="text-align:right">' + fmt(cfdi.subtotal) + '</td>' +
+      '<td style="text-align:right">' + fmt(cfdi.iva) + '</td>' +
+      '<td style="text-align:right"><strong>' + fmt(cfdi.total) + '</strong></td>' +
+      '<td><button class="btn btn-outline btn-xs" onclick="descargarCFDIxml(\'' + cfdi.id + '\')">XML</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function descargarCFDIxml(cfdiId) {
+  const stored = getStore('fiscal_cfdi') || [];
+  const cfdi = stored.find(c => c.id === cfdiId);
+  if (!cfdi) {
+    toast('CFDI no encontrado', 'error');
+    return;
+  }
+
+  const xml = buildCFDIXml(cfdi);
+  const blob = new Blob([xml], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = cfdi.id + '.xml';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('CFDI descargado: ' + cfdi.id + '.xml', 'success');
+}
+
+function descargarTodosCFDI() {
+  const stored = getStore('fiscal_cfdi') || [];
+  if (stored.length === 0) {
+    toast('No hay CFDIs para descargar', 'warning');
+    return;
+  }
+
+  if (typeof JSZip === 'undefined') {
+    stored.forEach(cfdi => descargarCFDIxml(cfdi.id));
+    toast('Descargando CFDIs individuales...', 'info');
+  } else {
+    const zip = new JSZip();
+    stored.forEach(cfdi => {
+      const xml = buildCFDIXml(cfdi);
+      zip.file(cfdi.id + '.xml', xml);
+    });
+    zip.generateAsync({type: 'blob'}).then(function(content) {
+      const url = URL.createObjectURL(content);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'CFDIs_' + new Date().toISOString().split('T')[0] + '.zip';
+      a.click();
+      URL.revokeObjectURL(url);
+      toast('ZIP descargado con todos los CFDIs', 'success');
+    });
+  }
+}
+
+function buildCFDIXml(cfdi) {
+  const cliente = cfdi.cliente || {};
+  const emisor = EMPRESA;
+  const folio = Math.floor(Math.random() * 999999) + 1;
+  const fechaISO = new Date(cfdi.periodo + '-01').toISOString().split('T')[0] + 'T23:59:59';
+  const claveProducto = cfdi.movimientos.some(m => m.tipo === 'ingreso_arrendamiento') ? '80131500' : '84111506';
+  const descripcion = cfdi.movimientos.some(m => m.tipo === 'ingreso_arrendamiento')
+    ? 'Renta devengada del período ' + cfdi.periodo
+    : 'Intereses devengados del período ' + cfdi.periodo;
+
+  const concepto = {
+    claveProdServ: claveProducto,
+    cantidad: 1,
+    claveUnidad: 'E48',
+    descripcion: descripcion,
+    valorUnitario: cfdi.subtotal,
+    importe: cfdi.subtotal,
+    ivaBase: cfdi.subtotal,
+    ivaMonto: cfdi.iva
+  };
+
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<cfdi:Comprobante xmlns:cfdi="http://www.sat.gob.mx/cfd/4" ' +
+    'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ' +
+    'xsi:schemaLocation="http://www.sat.gob.mx/cfd/4 http://www.sat.gob.mx/sitio_internet/cfd/4/cfdv40.xsd" ' +
+    'Version="4.0" Serie="A" Folio="' + folio + '" ' +
+    'Fecha="' + fechaISO + '" FormaPago="03" MetodoPago="PPD" ' +
+    'TipoDeComprobante="I" Moneda="MXN" LugarExpedicion="' + (emisor.cp || '06600') + '" ' +
+    'SubTotal="' + cfdi.subtotal + '" Total="' + cfdi.total + '" Exportacion="01">' +
+    '<cfdi:Emisor Rfc="' + (emisor.rfc || 'AOF000101XX0') + '" Nombre="' + (emisor.razonSocial || emisor.nombre) + '" RegimenFiscal="' + (emisor.regimenFiscal || '601') + '"/>' +
+    '<cfdi:Receptor Rfc="' + esc(cliente.rfc || 'XAXX010101000') + '" Nombre="' + esc(cliente.nombre || 'Cliente') + '" ' +
+    'DomicilioFiscalReceptor="' + (cliente.cp || '06600') + '" RegimenFiscalReceptor="' + (cliente.regimenFiscal || '601') + '" ' +
+    'UsoCFDI="G03"/>' +
+    '<cfdi:Conceptos>' +
+    '<cfdi:Concepto ClaveProdServ="' + concepto.claveProdServ + '" Cantidad="' + concepto.cantidad + '" ClaveUnidad="' + concepto.claveUnidad + '" ' +
+    'Descripcion="' + esc(concepto.descripcion) + '" ' +
+    'ValorUnitario="' + concepto.valorUnitario.toFixed(2) + '" Importe="' + concepto.importe.toFixed(2) + '" ObjetoImp="02">' +
+    '<cfdi:Impuestos>' +
+    '<cfdi:Traslados>' +
+    '<cfdi:Traslado Base="' + concepto.ivaBase.toFixed(2) + '" Impuesto="002" TipoFactor="Tasa" ' +
+    'TasaOCuota="0.160000" Importe="' + concepto.ivaMonto.toFixed(2) + '"/>' +
+    '</cfdi:Traslados>' +
+    '</cfdi:Impuestos>' +
+    '</cfdi:Concepto>' +
+    '</cfdi:Conceptos>' +
+    '<cfdi:Impuestos TotalImpuestosTrasladados="' + cfdi.iva.toFixed(2) + '">' +
+    '<cfdi:Traslados>' +
+    '<cfdi:Traslado Base="' + cfdi.subtotal.toFixed(2) + '" Impuesto="002" TipoFactor="Tasa" ' +
+    'TasaOCuota="0.160000" Importe="' + cfdi.iva.toFixed(2) + '"/>' +
+    '</cfdi:Traslados>' +
+    '</cfdi:Impuestos>' +
+    '</cfdi:Comprobante>';
+
+  return xml;
+}
+
+function generarDIOT() {
+  const periodoInput = document.getElementById('diotPeriodo').value;
+  if (!periodoInput) {
+    toast('Selecciona un período primero', 'warning');
+    return;
+  }
+
+  const [year, month] = periodoInput.split('-');
+  const mesNum = parseInt(month);
+  const anoNum = parseInt(year);
+
+  const contabilidad = getStore('contabilidad') || [];
+  const terceros = {};
+
+  contabilidad.forEach(entry => {
+    if (!entry.fecha) return;
+    const [entryYear, entryMonth] = entry.fecha.split('-');
+    if (parseInt(entryYear) === anoNum && parseInt(entryMonth) === mesNum) {
+      if (entry.tipo === 'iva_pagado' || entry.tipo === 'pago_intereses_fondeo') {
+        const rfc = entry.rfcTercero || 'XAXX010101000';
+        const nombre = entry.nombreTercero || 'Tercero sin identificar';
+
+        if (!terceros[rfc]) {
+          terceros[rfc] = {
+            rfc: rfc,
+            nombre: nombre,
+            tipoOperacion: entry.tipo === 'pago_intereses_fondeo' ? '85' : '06',
+            valorGravados: 0,
+            ivaPagado: 0,
+            ivaRetenido: 0
+          };
+        }
+
+        const t = terceros[rfc];
+        if (entry.tipo === 'iva_pagado') {
+          t.ivaPagado += entry.monto || 0;
+          t.valorGravados += (entry.monto || 0) / 0.16;
+        } else if (entry.tipo === 'pago_intereses_fondeo') {
+          t.valorGravados += entry.monto || 0;
+          t.ivaPagado += (entry.monto || 0) * 0.16;
+        }
+      }
+    }
+  });
+
+  const registros = Object.values(terceros);
+  const stored = getStore('fiscal_diot') || [];
+  stored.push({ periodo: periodoInput, registros: registros, fecha: hoyLocal() });
+  setStore('fiscal_diot', stored);
+
+  renderDIOTPreview(registros);
+  toast('DIOT generada: ' + registros.length + ' terceros', 'success');
+}
+
+function renderDIOTPreview(registros) {
+  const tb = document.getElementById('tbDIOT');
+  if (registros.length === 0) {
+    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gray-400)">Sin operaciones DIOT</td></tr>';
+    return;
+  }
+  tb.innerHTML = registros.map(r => {
+    return '<tr>' +
+      '<td>' + esc(r.rfc) + '</td>' +
+      '<td>' + esc(r.nombre) + '</td>' +
+      '<td>' + (r.tipoOperacion === '85' ? 'Proveedor' : 'Arrendador') + '</td>' +
+      '<td style="text-align:right">' + fmt(r.valorGravados) + '</td>' +
+      '<td style="text-align:right">' + fmt(r.ivaPagado) + '</td>' +
+      '<td style="text-align:right">' + fmt(r.ivaRetenido) + '</td>' +
+      '</tr>';
+  }).join('');
+}
+
+function descargarDIOT() {
+  const stored = getStore('fiscal_diot') || [];
+  if (stored.length === 0) {
+    toast('No hay DIOT para descargar', 'warning');
+    return;
+  }
+
+  const ultimaDIOT = stored[stored.length - 1];
+  const registros = ultimaDIOT.registros || [];
+
+  let contenido = '';
+  registros.forEach(r => {
+    const linea = '04|' +
+      (r.rfc.startsWith('XXX') ? '05' : '04') + '|' +
+      r.tipoOperacion + '|' +
+      r.rfc + '||' +
+      r.nombre + '||||||||' +
+      r.valorGravados.toFixed(2) + '|||||' +
+      r.ivaPagado.toFixed(2) + '|' +
+      r.ivaRetenido.toFixed(2) + '|||||||' + '\n';
+    contenido += linea;
+  });
+
+  const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'DIOT_' + ultimaDIOT.periodo.replace('-', '') + '.txt';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('DIOT .txt descargado', 'success');
+}
+
+function generarPolizasXML() {
+  const periodoInput = document.getElementById('polizasPeriodo').value;
+  if (!periodoInput) {
+    toast('Selecciona un período primero', 'warning');
+    return;
+  }
+
+  const [year, month] = periodoInput.split('-');
+  const mesNum = parseInt(month);
+  const anoNum = parseInt(year);
+
+  const contabilidad = getStore('contabilidad') || [];
+  const polizasMap = {};
+
+  contabilidad.forEach(entry => {
+    if (!entry.fecha) return;
+    const [entryYear, entryMonth] = entry.fecha.split('-');
+    if (parseInt(entryYear) === anoNum && parseInt(entryMonth) === mesNum) {
+      const key = entry.fecha + '_' + (entry.tipo || 'diario');
+      if (!polizasMap[key]) {
+        polizasMap[key] = {
+          id: 'POL_' + entry.fecha.replace(/-/g, '') + '_' + Math.floor(Math.random() * 1000),
+          fecha: entry.fecha,
+          tipo: entry.tipo === 'ingreso' ? 'I' : (entry.tipo === 'egreso' ? 'E' : 'D'),
+          concepto: entry.concepto || 'Póliza de ' + (entry.tipo || 'diario'),
+          transacciones: []
+        };
+      }
+
+      polizasMap[key].transacciones.push({
+        cuenta: entry.cuentaDebe,
+        nombre: CATALOGO_CUENTAS[entry.cuentaDebe]?.nombre || 'Cuenta ' + entry.cuentaDebe,
+        debe: entry.monto || 0,
+        haber: 0
+      });
+
+      polizasMap[key].transacciones.push({
+        cuenta: entry.cuentaHaber,
+        nombre: CATALOGO_CUENTAS[entry.cuentaHaber]?.nombre || 'Cuenta ' + entry.cuentaHaber,
+        debe: 0,
+        haber: entry.monto || 0
+      });
+    }
+  });
+
+  const polizas = Object.values(polizasMap);
+  const stored = getStore('fiscal_polizas') || [];
+  polizas.forEach(p => {
+    const idx = stored.findIndex(x => x.id === p.id);
+    if (idx >= 0) stored[idx] = p;
+    else stored.push(p);
+  });
+  setStore('fiscal_polizas', stored);
+
+  renderPolizasPreview(polizas);
+  toast('Se generaron ' + polizas.length + ' pólizas para ' + periodoInput, 'success');
+}
+
+function renderPolizasPreview(polizas) {
+  const tb = document.getElementById('tbPolizas');
+  if (polizas.length === 0) {
+    tb.innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--gray-400)">Sin pólizas generadas</td></tr>';
+    return;
+  }
+  tb.innerHTML = polizas.map(p => {
+    const totalDebe = p.transacciones.reduce((s, t) => s + t.debe, 0);
+    const totalHaber = p.transacciones.reduce((s, t) => s + t.haber, 0);
+    const tipoLabel = p.tipo === 'I' ? 'Ingreso' : (p.tipo === 'E' ? 'Egreso' : 'Diario');
+    return '<tr>' +
+      '<td>' + p.id + '</td>' +
+      '<td>' + p.fecha + '</td>' +
+      '<td>' + tipoLabel + '</td>' +
+      '<td>' + esc(p.concepto) + '</td>' +
+      '<td style="text-align:right">' + fmt(totalDebe) + '</td>' +
+      '<td style="text-align:right">' + fmt(totalHaber) + '</td>' +
+      '<td style="text-align:center">' + p.transacciones.length + '</td>' +
+      '<td><button class="btn btn-outline btn-xs" onclick="descargarPolizasXML()">XML</button></td>' +
+      '</tr>';
+  }).join('');
+}
+
+function descargarPolizasXML() {
+  const periodoInput = document.getElementById('polizasPeriodo').value;
+  if (!periodoInput) {
+    toast('Selecciona un período primero', 'warning');
+    return;
+  }
+
+  const [year, month] = periodoInput.split('-');
+  const mesNum = parseInt(month);
+  const anoNum = parseInt(year);
+
+  const stored = getStore('fiscal_polizas') || [];
+  const polizas = stored.filter(p => {
+    const [pYear, pMonth] = p.fecha.split('-');
+    return parseInt(pYear) === anoNum && parseInt(pMonth) === mesNum;
+  });
+
+  if (polizas.length === 0) {
+    toast('No hay pólizas para descargar', 'warning');
+    return;
+  }
+
+  const emisor = EMPRESA;
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<PLZ:Polizas xmlns:PLZ="http://www.sat.gob.mx/esquemas/ContabilidadE/1_3/PolizasPeriodo" ' +
+    'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" ' +
+    'xsi:schemaLocation="http://www.sat.gob.mx/esquemas/ContabilidadE/1_3/PolizasPeriodo http://www.sat.gob.mx/esquemas/ContabilidadE/1_3/PolizasPeriodo/PolizasPeriodo_1_3.xsd" ' +
+    'Version="1.3" RFC="' + (emisor.rfc || 'AOF000101XX0') + '" Mes="' + String(mesNum).padStart(2, '0') + '" Anio="' + anoNum + '" ' +
+    'TipoSolicitud="AF" NumOrden="ABC1234567/00" NumTramite="AC123456789">' +
+    polizas.map(p => {
+      return '<PLZ:Poliza NumUnIdenPol="' + p.id + '" Fecha="' + p.fecha + '" Concepto="' + esc(p.concepto) + '">' +
+        p.transacciones.map(t => {
+          return '<PLZ:Transaccion NumCta="' + t.cuenta + '" DesCta="' + esc(t.nombre) + '" Concepto="' + esc(p.concepto) + '" ' +
+            'Debe="' + t.debe.toFixed(2) + '" Haber="' + t.haber.toFixed(2) + '"/>';
+        }).join('') +
+        '</PLZ:Poliza>';
+    }).join('') +
+    '</PLZ:Polizas>';
+
+  const blob = new Blob([xml], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'PolizasPeriodo_' + periodoInput.replace('-', '') + '_Anexo24.xml';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Pólizas XML descargadas', 'success');
+}
+
+function descargarCatalogoXML() {
+  const emisor = EMPRESA;
+  const hoy = new Date();
+  const mes = String(hoy.getMonth() + 1).padStart(2, '0');
+  const anio = hoy.getFullYear();
+
+  let cuentasXml = '';
+  for (const [codigo, cuenta] of Object.entries(CATALOGO_CUENTAS)) {
+    const naturaleza = cuenta.tipo === 'pasivo' || cuenta.tipo === 'capital' ? 'A' : 'D';
+    cuentasXml += '<catalogocuentas:Ctas CodAgwordup="601" NumCta="' + codigo + '" ' +
+      'Desc="' + esc(cuenta.nombre || '') + '" Natur="' + naturaleza + '" Nivel="1"/>';
+  }
+
+  const xml = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<catalogocuentas:Catalogo xmlns:catalogocuentas="http://www.sat.gob.mx/esquemas/ContabilidadE/1_3/CatalogoCuentas" ' +
+    'Version="1.3" RFC="' + (emisor.rfc || 'AOF000101XX0') + '" Mes="' + mes + '" Anio="' + anio + '">' +
+    cuentasXml +
+    '</catalogocuentas:Catalogo>';
+
+  const blob = new Blob([xml], { type: 'application/xml' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'CatalogoCuentas_' + anio + mes + '.xml';
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('Catálogo de Cuentas XML descargado', 'success');
 }
 
 // ============================================================
@@ -13074,6 +14718,7 @@ function onGlobalSearch(query) {
     { label: 'Fondeos', page: 'fondeos', keys: 'fondeos fondeadores' },
     { label: 'Contabilidad', page: 'contabilidad', keys: 'contabilidad polizas' },
     { label: 'Reportes', page: 'reportes', keys: 'reportes cartera morosidad' },
+    { label: 'Fiscal SAT', page: 'fiscal', keys: 'fiscal sat cfdi diot polizas xml factura' },
     { label: 'Administración', page: 'admin', keys: 'administracion usuarios permisos' }
   ];
   paginas.forEach(function(p) {
@@ -15189,7 +16834,7 @@ function ejecutarPagoAprobado(sol) {
         var nuevoPeriodosAp = pendientesPostAp.length;
         var nuevoPagoAp;
 
-        var esArrendRecalcAp = cr.tipo === 'arrendamiento';
+        var esArrendRecalcAp = cr.tipo === 'arrendamiento' || cr.tipo === 'arrendamiento_puro';
 
         if (!esArrendRecalcAp && esAnticipadoAp && cr.pagoAnticipadoReducePlazo !== false) {
           if (tasaPerAp > 0) {
@@ -15263,7 +16908,7 @@ function ejecutarPagoAprobado(sol) {
   var contab = getStore('contabilidad');
   var _cidApprob = nextId('contabilidad');
   var credApprob = getStore('creditos').find(function(cr) { return cr.id === pago.creditoId; });
-  var esArrendApprob = credApprob && credApprob.tipo === 'arrendamiento';
+  var esArrendApprob = credApprob && (credApprob.tipo === 'arrendamiento' || credApprob.tipo === 'arrendamiento_puro');
   var ctaCartApprob = esArrendApprob ? '1204' : '1201';
   if (capital > 0) {
     contab.push({ id: _cidApprob++, fecha: pago.fecha, tipo: 'pago_recibido', concepto: 'Pago capital autorizado (Aprob #' + sol.id + ')', monto: capital, cuentaDebe: '1101', cuentaHaber: ctaCartApprob, creditoId: pago.creditoId, referencia: pago.referencia || '', createdAt: new Date().toISOString() });
