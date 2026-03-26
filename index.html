@@ -14172,6 +14172,10 @@ function generarCFDIsPeriodo() {
     if (parseInt(entryYear) === anoNum && parseInt(entryMonth) === mesNum) {
       if (['ingreso_intereses', 'ingreso_arrendamiento', 'iva_trasladado'].includes(entry.tipo)) {
         let clienteId = entry.clienteId || null;
+        if (!clienteId && entry.creditoId) {
+          const creditoById = getStore('creditos').find(c => c.id === entry.creditoId);
+          if (creditoById) clienteId = creditoById.clienteId;
+        }
         if (!clienteId && entry.referencia) {
           const creditoMatch = getStore('creditos').find(c => c.numero === entry.referencia);
           if (creditoMatch) clienteId = creditoMatch.clienteId;
@@ -14205,7 +14209,7 @@ function generarCFDIsPeriodo() {
     }
   });
 
-  cfdi.total = cfdi.subtotal + cfdi.iva;
+  Object.values(cfdisGenerados).forEach(c => { c.total = c.subtotal + c.iva; });
 
   const cfdisArray = Object.values(cfdisGenerados);
   const stored = getStore('fiscal_cfdi') || [];
