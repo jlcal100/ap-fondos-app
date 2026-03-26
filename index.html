@@ -1017,7 +1017,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       </div>
 
       <!-- TAB: CFDI 4.0 -->
-      <div id="fiscalCFDI">
+      <div id="fiscalCfdi">
         <div class="search-bar">
           <h3 style="margin:0;flex:1">Generador CFDI 4.0 Pre-Timbrado</h3>
           <button class="btn btn-primary btn-sm" onclick="generarCFDIsPeriodo()">📄 Generar CFDI</button>
@@ -1035,7 +1035,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       </div>
 
       <!-- TAB: DIOT -->
-      <div id="fiscalDIOT" style="display:none">
+      <div id="fiscalDiot" style="display:none">
         <div class="search-bar">
           <h3 style="margin:0;flex:1">Declaración Informativa de Operaciones con Terceros (DIOT)</h3>
           <button class="btn btn-primary btn-sm" onclick="generarDIOT()">📄 Generar DIOT</button>
@@ -4097,7 +4097,7 @@ function calcularValuacion() {
 // ============================================================
 const fmt = n => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN', minimumFractionDigits: 2 }).format(n || 0);
 const fmtPct = n => (n * 100).toFixed(2) + '%';
-const fmtDate = d => d ? new Date(d + 'T12:00:00').toLocaleDateString('es-MX') : '-';
+const fmtDate = d => { if (!d) return '-'; var s = String(d); if (s.includes('T')) return new Date(s).toLocaleDateString('es-MX'); return new Date(s + 'T12:00:00').toLocaleDateString('es-MX'); };
 const tipoLabel = { credito_simple: 'Crédito Simple', arrendamiento: 'Arrendamiento', arrendamiento_puro: 'Arrend. Puro', nomina: 'Nómina', cuenta_corriente: 'Cta. Corriente' };
 const estadoBadge = { vigente: 'badge-green', vencido: 'badge-red', liquidado: 'badge-gray', castigado: 'badge-red', reestructurado: 'badge-yellow' };
 const contaTipoLabel = { ingreso_intereses: 'Ingreso Intereses', ingreso_arrendamiento: 'Ingreso Arrendamiento', pago_recibido: 'Pago Recibido', colocacion: 'Colocación', pago_fondeo: 'Pago Fondeo', comision: 'Comisión', gasto_operativo: 'Gasto Operativo', quita_reestructura: 'Quita Reestructura', reversa_pago: 'Reversa Pago', liquidacion_credito: 'Liquidación Crédito', iva_trasladado: 'IVA Trasladado', devengo_intereses: 'Devengo Intereses', cobro_devengo: 'Cobro Devengo', provision_cartera: 'Provisión Cartera', otro: 'Otro' };
@@ -16752,10 +16752,11 @@ function ejecutarCreditoAprobado(sol) {
   if (cred.tipo !== 'cuenta_corriente') {
     var contab = getStore('contabilidad');
     var cidAp = nextId('contabilidad');
+    var ctaCartCol = (cred.tipo === 'arrendamiento' || cred.tipo === 'arrendamiento_puro') ? '1204' : '1201';
     // Asiento 1: Colocación
     contab.push({ id: cidAp++, fecha: cred.fechaInicio, tipo: 'colocacion',
       concepto: 'Colocación ' + esc(cred.numero) + ' (Aprobación #' + sol.id + ')',
-      monto: cred.monto, cuentaDebe: '1201', cuentaHaber: '1101',
+      monto: cred.monto, cuentaDebe: ctaCartCol, cuentaHaber: '1101',
       creditoId: cred.id, referencia: cred.numero, createdAt: new Date().toISOString() });
     // Asiento 2: Comisión de apertura
     var comAp = cred.comision || 0;
