@@ -2369,10 +2369,20 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         <div class="form-group"><label class="form-label">Moneda</label>
           <select class="form-select" id="credMoneda"><option value="MXN">MXN — Peso Mexicano</option><option value="USD">USD — Dólar</option><option value="UDI">UDI — Unidades de Inversión</option></select>
         </div>
+        <div class="form-group"><label class="form-label">Tipo Tasa</label>
+          <select class="form-select" id="credTipoTasa" onchange="toggleTasaFields()"><option value="fija">Fija</option><option value="variable">Variable (TIIE + Spread)</option></select>
+        </div>
         <div class="form-group"><label class="form-label">Tasa Anual *</label><div class="input-suffix"><input type="number" class="form-input" id="credTasa" min="0" step="0.01"><span class="suffix">%</span></div></div>
       </div>
       <div class="form-row-3">
         <div class="form-group"><label class="form-label">Tasa Moratoria</label><div class="input-suffix"><input type="number" class="form-input" id="credTasaMora" value="0" min="0" step="0.01"><span class="suffix">%</span></div></div>
+      </div>
+      <div class="form-row-3" id="credVariableRateFields" style="display:none">
+        <div class="form-group"><label class="form-label">Spread</label><div class="input-suffix"><input type="number" class="form-input" id="credSpread" min="0" step="0.01" oninput="calcularTasaEfectiva()"><span class="suffix">%</span></div></div>
+        <div class="form-group"><label class="form-label">Período Revisión</label>
+          <select class="form-select" id="credPeriodoRevision"><option value="mensual">Mensual</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option></select>
+        </div>
+        <div class="form-group"><label class="form-label" style="font-size:0.9em" id="credTasaEfectivaDisplay"></label></div>
       </div>
       <div class="form-row-3">
         <div class="form-group"><label class="form-label">Plazo (meses) *</label><input type="number" class="form-input" id="credPlazo" min="1"></div>
@@ -2449,10 +2459,20 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         <div class="form-group"><label class="form-label">Moneda</label>
           <select class="form-select" id="fondMoneda"><option value="MXN">MXN</option><option value="USD">USD</option><option value="UDI">UDI</option></select>
         </div>
+        <div class="form-group"><label class="form-label">Tipo Tasa</label>
+          <select class="form-select" id="fondTipoTasa" onchange="toggleFondoTasaFields()"><option value="fija">Fija</option><option value="variable">Variable (TIIE + Spread)</option></select>
+        </div>
         <div class="form-group"><label class="form-label">Tasa Anual *</label><div class="input-suffix"><input type="number" class="form-input" id="fondTasa" min="0" step="0.01"><span class="suffix">%</span></div></div>
       </div>
       <div class="form-row-3">
         <div class="form-group"><label class="form-label">Plazo (meses) *</label><input type="number" class="form-input" id="fondPlazo" min="1"></div>
+      </div>
+      <div class="form-row-3" id="fondVariableRateFields" style="display:none">
+        <div class="form-group"><label class="form-label">Spread</label><div class="input-suffix"><input type="number" class="form-input" id="fondSpread" min="0" step="0.01" oninput="calcularFondoTasaEfectiva()"><span class="suffix">%</span></div></div>
+        <div class="form-group"><label class="form-label">Período Revisión</label>
+          <select class="form-select" id="fondPeriodoRevision"><option value="mensual">Mensual</option><option value="trimestral">Trimestral</option><option value="semestral">Semestral</option><option value="anual">Anual</option></select>
+        </div>
+        <div class="form-group"><label class="form-label" style="font-size:0.9em" id="fondTasaEfectivaDisplay"></label></div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Periodicidad</label>
@@ -3207,12 +3227,92 @@ function initData() {
       { id: 4, numero: 'FD-004', fondeador: 'MULTISERVICIOS DUAL SA DE CV', tipo: 'cuenta_corriente', monto: 2900000, saldo: 2900000, tasa: 0.12, plazo: 24, periodicidad: 'mensual', fechaInicio: '2025-05-05', fechaVencimiento: addMonths(new Date('2025-05-05'), 24), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: 'Revolvente tasa fija' }
     ]);
   }
+  if (getStore('tiie_historico').length === 0) {
+    setStore('tiie_historico', [
+      { id: 1, fecha: '2025-01-01', tasa: 0.1050, fuente: 'Banxico' },
+      { id: 2, fecha: '2025-04-01', tasa: 0.1025, fuente: 'Banxico' },
+      { id: 3, fecha: '2025-07-01', tasa: 0.0975, fuente: 'Banxico' },
+      { id: 4, fecha: '2025-10-01', tasa: 0.0950, fuente: 'Banxico' },
+      { id: 5, fecha: '2026-01-01', tasa: 0.0925, fuente: 'Banxico' },
+      { id: 6, fecha: '2026-03-15', tasa: 0.0900, fuente: 'Banxico' }
+    ]);
+  }
 }
 
 function addMonths(date, months) {
   const d = new Date(date);
   d.setMonth(d.getMonth() + months);
   return d.toISOString().split('T')[0];
+}
+
+// Get the current (most recent) TIIE rate
+function getTIIEVigente() {
+  const tiieHist = getStore('tiie_historico') || [];
+  if (tiieHist.length === 0) return 0.09; // fallback
+  // Sort by date descending and return most recent
+  const sorted = tiieHist.slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  return sorted[0].tasa || 0.09;
+}
+
+// Recalculate effective rates for all variable-rate credits/fondeos when TIIE changes
+function actualizarTasasVariables() {
+  const tiieVigente = getTIIEVigente();
+  const hoy = new Date().toISOString().split('T')[0];
+
+  // Update credits
+  let creditos = getStore('creditos') || [];
+  creditos = creditos.map(c => {
+    if (c.tipoTasa === 'variable') {
+      const tasaEfectivaAnterior = c.tasa;
+      const tasaEfectivaNueva = +(tiieVigente + c.spread).toFixed(4);
+      if (Math.abs(tasaEfectivaNueva - tasaEfectivaAnterior) > 0.00001) {
+        c.tasa = tasaEfectivaNueva;
+        c.tasaReferencia = tiieVigente;
+        if (!c.historialTasas) c.historialTasas = [];
+        c.historialTasas.push({
+          fecha: hoy,
+          tiie: tiieVigente,
+          spread: c.spread,
+          tasaEfectiva: tasaEfectivaNueva
+        });
+        // Regenerate amortization from current period forward
+        if (c.amortizacion && c.amortizacion.length > 0) {
+          const periodoActual = c.amortizacion.findIndex(p => !p.pagado) || 0;
+          if (periodoActual >= 0 && periodoActual < c.amortizacion.length) {
+            const saldoEnPeriodo = c.amortizacion[periodoActual].saldoInicial;
+            const diasPorVencer = c.amortizacion.length - periodoActual;
+            const amortNueva = generarAmortizacion(saldoEnPeriodo, tasaEfectivaNueva, diasPorVencer, c.periodicidad, c.amortizacion[periodoActual].fecha, 0, 0, c.tipo);
+            // Keep paid periods, replace unpaid ones
+            c.amortizacion = c.amortizacion.slice(0, periodoActual).concat(amortNueva.map((p, idx) => ({ ...p, numero: periodoActual + idx + 1 })));
+          }
+        }
+      }
+    }
+    return c;
+  });
+  setStore('creditos', creditos);
+
+  // Update fondeos
+  let fondeos = getStore('fondeos') || [];
+  fondeos = fondeos.map(f => {
+    if (f.tipoTasa === 'variable') {
+      const tasaEfectivaAnterior = f.tasa;
+      const tasaEfectivaNueva = +(tiieVigente + f.spread).toFixed(4);
+      if (Math.abs(tasaEfectivaNueva - tasaEfectivaAnterior) > 0.00001) {
+        f.tasa = tasaEfectivaNueva;
+        f.tasaReferencia = tiieVigente;
+        if (!f.historialTasas) f.historialTasas = [];
+        f.historialTasas.push({
+          fecha: hoy,
+          tiie: tiieVigente,
+          spread: f.spread,
+          tasaEfectiva: tasaEfectivaNueva
+        });
+      }
+    }
+    return f;
+  });
+  setStore('fondeos', fondeos);
 }
 
 // ============================================================
@@ -3869,6 +3969,7 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
     pago: calcPago(monto, tasa, plazo, periodicidad, vrPct, tipo),
     estado: 'vigente', diasMora: 0, valorResidual: vrPct, valorEquipo, comision,
     fondeoId: null, notas: '', amortizacion: amort,
+    tipoTasa: 'fija', tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: [],
     createdAt: new Date().toISOString()
   };
 }
@@ -5085,10 +5186,12 @@ function renderCreditos() {
 function openModalCredito() {
   // Bug #21: Limpiar campos al abrir modal para nuevo crédito
   V.clearErrors('modalCredito');
-  clearForm(['credMonto','credTasa','credTasaMora','credPlazo','credVR','credValorEquipo','credComision','credNotas']);
+  clearForm(['credMonto','credTasa','credTasaMora','credPlazo','credVR','credValorEquipo','credComision','credNotas','credSpread']);
   document.getElementById('credMoneda').value = 'MXN';
   document.getElementById('credTipo').selectedIndex = 0;
   document.getElementById('credPeriodicidad').selectedIndex = 0;
+  document.getElementById('credTipoTasa').value = 'fija';
+  document.getElementById('credPeriodoRevision').value = 'mensual';
   toggleCreditoFields();
   const clientes = getStore('clientes');
   document.getElementById('credCliente').innerHTML = clientes.map(c => `<option value="${c.id}">${esc(c.nombre)}</option>`).join('');
@@ -5102,6 +5205,87 @@ function toggleCreditoFields() {
   const tipo = document.getElementById('credTipo').value;
   const isArrend = tipo === 'arrendamiento' || tipo === 'arrendamiento_puro';
   document.getElementById('credArrendFields').style.display = isArrend ? 'grid' : 'none';
+  // Hide variable rate fields for arrendamiento
+  const variableFields = document.getElementById('credVariableRateFields');
+  if (variableFields) {
+    variableFields.style.display = isArrend ? 'none' : '';
+  }
+  // Force tipoTasa to 'fija' for arrendamiento
+  const tipoTasa = document.getElementById('credTipoTasa');
+  if (tipoTasa) {
+    tipoTasa.disabled = isArrend;
+    if (isArrend) tipoTasa.value = 'fija';
+    toggleTasaFields();
+  }
+}
+
+function toggleTasaFields() {
+  const tipoTasa = document.getElementById('credTipoTasa');
+  if (!tipoTasa) return;
+  const isVariable = tipoTasa.value === 'variable';
+  const credTasa = document.getElementById('credTasa');
+  const spreadFields = document.getElementById('credVariableRateFields');
+
+  if (isVariable) {
+    // Show spread/revision fields
+    if (spreadFields) spreadFields.style.display = '';
+    if (credTasa) credTasa.readOnly = true;
+    // Calculate and display effective rate
+    calcularTasaEfectiva();
+  } else {
+    // Hide spread/revision fields
+    if (spreadFields) spreadFields.style.display = 'none';
+    if (credTasa) credTasa.readOnly = false;
+  }
+}
+
+function calcularTasaEfectiva() {
+  const tipoTasa = document.getElementById('credTipoTasa');
+  const credTasa = document.getElementById('credTasa');
+  const spreadVal = document.getElementById('credSpread');
+  const displayElem = document.getElementById('credTasaEfectivaDisplay');
+
+  if (!tipoTasa || tipoTasa.value !== 'variable' || !spreadVal || !displayElem) return;
+
+  const tiieVigente = getTIIEVigente();
+  const spread = parseFloat(spreadVal.value) / 100 || 0;
+  const tasaEfectiva = tiieVigente + spread;
+
+  if (credTasa) credTasa.value = (tasaEfectiva * 100).toFixed(2);
+  displayElem.textContent = `TIIE ${(tiieVigente*100).toFixed(2)}% + Spread ${(spread*100).toFixed(2)}% = Tasa Efectiva ${(tasaEfectiva*100).toFixed(2)}%`;
+}
+
+function toggleFondoTasaFields() {
+  const tipoTasa = document.getElementById('fondTipoTasa');
+  if (!tipoTasa) return;
+  const isVariable = tipoTasa.value === 'variable';
+  const fondTasa = document.getElementById('fondTasa');
+  const spreadFields = document.getElementById('fondVariableRateFields');
+
+  if (isVariable) {
+    if (spreadFields) spreadFields.style.display = '';
+    if (fondTasa) fondTasa.readOnly = true;
+    calcularFondoTasaEfectiva();
+  } else {
+    if (spreadFields) spreadFields.style.display = 'none';
+    if (fondTasa) fondTasa.readOnly = false;
+  }
+}
+
+function calcularFondoTasaEfectiva() {
+  const tipoTasa = document.getElementById('fondTipoTasa');
+  const fondTasa = document.getElementById('fondTasa');
+  const spreadVal = document.getElementById('fondSpread');
+  const displayElem = document.getElementById('fondTasaEfectivaDisplay');
+
+  if (!tipoTasa || tipoTasa.value !== 'variable' || !spreadVal || !displayElem) return;
+
+  const tiieVigente = getTIIEVigente();
+  const spread = parseFloat(spreadVal.value) / 100 || 0;
+  const tasaEfectiva = tiieVigente + spread;
+
+  if (fondTasa) fondTasa.value = (tasaEfectiva * 100).toFixed(2);
+  displayElem.textContent = `TIIE ${(tiieVigente*100).toFixed(2)}% + Spread ${(spread*100).toFixed(2)}% = Tasa Efectiva ${(tasaEfectiva*100).toFixed(2)}%`;
 }
 
 function guardarCredito() {
@@ -5173,7 +5357,8 @@ function guardarCredito() {
       fechaInicio, estado: 'vigente', saldo: 0, limite: monto,
       disponible: monto, disposiciones: [], comision,
       fechaVencimiento: addMonths(new Date(fechaInicio), plazo),
-      esRevolvente: true
+      esRevolvente: true,
+      tipoTasa: 'fija', tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: []
     };
   } else {
     // Para arrendamiento_puro, VR por defecto debe ser 0 (no 1%)
@@ -5190,6 +5375,28 @@ function guardarCredito() {
   credito.notas = document.getElementById('credNotas').value;
   // Sprint Z: Moneda
   credito.moneda = document.getElementById('credMoneda').value || 'MXN';
+
+  // Handle variable rate fields
+  if (tipo !== 'arrendamiento' && tipo !== 'arrendamiento_puro') {
+    const tipoTasaElem = document.getElementById('credTipoTasa');
+    if (tipoTasaElem) {
+      credito.tipoTasa = tipoTasaElem.value;
+      if (tipoTasaElem.value === 'variable') {
+        const spreadVal = document.getElementById('credSpread');
+        const periodoRevElem = document.getElementById('credPeriodoRevision');
+        const tiieVigente = getTIIEVigente();
+        credito.tasaReferencia = tiieVigente;
+        credito.spread = parseFloat(spreadVal.value) / 100 || 0;
+        credito.periodoRevision = periodoRevElem ? periodoRevElem.value : 'mensual';
+        credito.historialTasas = [{
+          fecha: fechaInicio,
+          tiie: tiieVigente,
+          spread: credito.spread,
+          tasaEfectiva: tasa
+        }];
+      }
+    }
+  }
 
   // PLD: Verificar si el cliente tiene alertas pendientes de revisión
   var pldStore = getStore('pld') || [];
@@ -8579,8 +8786,12 @@ function abrirNuevoFondeo() {
   document.getElementById('fondCLABE').value = '';
   document.getElementById('fondCuentaBanco').value = '';
   document.getElementById('fondNotas').value = '';
+  document.getElementById('fondTipoTasa').value = 'fija';
+  document.getElementById('fondSpread').value = '';
+  document.getElementById('fondPeriodoRevision').value = 'mensual';
   document.querySelector('#modalFondeo .modal-header h3').textContent = 'Nuevo Fondeo';
   V.clearErrors('modalFondeo');
+  toggleFondoTasaFields();
   openModal('modalFondeo');
 }
 
@@ -8601,8 +8812,13 @@ function editarFondeo(id) {
   document.getElementById('fondCLABE').value = f.clabe || '';
   document.getElementById('fondCuentaBanco').value = f.cuentaBanco || '';
   document.getElementById('fondNotas').value = f.notas || '';
+  // Variable rate fields
+  document.getElementById('fondTipoTasa').value = f.tipoTasa || 'fija';
+  document.getElementById('fondSpread').value = f.spread ? (f.spread * 100).toFixed(2) : '';
+  document.getElementById('fondPeriodoRevision').value = f.periodoRevision || 'mensual';
   document.querySelector('#modalFondeo .modal-header h3').textContent = 'Editar Fondeo — ' + f.numero;
   V.clearErrors('modalFondeo');
+  toggleFondoTasaFields();
   openModal('modalFondeo');
 }
 
@@ -8661,6 +8877,26 @@ function guardarFondeo() {
       f.cuentaBanco = document.getElementById('fondCuentaBanco').value.trim();
       f.notas = document.getElementById('fondNotas').value;
       f.moneda = document.getElementById('fondMoneda').value || 'MXN';
+      // Handle variable rate fields
+      const tipoTasaElem = document.getElementById('fondTipoTasa');
+      if (tipoTasaElem) {
+        f.tipoTasa = tipoTasaElem.value;
+        if (tipoTasaElem.value === 'variable') {
+          const spreadVal = document.getElementById('fondSpread');
+          const periodoRevElem = document.getElementById('fondPeriodoRevision');
+          const tiieVigente = getTIIEVigente();
+          f.tasaReferencia = tiieVigente;
+          f.spread = parseFloat(spreadVal.value) / 100 || 0;
+          f.periodoRevision = periodoRevElem ? periodoRevElem.value : 'mensual';
+          if (!f.historialTasas) f.historialTasas = [];
+          f.historialTasas.push({
+            fecha: fechaInicio,
+            tiie: tiieVigente,
+            spread: f.spread,
+            tasaEfectiva: f.tasa
+          });
+        }
+      }
       addAudit('Editar', 'Fondeos', f.numero, datosAntes, f);
       return f;
     });
@@ -8696,6 +8932,25 @@ function guardarFondeo() {
       fondeo.disponibleFondeo = fondeo.monto;
       fondeo.disposiciones = [];
       fondeo.esRevolvente = true;
+    }
+    // Handle variable rate fields
+    const tipoTasaElem = document.getElementById('fondTipoTasa');
+    if (tipoTasaElem) {
+      fondeo.tipoTasa = tipoTasaElem.value;
+      if (tipoTasaElem.value === 'variable') {
+        const spreadVal = document.getElementById('fondSpread');
+        const periodoRevElem = document.getElementById('fondPeriodoRevision');
+        const tiieVigente = getTIIEVigente();
+        fondeo.tasaReferencia = tiieVigente;
+        fondeo.spread = parseFloat(spreadVal.value) / 100 || 0;
+        fondeo.periodoRevision = periodoRevElem ? periodoRevElem.value : 'mensual';
+        fondeo.historialTasas = [{
+          fecha: fechaInicio,
+          tiie: tiieVigente,
+          spread: fondeo.spread,
+          tasaEfectiva: fondeo.tasa
+        }];
+      }
     }
     fondeos.push(fondeo);
     setStore('fondeos', fondeos);
@@ -19163,6 +19418,33 @@ function initApp() {
   setTimeout(checkAutoBackupReminder, 3000);
   iniciarAutoBackup();
   setTimeout(validarIntegridadInicio, 1500);
+  // Auto-update TIIE from Banxico on each login
+  consultarTIIEBanxico();
+}
+
+// Fetch latest TIIE from Banxico via server endpoint
+function consultarTIIEBanxico() {
+  if (typeof ApiClient === 'undefined' || !ApiClient.isLoggedIn()) return;
+  var token = ApiClient.getToken();
+  fetch('/api/tiie/actualizar', {
+    headers: { 'Authorization': 'Bearer ' + token }
+  })
+  .then(function(r) { return r.json(); })
+  .then(function(res) {
+    if (res.updated) {
+      // Reload TIIE data into cache and recalculate variable rates
+      ApiClient.loadAllData().then(function() {
+        if (typeof actualizarTasasVariables === 'function') {
+          actualizarTasasVariables();
+        }
+        toast('TIIE actualizada desde Banxico: ' + (res.tasa * 100).toFixed(4) + '% (' + res.fecha + ')', 'success');
+        renderDashboard();
+      });
+    }
+  })
+  .catch(function(err) {
+    console.warn('No se pudo consultar TIIE de Banxico:', err.message);
+  });
 }
 
 // Check if already logged in (token exists)
