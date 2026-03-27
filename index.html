@@ -19494,21 +19494,12 @@ function consultarTIIEBanxico() {
   });
 }
 
-// Check if already logged in (token exists)
-if (typeof ApiClient !== 'undefined' && ApiClient.isLoggedIn()) {
-  // Already logged in — load data from PostgreSQL, then init
-  document.getElementById('appContainer').style.display = 'none';
-  ApiClient.loadAllData().then(function() {
-    document.getElementById('appContainer').style.display = '';
-    window.currentUser = ApiClient.getUser();
-    initApp();
-    if (typeof toast === 'function') toast('Bienvenido, ' + (window.currentUser ? window.currentUser.nombre : ''), 'success');
-  }).catch(function() {
-    // Token expired or invalid — show login
-    showLoginScreen();
-  });
-} else if (typeof ApiClient !== 'undefined') {
-  // Not logged in — show login screen
+// Always require login on page load — clear stored session
+if (typeof ApiClient !== 'undefined') {
+  ApiClient.logout = ApiClient.logout; // ensure available
+  // Clear any stored token so user must authenticate every time
+  localStorage.removeItem('ap_auth_token');
+  localStorage.removeItem('ap_auth_user');
   showLoginScreen();
 } else {
   // ApiClient not available — fallback to localStorage mode
