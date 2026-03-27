@@ -89,6 +89,15 @@ function toggleCreditoFields() {
       comInput.value = '0';
     }
   }
+  // Periodo de gracia: solo para crédito simple y arrendamiento
+  var graciaFields = document.getElementById('credGraciaFields');
+  if (graciaFields) {
+    var showGracia = (tipo === 'credito_simple' || isArrend);
+    graciaFields.style.display = showGracia ? 'grid' : 'none';
+    if (!showGracia) {
+      document.getElementById('credGraciaMeses').value = '0';
+    }
+  }
 }
 
 function toggleTasaFields() {
@@ -199,6 +208,20 @@ function guardarCredito() {
   const prefix = prefixMap[tipo] || 'XX';
   const numero = `${prefix}-${String(id).padStart(3, '0')}`;
 
+  // Extract grace period config for credito_simple and arrendamiento
+  var graciaConfig = null;
+  if (tipo === 'credito_simple' || tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') {
+    const graciaMesesElem = document.getElementById('credGraciaMeses');
+    const graciaTipoElem = document.getElementById('credGraciaTipo');
+    if (graciaMesesElem && graciaTipoElem) {
+      const graciaMeses = parseInt(graciaMesesElem.value) || 0;
+      const graciaTipo = graciaTipoElem.value || 'capital';
+      if (graciaMeses > 0) {
+        graciaConfig = { meses: graciaMeses, tipo: graciaTipo };
+      }
+    }
+  }
+
   var credito;
   if (tipo === 'cuenta_corriente') {
     // Cuenta corriente: línea revolvente sin amortización
@@ -211,7 +234,7 @@ function guardarCredito() {
       tipoTasa: 'fija', tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: []
     };
   } else {
-    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision);
+    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision, graciaConfig);
   }
   const fondeoId = document.getElementById('credFondeo').value;
   if (fondeoId) credito.fondeoId = parseInt(fondeoId);

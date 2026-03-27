@@ -65,8 +65,13 @@ function avanzarFechaPeriodo(fecha, periodicidad, diaOriginal) {
 }
 
 // tipoCredito: opcional, si es 'arrendamiento' usa lógica flat
-function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaInicio, valorResidualPct = 0, ivaPct = 0, tipoCredito = '') {
+function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaInicio, valorResidualPct = 0, ivaPct = 0, tipoCredito = '', graciaConfig = null) {
+  // graciaConfig: { meses: N, tipo: 'capital'|'total' } o null
+  const periodosGracia = graciaConfig && graciaConfig.meses > 0 ? getPeriodos(graciaConfig.meses, periodicidad) : 0;
+  const tipoGracia = graciaConfig ? graciaConfig.tipo : 'capital';
+
   const periodos = getPeriodos(plazoMeses, periodicidad);
+  const totalPeriodos = periodos + periodosGracia;
   const tasaPeriodica = getTasaPeriodica(tasaAnual, periodicidad);
   const vr = monto * (valorResidualPct / 100);
   const diasPeriodo = getDiasPeriodo(periodicidad);
@@ -74,48 +79,92 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
   let saldo = monto;
   const tabla = [];
   let fecha = new Date(fechaInicio);
-  const diaOriginal = fecha.getDate(); // Preservar día original para meses cortos
+  const diaOriginal = fecha.getDate();
 
-  // ARRENDAMIENTO FINANCIERO:
-  // - Interés FLAT: se calcula sobre el monto total original, NO sobre saldo insoluto
-  // - Capital: distribución lineal de (monto - VR) entre todos los periodos
-  // - Renta fija: capital_fijo + interés_flat + IVA_interés
-  if (tipoCredito === 'arrendamiento') {
+  // ARRENDAMIENTO FINANCIERO Y PURO:
+  if (tipoCredito === 'arrendamiento' || tipoCredito === 'arrendamiento_puro') {
     const interesFlat = +(monto * tasaPeriodica).toFixed(2);
-    const capitalFijo = +((monto - vr) / periodos).toFixed(2);
+    const capitalFijo = +((monto - vr) / periodos).toFixed(2); // capital solo en periodos normales
 
-    for (let i = 1; i <= periodos; i++) {
+    for (let i = 1; i <= totalPeriodos; i++) {
       fecha = avanzarFechaPeriodo(fecha, periodicidad, diaOriginal);
+      const esGracia = i <= periodosGracia;
 
-      let capital;
-      if (i === periodos) {
-        // Último pago: ajustar capital para cerrar exacto al VR
-        capital = +(saldo - vr).toFixed(2);
+      let capital, interes, ivaInteres, pagoTotal;
+      if (esGracia) {
+        if (tipoGracia === 'total') {
+          // Gracia total: no paga nada, intereses se capitalizan
+          interes = +(saldo * tasaPeriodica).toFixed(2);
+          capital = 0;
+          ivaInteres = 0;
+          pagoTotal = 0;
+          saldo = +(saldo + interes).toFixed(2); // capitalizar intereses
+        } else {
+          // Gracia capital: paga solo intereses
+          interes = interesFlat;
+          capital = 0;
+          ivaInteres = +(interes * (ivaPct / 100)).toFixed(2);
+          pagoTotal = +(interes + ivaInteres).toFixed(2);
+        }
       } else {
-        capital = capitalFijo;
+        interes = interesFlat;
+        if (i === totalPeriodos) {
+          capital = +(saldo - vr).toFixed(2);
+        } else {
+          capital = capitalFijo;
+        }
+        ivaInteres = +(interes * (ivaPct / 100)).toFixed(2);
+        pagoTotal = +(capital + interes + ivaInteres).toFixed(2);
       }
-      const ivaInteres = +(interesFlat * (ivaPct / 100)).toFixed(2);
-      const pagoTotal = +(capital + interesFlat + ivaInteres).toFixed(2);
-      const saldoFinal = +(saldo - capital).toFixed(2);
+      const saldoFinal = esGracia && tipoGracia === 'total' ? saldo : +(saldo - capital).toFixed(2);
 
       tabla.push({
         numero: i,
         fecha: fecha.toISOString().split('T')[0],
         saldoInicial: Math.max(+saldo.toFixed(2), 0),
         capital: Math.max(capital, 0),
-        interes: interesFlat,
+        interes: Math.max(interes, 0),
         iva: ivaInteres,
         pagoTotal: Math.max(pagoTotal, 0),
         saldoFinal: Math.max(saldoFinal, 0),
-        pagado: false
+        pagado: false,
+        esGracia: esGracia || undefined
       });
-      saldo = saldoFinal;
+      if (!(esGracia && tipoGracia === 'total')) saldo = saldoFinal;
     }
     return tabla;
   }
 
   // CRÉDITO ESTÁNDAR: interés sobre saldo insoluto (sistema francés)
-  const pago = calcPago(monto, tasaAnual, plazoMeses, periodicidad, valorResidualPct);
+  // Si hay gracia total, recalcular saldo post-gracia antes de generar amortización normal
+  let saldoPostGracia = monto;
+
+  // Generar periodos de gracia primero
+  for (let i = 1; i <= periodosGracia; i++) {
+    fecha = avanzarFechaPeriodo(fecha, periodicidad, diaOriginal);
+    const interes = +(saldo * tasaPeriodica).toFixed(2);
+
+    if (tipoGracia === 'total') {
+      // No paga nada, intereses se capitalizan
+      tabla.push({
+        numero: i, fecha: fecha.toISOString().split('T')[0],
+        saldoInicial: Math.max(+saldo.toFixed(2), 0), capital: 0, interes: interes, iva: 0,
+        pagoTotal: 0, saldoFinal: +(saldo + interes).toFixed(2), pagado: false, esGracia: true
+      });
+      saldo = +(saldo + interes).toFixed(2);
+    } else {
+      // Paga solo intereses
+      const ivaInteres = +(interes * (ivaPct / 100)).toFixed(2);
+      tabla.push({
+        numero: i, fecha: fecha.toISOString().split('T')[0],
+        saldoInicial: Math.max(+saldo.toFixed(2), 0), capital: 0, interes: interes, iva: ivaInteres,
+        pagoTotal: +(interes + ivaInteres).toFixed(2), saldoFinal: +saldo.toFixed(2), pagado: false, esGracia: true
+      });
+    }
+  }
+
+  // Ahora generar periodos normales con el saldo post-gracia
+  const pago = calcPago(saldo, tasaAnual, plazoMeses, periodicidad, valorResidualPct);
 
   for (let i = 1; i <= periodos; i++) {
     fecha = avanzarFechaPeriodo(fecha, periodicidad, diaOriginal);
@@ -132,7 +181,7 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
     const saldoFinal = +(saldo - capital).toFixed(2);
 
     tabla.push({
-      numero: i,
+      numero: periodosGracia + i,
       fecha: fecha.toISOString().split('T')[0],
       saldoInicial: Math.max(+saldo.toFixed(2), 0),
       capital: Math.max(capital, 0),
@@ -147,8 +196,9 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
   return tabla;
 }
 
-function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision) {
-  const amort = generarAmortizacion(monto, tasa, plazo, periodicidad, fechaInicio, vrPct, 0, tipo);
+function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision, graciaConfig) {
+  // IVA 16% estándar sobre intereses para todos los tipos de crédito en México
+  const amort = generarAmortizacion(monto, tasa, plazo, periodicidad, fechaInicio, vrPct, 16, tipo, graciaConfig || null);
   const fechaVenc = amort.length > 0 ? amort[amort.length - 1].fecha : fechaInicio;
   return {
     id, numero, clienteId, tipo, monto, saldo: monto, tasa, tasaMoratoria: tasaMora,
@@ -156,6 +206,7 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
     pago: calcPago(monto, tasa, plazo, periodicidad, vrPct, tipo),
     estado: 'vigente', diasMora: 0, valorResidual: vrPct, valorEquipo, comision,
     fondeoId: null, notas: '', amortizacion: amort,
+    graciaConfig: graciaConfig || null,
     tipoTasa: 'fija', tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: [],
     createdAt: new Date().toISOString()
   };
