@@ -253,7 +253,9 @@ function verFondeo(id) {
   } else {
     toolbarHTML += `<button class="btn btn-primary btn-sm" onclick="registrarPagoFondeo(${f.id})">Registrar Pago</button>`;
   }
-  toolbarHTML += `<button class="btn btn-outline btn-sm" onclick="editarFondeo(${f.id})">Editar</button></div>`;
+  toolbarHTML += `<button class="btn btn-outline btn-sm" onclick="editarFondeo(${f.id})">Editar</button>
+        <span style="border-left:1px solid var(--gray-200);height:24px;margin:0 4px"></span>
+        <button class="btn btn-outline btn-sm" onclick="generarContratoFondeoPDF(${f.id})">📄 Contrato</button></div>`;
 
   panel.innerHTML = `
     <div class="detail-panel-header">
