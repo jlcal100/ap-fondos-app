@@ -2771,7 +2771,7 @@ const EMPRESA = {
   nombre: 'AP Operadora de Fondos, S.A. de C.V.',
   nombreCorto: 'AP Operadora',
   subtitulo: 'de Fondos',
-  razonSocial: 'AP Operadora de Fondos, S.A. de C.V., SOFOM E.N.R.',
+  razonSocial: 'AP Operadora de Fondos, S.A. de C.V.',
   sistemaLabel: 'Sistema Financiero',
   version: 'v1.0',
   copyright: '© 2026 AP Operadora de Fondos',
@@ -6775,13 +6775,17 @@ function exportCotizacionPDF() {
     const { jsPDF } = window.jspdf;
     const doc = new jsPDF('p', 'mm', 'letter');
 
-    // Header
+    // Header con logo
+    var cotTextX = 20;
+    if (EMPRESA.logo) {
+      try { doc.addImage(EMPRESA.logo, 'PNG', 20, 8, 20, 20); cotTextX = 44; } catch(e) {}
+    }
     doc.setFontSize(18);
     doc.setTextColor(30, 48, 80);
-    doc.text(EMPRESA.nombre, 20, 20);
+    doc.text(EMPRESA.nombre, cotTextX, 20);
     doc.setFontSize(12);
     doc.setTextColor(100);
-    doc.text('Cotización Financiera', 20, 28);
+    doc.text('Cotización Financiera', cotTextX, 28);
 
     // Destinatario
     const destinatario = (document.getElementById('cotDestinatario') ? document.getElementById('cotDestinatario').value.trim() : '');
@@ -10076,7 +10080,7 @@ function renderBalance() {
   var totalPagadoFondeos = contabCorte.filter(function(r) { return r.tipo === 'pago_fondeo'; }).reduce(function(s, r) { return s + r.monto; }, 0);
   var totalGastosOp = contabCorte.filter(function(r) { return r.tipo === 'gasto_operativo'; }).reduce(function(s, r) { return s + r.monto; }, 0);
   // Comisiones de apertura cobradas al crear créditos (no están en pagos, solo en contabilidad)
-  // Estas son cash inflow real: la SOFOM desembolsa (monto - comisión - IVA_comisión)
+  // Estas son cash inflow real: la empresa desembolsa (monto - comisión - IVA_comisión)
   var comisionesApertura = contabCorte.filter(function(r) { return r.tipo === 'comision' && r.concepto && r.concepto.indexOf('apertura') >= 0; }).reduce(function(s, r) { return s + r.monto; }, 0);
   var ivaComisionesApertura = contabCorte.filter(function(r) { return r.tipo === 'iva_trasladado' && r.concepto && r.concepto.indexOf('comisión apertura') >= 0; }).reduce(function(s, r) { return s + r.monto; }, 0);
   var efectivo = totalFondeoRecibido + totalCobrado - totalColocado + comisionesApertura + ivaComisionesApertura - totalPagadoFondeos - totalGastosOp;
@@ -15377,18 +15381,24 @@ function numeroALetras(num) {
 function _pdfHeader(doc, titulo, subtitulo) {
   var w = doc.internal.pageSize.getWidth();
   var m = 18;
+  var logoW = 22, logoH = 22, logoPad = 4;
+  var textX = m;
   doc.setFillColor(27, 42, 74);
   doc.rect(0, 0, w, 36, 'F');
+  // Logo
+  if (EMPRESA.logo) {
+    try { doc.addImage(EMPRESA.logo, 'PNG', m, 5, logoW, logoH); textX = m + logoW + logoPad; } catch(e) { textX = m; }
+  }
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text(EMPRESA.nombre, m, 14);
+  doc.text(EMPRESA.nombre, textX, 14);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(EMPRESA.razonSocial, m, 22);
+  doc.text(EMPRESA.razonSocial, textX, 22);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text(titulo, m, 32);
+  doc.text(titulo, textX, 32);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
   if (subtitulo) doc.text(subtitulo, w - m, 32, { align: 'right' });
@@ -15476,7 +15486,7 @@ var _periLabel = { mensual: 'Mensual', quincenal: 'Quincenal', semanal: 'Semanal
 //  1. CONTRATO DE CRÉDITO / ARRENDAMIENTO PDF (Legalmente completo)
 //  Tipos: Mutuo con Interés (crédito simple/nómina), Arrendamiento Financiero
 //  Base legal: LGTOC Art. 358-364 (mutuo), Art. 408-418 (arrendamiento),
-//  CCF Art. 2384-2397 (mutuo civil), LGOACC (SOFOM)
+//  CCF Art. 2384-2397 (mutuo civil)
 // ════════════════════════════════════════════════════════════════
 function generarContratoPDF(id) {
   var data = _getCreditoYCliente(id);
@@ -15515,7 +15525,7 @@ function generarContratoPDF(id) {
   y = _pdfParrafo(doc, y, 'En la Ciudad de México, a ' + fechaHoy + ', comparecen para celebrar el presente contrato:', m, maxW);
 
   // Parte A
-  y = _pdfParrafo(doc, y, 'I. ' + EMPRESA.razonSocial + ', con Registro Federal de Contribuyentes ' + EMPRESA.rfc + ', con domicilio fiscal en C.P. ' + EMPRESA.cp + ', constituida conforme a las leyes mexicanas como Sociedad Financiera de Objeto Múltiple, Entidad No Regulada (SOFOM E.N.R.), representada en este acto por su apoderado legal (en lo sucesivo "' + labelAcreditante + '").', m, maxW);
+  y = _pdfParrafo(doc, y, 'I. ' + EMPRESA.razonSocial + ', con Registro Federal de Contribuyentes ' + EMPRESA.rfc + ', con domicilio fiscal en C.P. ' + EMPRESA.cp + ', sociedad anónima de capital variable constituida conforme a las leyes mexicanas, representada en este acto por su apoderado legal (en lo sucesivo "' + labelAcreditante + '").', m, maxW);
 
   // Parte B
   var domCli = (cli.direccion || '[Sin domicilio registrado]') + (cli.ciudad ? ', ' + cli.ciudad : '') + (cli.estado ? ', ' + cli.estado : '') + (cli.cp ? ', C.P. ' + cli.cp : '');
@@ -15526,7 +15536,7 @@ function generarContratoPDF(id) {
 
   // ══════ DECLARACIONES ══════
   y = _pdfSeccion(doc, y, 'DECLARACIONES', m);
-  y = _pdfParrafo(doc, y, 'I. Declara ' + labelAcreditante + ' que: a) Es una sociedad legalmente constituida y en pleno ejercicio de sus facultades; b) Su representante legal cuenta con las facultades suficientes para obligarla en los términos del presente contrato; c) Su objeto social le permite celebrar operaciones de ' + (esArrendamiento ? 'arrendamiento financiero' : 'otorgamiento de créditos') + ' conforme a la Ley General de Organizaciones y Actividades Auxiliares del Crédito; d) Cuenta con los recursos para cumplir las obligaciones derivadas de este contrato.', m, maxW);
+  y = _pdfParrafo(doc, y, 'I. Declara ' + labelAcreditante + ' que: a) Es una sociedad anónima de capital variable legalmente constituida y en pleno ejercicio de sus facultades; b) Su representante legal cuenta con las facultades suficientes para obligarla en los términos del presente contrato; c) Su objeto social le permite celebrar operaciones de ' + (esArrendamiento ? 'arrendamiento financiero' : 'otorgamiento de créditos') + '; d) Cuenta con los recursos para cumplir las obligaciones derivadas de este contrato.', m, maxW);
 
   y = _pdfParrafo(doc, y, 'II. Declara ' + labelAcreditado + ' que: a) ' + (cli.tipo === 'moral' ? 'Es una persona moral legalmente constituida' : 'Es una persona física con capacidad legal') + ' para obligarse en los términos del presente contrato; b) La información y documentación proporcionada a ' + labelAcreditante + ' es verídica y vigente; c) Conoce y acepta las condiciones financieras del presente contrato; d) No se encuentra en estado de insolvencia, concurso mercantil o cualquier situación que limite su capacidad de pago.' + (esNomina ? ' e) Mantiene una relación laboral vigente con su empleador y autoriza expresamente el descuento vía nómina para el cumplimiento de las obligaciones aquí pactadas.' : ''), m, maxW);
 
@@ -15720,7 +15730,7 @@ function generarContratoPDF(id) {
 
   // ── Ley Aplicable ──
   y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — LEY APLICABLE', m);
-  y = _pdfParrafo(doc, y, 'El presente contrato se regirá e interpretará de conformidad con la Ley General de Títulos y Operaciones de Crédito, la Ley General de Organizaciones y Actividades Auxiliares del Crédito, el Código de Comercio, el Código Civil Federal y demás legislación mercantil y financiera aplicable de los Estados Unidos Mexicanos.', m, maxW);
+  y = _pdfParrafo(doc, y, 'El presente contrato se regirá e interpretará de conformidad con la Ley General de Títulos y Operaciones de Crédito, el Código de Comercio, el Código Civil Federal y demás legislación mercantil y financiera aplicable de los Estados Unidos Mexicanos.', m, maxW);
 
   // ── Cláusula Final ──
   y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — DISPOSICIONES FINALES', m);
@@ -15853,13 +15863,13 @@ function generarContratoFondeoPDF(id) {
   // En fondeos: el FONDEADOR es quien presta dinero a la EMPRESA
   y = _pdfParrafo(doc, y, 'I. ' + (f.fondeador || '[NOMBRE DEL FONDEADOR]') + ' (en lo sucesivo "EL MUTUANTE" o "EL FONDEADOR"), quien declara tener la capacidad legal y los recursos suficientes para celebrar el presente contrato y otorgar los recursos aquí pactados.', m, maxW);
 
-  y = _pdfParrafo(doc, y, 'II. ' + EMPRESA.razonSocial + ', con RFC ' + EMPRESA.rfc + ', con domicilio fiscal en C.P. ' + EMPRESA.cp + ', constituida conforme a las leyes mexicanas como SOFOM E.N.R., representada por su apoderado legal (en lo sucesivo "EL MUTUATARIO" o "LA EMPRESA").', m, maxW);
+  y = _pdfParrafo(doc, y, 'II. ' + EMPRESA.razonSocial + ', con RFC ' + EMPRESA.rfc + ', con domicilio fiscal en C.P. ' + EMPRESA.cp + ', sociedad anónima de capital variable constituida conforme a las leyes mexicanas, representada por su apoderado legal (en lo sucesivo "EL MUTUATARIO" o "LA EMPRESA").', m, maxW);
 
   // ══════ DECLARACIONES ══════
   y = _pdfSeccion(doc, y, 'DECLARACIONES', m);
   y = _pdfParrafo(doc, y, 'I. Declara EL MUTUANTE que: a) Cuenta con la capacidad legal para celebrar el presente contrato; b) Los recursos que proporcionará provienen de fuentes lícitas; c) Conoce y acepta las condiciones financieras del presente contrato; d) Ha realizado la evaluación de riesgo correspondiente respecto de EL MUTUATARIO.', m, maxW);
 
-  y = _pdfParrafo(doc, y, 'II. Declara EL MUTUATARIO que: a) Es una SOFOM E.N.R. legalmente constituida cuyo objeto social incluye la celebración de operaciones de crédito, arrendamiento financiero y factoraje financiero; b) Su representante legal cuenta con las facultades suficientes para obligarla; c) Los recursos obtenidos se destinarán exclusivamente a sus operaciones de intermediación financiera; d) No se encuentra en estado de insolvencia o concurso mercantil.', m, maxW);
+  y = _pdfParrafo(doc, y, 'II. Declara EL MUTUATARIO que: a) Es una sociedad anónima de capital variable legalmente constituida cuyo objeto social incluye la celebración de operaciones de préstamo, arrendamiento y fondeo; b) Su representante legal cuenta con las facultades suficientes para obligarla; c) Los recursos obtenidos se destinarán exclusivamente a sus operaciones; d) No se encuentra en estado de insolvencia o concurso mercantil.', m, maxW);
 
   // ══════ CLÁUSULAS ══════
 
@@ -15936,7 +15946,7 @@ function generarContratoFondeoPDF(id) {
 
   // ── Vencimiento anticipado ──
   y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — CAUSAS DE VENCIMIENTO ANTICIPADO', m);
-  y = _pdfParrafo(doc, y, 'EL MUTUANTE podrá dar por vencido anticipadamente el presente contrato en los siguientes supuestos: a) Falta de pago oportuno de capital o intereses; b) Si EL MUTUATARIO proporciona información falsa; c) Si EL MUTUATARIO es declarado en concurso mercantil o insolvencia; d) Si la autorización de EL MUTUATARIO como SOFOM es revocada o suspendida; e) Si el índice de morosidad de la cartera de EL MUTUATARIO excede los parámetros acordados; f) Incumplimiento de cualquier obligación del presente contrato.', m, maxW);
+  y = _pdfParrafo(doc, y, 'EL MUTUANTE podrá dar por vencido anticipadamente el presente contrato en los siguientes supuestos: a) Falta de pago oportuno de capital o intereses; b) Si EL MUTUATARIO proporciona información falsa; c) Si EL MUTUATARIO es declarado en concurso mercantil o insolvencia; d) Si el índice de morosidad de la cartera de EL MUTUATARIO excede los parámetros acordados; e) Incumplimiento de cualquier obligación del presente contrato.', m, maxW);
 
   // ── Pago anticipado ──
   y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — PAGO ANTICIPADO', m);
@@ -15948,7 +15958,7 @@ function generarContratoFondeoPDF(id) {
 
   // ── Destino de recursos ──
   y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — DESTINO DE LOS RECURSOS', m);
-  y = _pdfParrafo(doc, y, 'EL MUTUATARIO se obliga a destinar los recursos recibidos exclusivamente a la originación de créditos y/o arrendamientos financieros dentro de su actividad como SOFOM E.N.R. EL MUTUATARIO no podrá destinar los recursos a fines distintos sin el consentimiento previo y por escrito de EL MUTUANTE.', m, maxW);
+  y = _pdfParrafo(doc, y, 'EL MUTUATARIO se obliga a destinar los recursos recibidos exclusivamente a la originación de préstamos y/o arrendamientos dentro de su objeto social. EL MUTUATARIO no podrá destinar los recursos a fines distintos sin el consentimiento previo y por escrito de EL MUTUANTE.', m, maxW);
 
   // ── Obligaciones de información ──
   y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — OBLIGACIONES DE INFORMACIÓN', m);
@@ -15964,7 +15974,7 @@ function generarContratoFondeoPDF(id) {
 
   // ── Ley Aplicable ──
   y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — LEY APLICABLE', m);
-  y = _pdfParrafo(doc, y, 'El presente contrato se regirá por la Ley General de Títulos y Operaciones de Crédito, la Ley General de Organizaciones y Actividades Auxiliares del Crédito, el Código de Comercio, el Código Civil Federal y demás legislación mercantil aplicable.', m, maxW);
+  y = _pdfParrafo(doc, y, 'El presente contrato se regirá por la Ley General de Títulos y Operaciones de Crédito, el Código de Comercio, el Código Civil Federal y demás legislación mercantil aplicable.', m, maxW);
 
   // ── Disposiciones finales ──
   y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — DISPOSICIONES FINALES', m);
@@ -16165,10 +16175,15 @@ function generarPagarePDF(id) {
   doc.setLineWidth(0.5);
   doc.rect(12, 12, w - 24, doc.internal.pageSize.getHeight() - 24);
 
+  // ── Logo ──
+  if (EMPRESA.logo) {
+    try { doc.addImage(EMPRESA.logo, 'PNG', m, 14, 20, 20); } catch(e) {}
+  }
+
   // ── Título ──
   y = 28;
   doc.setFillColor(27, 42, 74);
-  doc.rect(m, y - 6, maxW, 14, 'F');
+  doc.rect(m + 24, y - 6, maxW - 24, 14, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(20);
   doc.setFont('helvetica', 'bold');
@@ -16312,17 +16327,21 @@ function generarTablaAmortPDF(id) {
   var m = 14;
 
   // ── Encabezado ──
+  var logoOff = 0;
   doc.setFillColor(27, 42, 74);
   doc.rect(0, 0, w, 30, 'F');
+  if (EMPRESA.logo) {
+    try { doc.addImage(EMPRESA.logo, 'PNG', m, 3, 18, 18); logoOff = 22; } catch(e) {}
+  }
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
   doc.setFont('helvetica', 'bold');
-  doc.text('TABLA DE AMORTIZACIÓN', m, 12);
+  doc.text('TABLA DE AMORTIZACIÓN', m + logoOff, 12);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text(EMPRESA.nombre, m, 20);
+  doc.text(EMPRESA.nombre, m + logoOff, 20);
   doc.setFontSize(9);
-  doc.text('Contrato: ' + c.numero + '  |  Cliente: ' + cli.nombre + '  |  RFC: ' + cli.rfc, m, 27);
+  doc.text('Contrato: ' + c.numero + '  |  Cliente: ' + cli.nombre + '  |  RFC: ' + cli.rfc, m + logoOff, 27);
 
   // ── Resumen ──
   var y = 36;
@@ -16455,17 +16474,21 @@ function generarEstadoCuentaCliente(clienteId) {
   var hoy = hoyLocal();
   var mesActual = hoy.substring(0, 7);
 
-  // Header
+  // Header con logo
+  var ecTextX = 14;
   doc.setFillColor(30, 48, 80);
   doc.rect(0, 0, 216, 32, 'F');
+  if (EMPRESA.logo) {
+    try { doc.addImage(EMPRESA.logo, 'PNG', 14, 4, 18, 18); ecTextX = 36; } catch(e) {}
+  }
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14);
-  doc.text(EMPRESA.nombre, 14, 10);
+  doc.text(EMPRESA.nombre, ecTextX, 10);
   doc.setFontSize(10);
-  doc.text('Estado de Cuenta', 14, 17);
+  doc.text('Estado de Cuenta', ecTextX, 17);
   doc.setFontSize(8);
-  doc.text('Fecha de corte: ' + hoy, 14, 23);
-  doc.text('RFC: ' + (EMPRESA.rfc || 'N/A'), 14, 28);
+  doc.text('Fecha de corte: ' + hoy, ecTextX, 23);
+  doc.text('RFC: ' + (EMPRESA.rfc || 'N/A'), ecTextX, 28);
   doc.text('Folio: EC-' + clienteId + '-' + mesActual, 150, 10);
 
   // Datos del cliente
