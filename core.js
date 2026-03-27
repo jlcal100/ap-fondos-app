@@ -432,12 +432,12 @@ function initData() {
   }
   if (getStore('tiie_historico').length === 0) {
     setStore('tiie_historico', [
-      { id: 1, fecha: '2025-01-01', tasa: 0.1050, fuente: 'Banxico' },
-      { id: 2, fecha: '2025-04-01', tasa: 0.1025, fuente: 'Banxico' },
-      { id: 3, fecha: '2025-07-01', tasa: 0.0975, fuente: 'Banxico' },
-      { id: 4, fecha: '2025-10-01', tasa: 0.0950, fuente: 'Banxico' },
-      { id: 5, fecha: '2026-01-01', tasa: 0.0925, fuente: 'Banxico' },
-      { id: 6, fecha: '2026-03-15', tasa: 0.0900, fuente: 'Banxico' }
+      { id: 1, fecha: '2025-01-09', tasa: 0.1025, fuente: 'Banxico' },
+      { id: 2, fecha: '2025-03-28', tasa: 0.0950, fuente: 'Banxico' },
+      { id: 3, fecha: '2025-06-27', tasa: 0.0875, fuente: 'Banxico' },
+      { id: 4, fecha: '2025-09-26', tasa: 0.0800, fuente: 'Banxico' },
+      { id: 5, fecha: '2025-12-19', tasa: 0.0750, fuente: 'Banxico' },
+      { id: 6, fecha: '2026-03-27', tasa: 0.0701, fuente: 'Banxico' }
     ]);
   }
 }
@@ -451,10 +451,10 @@ function addMonths(date, months) {
 // Get the current (most recent) TIIE rate
 function getTIIEVigente() {
   const tiieHist = getStore('tiie_historico') || [];
-  if (tiieHist.length === 0) return 0.09; // fallback
+  if (tiieHist.length === 0) return 0.0701; // fallback TIIE ~7.01%
   // Sort by date descending and return most recent
   const sorted = tiieHist.slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
-  return sorted[0].tasa || 0.09;
+  return sorted[0].tasa || 0.0701;
 }
 
 // Recalculate effective rates for all variable-rate credits/fondeos when TIIE changes
@@ -462,32 +462,46 @@ function actualizarTasasVariables() {
   const tiieVigente = getTIIEVigente();
   const hoy = new Date().toISOString().split('T')[0];
 
-  // Update credits
+  // Update credits — new TIIE applies from NEXT unpaid period (anticipación de 1 periodo)
   let creditos = getStore('creditos') || [];
   creditos = creditos.map(c => {
     if (c.tipoTasa === 'variable') {
-      const tasaEfectivaAnterior = c.tasa;
       const tasaEfectivaNueva = +(tiieVigente + c.spread).toFixed(4);
+      const tasaEfectivaAnterior = c.tasa;
       if (Math.abs(tasaEfectivaNueva - tasaEfectivaAnterior) > 0.00001) {
-        c.tasa = tasaEfectivaNueva;
-        c.tasaReferencia = tiieVigente;
         if (!c.historialTasas) c.historialTasas = [];
         c.historialTasas.push({
           fecha: hoy,
           tiie: tiieVigente,
           spread: c.spread,
-          tasaEfectiva: tasaEfectivaNueva
+          tasaEfectiva: tasaEfectivaNueva,
+          aplicaDesde: null
         });
-        // Regenerate amortization from current period forward
+
         if (c.amortizacion && c.amortizacion.length > 0) {
-          const periodoActual = c.amortizacion.findIndex(p => !p.pagado) || 0;
-          if (periodoActual >= 0 && periodoActual < c.amortizacion.length) {
-            const saldoEnPeriodo = c.amortizacion[periodoActual].saldoInicial;
-            const diasPorVencer = c.amortizacion.length - periodoActual;
-            const amortNueva = generarAmortizacion(saldoEnPeriodo, tasaEfectivaNueva, diasPorVencer, c.periodicidad, c.amortizacion[periodoActual].fecha, 0, 0, c.tipo);
-            // Keep paid periods, replace unpaid ones
-            c.amortizacion = c.amortizacion.slice(0, periodoActual).concat(amortNueva.map((p, idx) => ({ ...p, numero: periodoActual + idx + 1 })));
+          const periodoActual = c.amortizacion.findIndex(p => !p.pagado);
+          if (periodoActual >= 0) {
+            // New rate applies from NEXT period, not current
+            const periodoAplica = periodoActual + 1;
+            c.historialTasas[c.historialTasas.length - 1].aplicaDesde =
+              periodoAplica < c.amortizacion.length ? c.amortizacion[periodoAplica].fecha : hoy;
+
+            if (periodoAplica < c.amortizacion.length) {
+              c.tasaReferencia = tiieVigente;
+              c.tasaPendiente = tasaEfectivaNueva;
+              c.tasaPendienteDesde = c.amortizacion[periodoAplica].fecha;
+              const saldoEnPeriodo = c.amortizacion[periodoAplica].saldoInicial;
+              const periodosRestantes = c.amortizacion.length - periodoAplica;
+              const amortNueva = generarAmortizacion(saldoEnPeriodo, tasaEfectivaNueva, periodosRestantes, c.periodicidad, c.amortizacion[periodoAplica].fecha, 0, 0, c.tipo);
+              c.amortizacion = c.amortizacion.slice(0, periodoAplica).concat(
+                amortNueva.map((p, idx) => ({ ...p, numero: periodoAplica + idx + 1 }))
+              );
+              c.tasa = tasaEfectivaNueva;
+            }
           }
+        } else {
+          c.tasa = tasaEfectivaNueva;
+          c.tasaReferencia = tiieVigente;
         }
       }
     }
@@ -495,22 +509,30 @@ function actualizarTasasVariables() {
   });
   setStore('creditos', creditos);
 
-  // Update fondeos
+  // Update fondeos — new TIIE applies from next interest period
   let fondeos = getStore('fondeos') || [];
   fondeos = fondeos.map(f => {
     if (f.tipoTasa === 'variable') {
-      const tasaEfectivaAnterior = f.tasa;
       const tasaEfectivaNueva = +(tiieVigente + f.spread).toFixed(4);
+      const tasaEfectivaAnterior = f.tasa;
       if (Math.abs(tasaEfectivaNueva - tasaEfectivaAnterior) > 0.00001) {
-        f.tasa = tasaEfectivaNueva;
-        f.tasaReferencia = tiieVigente;
         if (!f.historialTasas) f.historialTasas = [];
+        var proximoPeriodo = hoy;
+        if (f.periodicidad) {
+          var mesesPeriodo = f.periodicidad === 'mensual' ? 1 : f.periodicidad === 'trimestral' ? 3 : f.periodicidad === 'semestral' ? 6 : 12;
+          proximoPeriodo = addMonths(hoy, mesesPeriodo);
+        }
         f.historialTasas.push({
           fecha: hoy,
           tiie: tiieVigente,
           spread: f.spread,
-          tasaEfectiva: tasaEfectivaNueva
+          tasaEfectiva: tasaEfectivaNueva,
+          aplicaDesde: proximoPeriodo
         });
+        f.tasaReferencia = tiieVigente;
+        f.tasaPendiente = tasaEfectivaNueva;
+        f.tasaPendienteDesde = proximoPeriodo;
+        f.tasa = tasaEfectivaNueva;
       }
     }
     return f;
