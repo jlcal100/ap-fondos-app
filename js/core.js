@@ -9,7 +9,7 @@ const EMPRESA = {
   nombre: 'AP Operadora de Fondos, S.A. de C.V.',
   nombreCorto: 'AP Operadora',
   subtitulo: 'de Fondos',
-  razonSocial: 'AP Operadora de Fondos, S.A. de C.V., SOFOM E.N.R.',
+  razonSocial: 'AP Operadora de Fondos, S.A. de C.V.',
   sistemaLabel: 'Sistema Financiero',
   version: 'v1.0',
   copyright: '\u00a9 2026 AP Operadora de Fondos',
