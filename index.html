@@ -2398,7 +2398,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         <div class="form-group"><label class="form-label">Valor del Equipo</label><div class="input-prefix"><span class="prefix">$</span><input type="text" class="form-input" id="credValorEquipo" oninput="formatMiles(this)" placeholder="0"></div></div>
       </div>
       <div class="form-row">
-        <div class="form-group"><label class="form-label">Comisión Apertura</label><div class="input-prefix"><span class="prefix">$</span><input type="text" class="form-input" id="credComision" oninput="formatMiles(this)" value="0"></div></div>
+        <div class="form-group" id="credComisionGroup"><label class="form-label">Comisión Apertura</label><div id="credComisionWrapper" class="input-suffix"><input type="number" class="form-input" id="credComision" value="0" min="0" max="100" step="0.5"><span class="suffix" id="credComisionSuffix">%</span></div></div>
         <div class="form-group"><label class="form-label">Fondeo Asociado</label><select class="form-select" id="credFondeo"><option value="">Ninguno</option></select></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="credNotas"></textarea></div>
@@ -5247,6 +5247,7 @@ function openModalCredito() {
 function toggleCreditoFields() {
   const tipo = document.getElementById('credTipo').value;
   const isArrend = tipo === 'arrendamiento' || tipo === 'arrendamiento_puro';
+  const isNomina = tipo === 'nomina';
   document.getElementById('credArrendFields').style.display = isArrend ? 'grid' : 'none';
   // Hide variable rate fields for arrendamiento
   const variableFields = document.getElementById('credVariableRateFields');
@@ -5259,6 +5260,31 @@ function toggleCreditoFields() {
     tipoTasa.disabled = isArrend;
     if (isArrend) tipoTasa.value = 'fija';
     toggleTasaFields();
+  }
+  // Comisión: monto ($) para nómina, porcentaje (%) para créditos y arrendamientos
+  var comInput = document.getElementById('credComision');
+  var comSuffix = document.getElementById('credComisionSuffix');
+  var comWrapper = document.getElementById('credComisionWrapper');
+  if (comInput && comWrapper) {
+    if (isNomina) {
+      // Nómina: monto fijo en pesos
+      comWrapper.className = 'input-prefix';
+      if (comSuffix) { comSuffix.className = 'prefix'; comSuffix.textContent = '$'; }
+      comInput.removeAttribute('max');
+      comInput.step = '1';
+      comInput.type = 'text';
+      comInput.setAttribute('oninput', 'formatMiles(this)');
+      comInput.value = '0';
+    } else {
+      // Crédito simple, arrendamiento: porcentaje
+      comWrapper.className = 'input-suffix';
+      if (comSuffix) { comSuffix.className = 'suffix'; comSuffix.textContent = '%'; }
+      comInput.max = '100';
+      comInput.step = '0.5';
+      comInput.type = 'number';
+      comInput.removeAttribute('oninput');
+      comInput.value = '0';
+    }
   }
 }
 
@@ -5345,7 +5371,8 @@ function guardarCredito() {
   const fechaInicio = document.getElementById('credFechaInicio').value;
   const vrPctVal = (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') ? document.getElementById('credVR').value : '0';
   const valorEquipoVal = (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') ? String(parseMiles('credValorEquipo')) : '0';
-  const comisionVal = String(parseMiles('credComision'));
+  const esNomina = tipo === 'nomina';
+  const comisionRaw = esNomina ? String(parseMiles('credComision')) : document.getElementById('credComision').value;
 
   // Validaciones
   var ok = true;
@@ -5366,7 +5393,10 @@ function guardarCredito() {
   if (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') {
     ok = V.check('credValorEquipo', V.positiveNum(valorEquipoVal), 'Valor del equipo obligatorio para arrendamiento') && ok;
   }
-  ok = V.check('credComision', V.nonNegNum(comisionVal || '0'), 'Comisión no puede ser negativa') && ok;
+  ok = V.check('credComision', V.nonNegNum(comisionRaw || '0'), 'Comisión no puede ser negativa') && ok;
+  if (!esNomina) {
+    ok = V.check('credComision', parseFloat(comisionRaw || '0') <= 100, 'Comisión no puede ser mayor a 100%') && ok;
+  }
 
   if (!ok) return toast('Corrige los errores marcados en rojo', 'error');
 
@@ -5385,7 +5415,14 @@ function guardarCredito() {
   const plazo = parseInt(plazoVal);
   const vrPct = parseFloat(vrPctVal) || 0;
   const valorEquipo = parseFloat(valorEquipoVal) || 0;
-  const comision = parseFloat(comisionVal) || 0;
+  // Nómina: comisión es monto fijo. Créditos/Arrendamientos: comisión es % del monto
+  var comision;
+  if (esNomina) {
+    comision = parseFloat(comisionRaw) || 0;
+  } else {
+    var comisionPct = parseFloat(comisionRaw) || 0;
+    comision = +(monto * comisionPct / 100).toFixed(2);
+  }
 
   const id = nextId('creditos');
   const prefixMap = { credito_simple: 'CS', arrendamiento: 'AR', arrendamiento_puro: 'AP', nomina: 'NM', cuenta_corriente: 'CC' };
