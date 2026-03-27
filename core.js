@@ -430,10 +430,90 @@ function initData() {
       { id: 4, numero: 'FD-004', fondeador: 'MULTISERVICIOS DUAL SA DE CV', tipo: 'cuenta_corriente', monto: 2900000, saldo: 2900000, tasa: 0.12, plazo: 24, periodicidad: 'mensual', fechaInicio: '2025-05-05', fechaVencimiento: addMonths(new Date('2025-05-05'), 24), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: 'Revolvente tasa fija' }
     ]);
   }
+  if (getStore('tiie_historico').length === 0) {
+    setStore('tiie_historico', [
+      { id: 1, fecha: '2025-01-01', tasa: 0.1050, fuente: 'Banxico' },
+      { id: 2, fecha: '2025-04-01', tasa: 0.1025, fuente: 'Banxico' },
+      { id: 3, fecha: '2025-07-01', tasa: 0.0975, fuente: 'Banxico' },
+      { id: 4, fecha: '2025-10-01', tasa: 0.0950, fuente: 'Banxico' },
+      { id: 5, fecha: '2026-01-01', tasa: 0.0925, fuente: 'Banxico' },
+      { id: 6, fecha: '2026-03-15', tasa: 0.0900, fuente: 'Banxico' }
+    ]);
+  }
 }
 
 function addMonths(date, months) {
   const d = new Date(date);
   d.setMonth(d.getMonth() + months);
   return d.toISOString().split('T')[0];
+}
+
+// Get the current (most recent) TIIE rate
+function getTIIEVigente() {
+  const tiieHist = getStore('tiie_historico') || [];
+  if (tiieHist.length === 0) return 0.09; // fallback
+  // Sort by date descending and return most recent
+  const sorted = tiieHist.slice().sort((a, b) => new Date(b.fecha) - new Date(a.fecha));
+  return sorted[0].tasa || 0.09;
+}
+
+// Recalculate effective rates for all variable-rate credits/fondeos when TIIE changes
+function actualizarTasasVariables() {
+  const tiieVigente = getTIIEVigente();
+  const hoy = new Date().toISOString().split('T')[0];
+
+  // Update credits
+  let creditos = getStore('creditos') || [];
+  creditos = creditos.map(c => {
+    if (c.tipoTasa === 'variable') {
+      const tasaEfectivaAnterior = c.tasa;
+      const tasaEfectivaNueva = +(tiieVigente + c.spread).toFixed(4);
+      if (Math.abs(tasaEfectivaNueva - tasaEfectivaAnterior) > 0.00001) {
+        c.tasa = tasaEfectivaNueva;
+        c.tasaReferencia = tiieVigente;
+        if (!c.historialTasas) c.historialTasas = [];
+        c.historialTasas.push({
+          fecha: hoy,
+          tiie: tiieVigente,
+          spread: c.spread,
+          tasaEfectiva: tasaEfectivaNueva
+        });
+        // Regenerate amortization from current period forward
+        if (c.amortizacion && c.amortizacion.length > 0) {
+          const periodoActual = c.amortizacion.findIndex(p => !p.pagado) || 0;
+          if (periodoActual >= 0 && periodoActual < c.amortizacion.length) {
+            const saldoEnPeriodo = c.amortizacion[periodoActual].saldoInicial;
+            const diasPorVencer = c.amortizacion.length - periodoActual;
+            const amortNueva = generarAmortizacion(saldoEnPeriodo, tasaEfectivaNueva, diasPorVencer, c.periodicidad, c.amortizacion[periodoActual].fecha, 0, 0, c.tipo);
+            // Keep paid periods, replace unpaid ones
+            c.amortizacion = c.amortizacion.slice(0, periodoActual).concat(amortNueva.map((p, idx) => ({ ...p, numero: periodoActual + idx + 1 })));
+          }
+        }
+      }
+    }
+    return c;
+  });
+  setStore('creditos', creditos);
+
+  // Update fondeos
+  let fondeos = getStore('fondeos') || [];
+  fondeos = fondeos.map(f => {
+    if (f.tipoTasa === 'variable') {
+      const tasaEfectivaAnterior = f.tasa;
+      const tasaEfectivaNueva = +(tiieVigente + f.spread).toFixed(4);
+      if (Math.abs(tasaEfectivaNueva - tasaEfectivaAnterior) > 0.00001) {
+        f.tasa = tasaEfectivaNueva;
+        f.tasaReferencia = tiieVigente;
+        if (!f.historialTasas) f.historialTasas = [];
+        f.historialTasas.push({
+          fecha: hoy,
+          tiie: tiieVigente,
+          spread: f.spread,
+          tasaEfectiva: tasaEfectivaNueva
+        });
+      }
+    }
+    return f;
+  });
+  setStore('fondeos', fondeos);
 }
