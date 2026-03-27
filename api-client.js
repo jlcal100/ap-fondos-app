@@ -64,7 +64,7 @@ var ApiClient = (function() {
     var promises = VALID_KEYS.map(function(key) {
       return apiRequest('GET', '/api/data/' + key)
         .then(function(res) {
-          _cache[key] = res.data || [];
+          _cache[key] = Array.isArray(res) ? res : (res.data || []);
         })
         .catch(function(err) {
           console.warn('Failed to load ' + key + ':', err);
