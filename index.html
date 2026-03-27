@@ -498,7 +498,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
 </style>
 </head>
 <body>
-<div class="layout">
+<div id="appContainer" class="layout">
 <!-- SIDEBAR -->
 <aside class="sidebar" id="sidebar">
   <div class="sidebar-header">
@@ -2686,6 +2686,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="width:20px;height:20px"><polyline points="18 15 12 9 6 15"/></svg>
 </button>
 
+<script src="js/api-client.js"></script>
 <script>
 
 // LOGO (single source of truth)
@@ -2977,9 +2978,20 @@ function guardarTipoCambio() {
 })();
 
 function getStore(key) {
+  // Use API client (PostgreSQL) if available and logged in
+  if (typeof ApiClient !== 'undefined' && ApiClient.isLoggedIn()) {
+    return ApiClient.read(key);
+  }
+  // Fallback to localStorage
   try { return JSON.parse(localStorage.getItem('apf_' + key)) || []; } catch { return []; }
 }
 function setStore(key, data) {
+  // Use API client (PostgreSQL) if available and logged in
+  if (typeof ApiClient !== 'undefined' && ApiClient.isLoggedIn()) {
+    ApiClient.write(key, data);
+    return;
+  }
+  // Fallback to localStorage
   try {
     localStorage.setItem('apf_' + key, JSON.stringify(data));
     checkStorageUsage();
@@ -19114,23 +19126,43 @@ function validarIntegridadInicio() {
 //  INIT
 // ============================================================
 document.getElementById('currentDate').textContent = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-initData();
-loadSession();
-restaurarFiltros();
-renderDashboard();
-checkStorageUsage();
-// Sprint I: Inicializar notificaciones
-refreshNotifications();
-// Sprint M: Inicializar badge de aprobaciones
-updateApprovalsBadge();
-// Sprint J: Inicializar UX avanzada
-initDarkMode();
-initScrollTopBtn();
-// Bug #50: Verificar si hay backup reciente
-setTimeout(checkAutoBackupReminder, 3000);
-// Sprint 6: Auto-backup e integridad
-iniciarAutoBackup();
-setTimeout(validarIntegridadInicio, 1500);
+
+// App initialization function (called after login + data load)
+function initApp() {
+  initData();
+  loadSession();
+  restaurarFiltros();
+  renderDashboard();
+  checkStorageUsage();
+  refreshNotifications();
+  updateApprovalsBadge();
+  initDarkMode();
+  initScrollTopBtn();
+  setTimeout(checkAutoBackupReminder, 3000);
+  iniciarAutoBackup();
+  setTimeout(validarIntegridadInicio, 1500);
+}
+
+// Check if already logged in (token exists)
+if (typeof ApiClient !== 'undefined' && ApiClient.isLoggedIn()) {
+  // Already logged in — load data from PostgreSQL, then init
+  document.getElementById('appContainer').style.display = 'none';
+  ApiClient.loadAllData().then(function() {
+    document.getElementById('appContainer').style.display = '';
+    window.currentUser = ApiClient.getUser();
+    initApp();
+    if (typeof toast === 'function') toast('Bienvenido, ' + (window.currentUser ? window.currentUser.nombre : ''), 'success');
+  }).catch(function() {
+    // Token expired or invalid — show login
+    showLoginScreen();
+  });
+} else if (typeof ApiClient !== 'undefined') {
+  // Not logged in — show login screen
+  showLoginScreen();
+} else {
+  // ApiClient not available — fallback to localStorage mode
+  initApp();
+}
 </script>
 </body>
 </html>
