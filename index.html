@@ -2397,8 +2397,17 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         <div class="form-group"><label class="form-label">Valor Residual</label><div class="input-suffix"><input type="number" class="form-input" id="credVR" value="1" min="0"><span class="suffix">%</span></div></div>
         <div class="form-group"><label class="form-label">Valor del Equipo</label><div class="input-prefix"><span class="prefix">$</span><input type="text" class="form-input" id="credValorEquipo" oninput="formatMiles(this)" placeholder="0"></div></div>
       </div>
-      <div class="form-row">
+      <div class="form-row-3" id="credGraciaFields">
+        <div class="form-group"><label class="form-label">Periodo de Gracia (meses)</label><input type="number" class="form-input" id="credGraciaMeses" value="0" min="0" max="60"></div>
+        <div class="form-group"><label class="form-label">Tipo de Gracia</label>
+          <select class="form-select" id="credGraciaTipo">
+            <option value="capital">Solo capital (paga intereses)</option>
+            <option value="total">Total (no paga nada)</option>
+          </select>
+        </div>
         <div class="form-group" id="credComisionGroup"><label class="form-label">Comisión Apertura</label><div id="credComisionWrapper" class="input-suffix"><input type="number" class="form-input" id="credComision" value="0" min="0" max="100" step="0.5"><span class="suffix" id="credComisionSuffix">%</span></div></div>
+      </div>
+      <div class="form-row">
         <div class="form-group"><label class="form-label">Fondeo Asociado</label><select class="form-select" id="credFondeo"><option value="">Ninguno</option></select></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="credNotas"></textarea></div>
@@ -2466,6 +2475,13 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       </div>
       <div class="form-row-3">
         <div class="form-group"><label class="form-label">Plazo (meses) *</label><input type="number" class="form-input" id="fondPlazo" min="1"></div>
+        <div class="form-group"><label class="form-label">Periodo de Gracia (meses)</label><input type="number" class="form-input" id="fondGraciaMeses" value="0" min="0" max="60"></div>
+        <div class="form-group"><label class="form-label">Tipo de Gracia</label>
+          <select class="form-select" id="fondGraciaTipo">
+            <option value="capital">Solo capital (paga intereses)</option>
+            <option value="total">Total (no paga nada)</option>
+          </select>
+        </div>
       </div>
       <div class="form-row-3" id="fondVariableRateFields" style="display:none">
         <div class="form-group"><label class="form-label">Spread</label><div class="input-suffix"><input type="number" class="form-input" id="fondSpread" min="0" step="0.01" oninput="calcularFondoTasaEfectiva()"><span class="suffix">%</span></div></div>
@@ -3919,8 +3935,13 @@ function avanzarFechaPeriodo(fecha, periodicidad, diaOriginal) {
 }
 
 // tipoCredito: opcional, si es 'arrendamiento' usa lógica flat
-function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaInicio, valorResidualPct = 0, ivaPct = 0, tipoCredito = '') {
+function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaInicio, valorResidualPct = 0, ivaPct = 0, tipoCredito = '', graciaConfig = null) {
+  // graciaConfig: { meses: N, tipo: 'capital'|'total' } o null
+  const periodosGracia = graciaConfig && graciaConfig.meses > 0 ? getPeriodos(graciaConfig.meses, periodicidad) : 0;
+  const tipoGracia = graciaConfig ? graciaConfig.tipo : 'capital';
+
   const periodos = getPeriodos(plazoMeses, periodicidad);
+  const totalPeriodos = periodos + periodosGracia;
   const tasaPeriodica = getTasaPeriodica(tasaAnual, periodicidad);
   const vr = monto * (valorResidualPct / 100);
   const diasPeriodo = getDiasPeriodo(periodicidad);
@@ -3928,49 +3949,92 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
   let saldo = monto;
   const tabla = [];
   let fecha = new Date(fechaInicio);
-  const diaOriginal = fecha.getDate(); // Preservar día original para meses cortos
+  const diaOriginal = fecha.getDate();
 
   // ARRENDAMIENTO FINANCIERO Y PURO:
-  // - Interés FLAT: se calcula sobre el monto total original, NO sobre saldo insoluto
-  // - Capital: distribución lineal de (monto - VR) entre todos los periodos
-  // - Renta fija: capital_fijo + interés_flat + IVA_interés
-  // - arrendamiento_puro: mismo cálculo pero con VR=0 (todo se amortiza)
   if (tipoCredito === 'arrendamiento' || tipoCredito === 'arrendamiento_puro') {
     const interesFlat = +(monto * tasaPeriodica).toFixed(2);
-    const capitalFijo = +((monto - vr) / periodos).toFixed(2);
+    const capitalFijo = +((monto - vr) / periodos).toFixed(2); // capital solo en periodos normales
 
-    for (let i = 1; i <= periodos; i++) {
+    for (let i = 1; i <= totalPeriodos; i++) {
       fecha = avanzarFechaPeriodo(fecha, periodicidad, diaOriginal);
+      const esGracia = i <= periodosGracia;
 
-      let capital;
-      if (i === periodos) {
-        // Último pago: ajustar capital para cerrar exacto al VR
-        capital = +(saldo - vr).toFixed(2);
+      let capital, interes, ivaInteres, pagoTotal;
+      if (esGracia) {
+        if (tipoGracia === 'total') {
+          // Gracia total: no paga nada, intereses se capitalizan
+          interes = +(saldo * tasaPeriodica).toFixed(2);
+          capital = 0;
+          ivaInteres = 0;
+          pagoTotal = 0;
+          saldo = +(saldo + interes).toFixed(2); // capitalizar intereses
+        } else {
+          // Gracia capital: paga solo intereses
+          interes = interesFlat;
+          capital = 0;
+          ivaInteres = +(interes * (ivaPct / 100)).toFixed(2);
+          pagoTotal = +(interes + ivaInteres).toFixed(2);
+        }
       } else {
-        capital = capitalFijo;
+        interes = interesFlat;
+        if (i === totalPeriodos) {
+          capital = +(saldo - vr).toFixed(2);
+        } else {
+          capital = capitalFijo;
+        }
+        ivaInteres = +(interes * (ivaPct / 100)).toFixed(2);
+        pagoTotal = +(capital + interes + ivaInteres).toFixed(2);
       }
-      const ivaInteres = +(interesFlat * (ivaPct / 100)).toFixed(2);
-      const pagoTotal = +(capital + interesFlat + ivaInteres).toFixed(2);
-      const saldoFinal = +(saldo - capital).toFixed(2);
+      const saldoFinal = esGracia && tipoGracia === 'total' ? saldo : +(saldo - capital).toFixed(2);
 
       tabla.push({
         numero: i,
         fecha: fecha.toISOString().split('T')[0],
         saldoInicial: Math.max(+saldo.toFixed(2), 0),
         capital: Math.max(capital, 0),
-        interes: interesFlat,
+        interes: Math.max(interes, 0),
         iva: ivaInteres,
         pagoTotal: Math.max(pagoTotal, 0),
         saldoFinal: Math.max(saldoFinal, 0),
-        pagado: false
+        pagado: false,
+        esGracia: esGracia || undefined
       });
-      saldo = saldoFinal;
+      if (!(esGracia && tipoGracia === 'total')) saldo = saldoFinal;
     }
     return tabla;
   }
 
   // CRÉDITO ESTÁNDAR: interés sobre saldo insoluto (sistema francés)
-  const pago = calcPago(monto, tasaAnual, plazoMeses, periodicidad, valorResidualPct);
+  // Si hay gracia total, recalcular saldo post-gracia antes de generar amortización normal
+  let saldoPostGracia = monto;
+
+  // Generar periodos de gracia primero
+  for (let i = 1; i <= periodosGracia; i++) {
+    fecha = avanzarFechaPeriodo(fecha, periodicidad, diaOriginal);
+    const interes = +(saldo * tasaPeriodica).toFixed(2);
+
+    if (tipoGracia === 'total') {
+      // No paga nada, intereses se capitalizan
+      tabla.push({
+        numero: i, fecha: fecha.toISOString().split('T')[0],
+        saldoInicial: Math.max(+saldo.toFixed(2), 0), capital: 0, interes: interes, iva: 0,
+        pagoTotal: 0, saldoFinal: +(saldo + interes).toFixed(2), pagado: false, esGracia: true
+      });
+      saldo = +(saldo + interes).toFixed(2);
+    } else {
+      // Paga solo intereses
+      const ivaInteres = +(interes * (ivaPct / 100)).toFixed(2);
+      tabla.push({
+        numero: i, fecha: fecha.toISOString().split('T')[0],
+        saldoInicial: Math.max(+saldo.toFixed(2), 0), capital: 0, interes: interes, iva: ivaInteres,
+        pagoTotal: +(interes + ivaInteres).toFixed(2), saldoFinal: +saldo.toFixed(2), pagado: false, esGracia: true
+      });
+    }
+  }
+
+  // Ahora generar periodos normales con el saldo post-gracia
+  const pago = calcPago(saldo, tasaAnual, plazoMeses, periodicidad, valorResidualPct);
 
   for (let i = 1; i <= periodos; i++) {
     fecha = avanzarFechaPeriodo(fecha, periodicidad, diaOriginal);
@@ -3987,7 +4051,7 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
     const saldoFinal = +(saldo - capital).toFixed(2);
 
     tabla.push({
-      numero: i,
+      numero: periodosGracia + i,
       fecha: fecha.toISOString().split('T')[0],
       saldoInicial: Math.max(+saldo.toFixed(2), 0),
       capital: Math.max(capital, 0),
@@ -4002,9 +4066,9 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
   return tabla;
 }
 
-function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision) {
+function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision, graciaConfig) {
   // IVA 16% estándar sobre intereses para todos los tipos de crédito en México
-  const amort = generarAmortizacion(monto, tasa, plazo, periodicidad, fechaInicio, vrPct, 16, tipo);
+  const amort = generarAmortizacion(monto, tasa, plazo, periodicidad, fechaInicio, vrPct, 16, tipo, graciaConfig || null);
   const fechaVenc = amort.length > 0 ? amort[amort.length - 1].fecha : fechaInicio;
   return {
     id, numero, clienteId, tipo, monto, saldo: monto, tasa, tasaMoratoria: tasaMora,
@@ -4012,6 +4076,7 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
     pago: calcPago(monto, tasa, plazo, periodicidad, vrPct, tipo),
     estado: 'vigente', diasMora: 0, valorResidual: vrPct, valorEquipo, comision,
     fondeoId: null, notas: '', amortizacion: amort,
+    graciaConfig: graciaConfig || null,
     tipoTasa: 'fija', tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: [],
     createdAt: new Date().toISOString()
   };
@@ -5229,7 +5294,8 @@ function renderCreditos() {
 function openModalCredito() {
   // Bug #21: Limpiar campos al abrir modal para nuevo crédito
   V.clearErrors('modalCredito');
-  clearForm(['credMonto','credTasa','credTasaMora','credPlazo','credVR','credValorEquipo','credComision','credNotas','credSpread']);
+  clearForm(['credMonto','credTasa','credTasaMora','credPlazo','credVR','credValorEquipo','credComision','credNotas','credSpread','credGraciaMeses']);
+  document.getElementById('credGraciaTipo').value = 'capital';
   document.getElementById('credMoneda').value = 'MXN';
   document.getElementById('credTipo').selectedIndex = 0;
   document.getElementById('credPeriodicidad').selectedIndex = 0;
@@ -5260,6 +5326,15 @@ function toggleCreditoFields() {
     tipoTasa.disabled = isArrend;
     if (isArrend) tipoTasa.value = 'fija';
     toggleTasaFields();
+  }
+  // Periodo de gracia: solo para crédito simple y arrendamiento
+  var graciaFields = document.getElementById('credGraciaFields');
+  if (graciaFields) {
+    var showGracia = (tipo === 'credito_simple' || isArrend);
+    graciaFields.style.display = showGracia ? 'grid' : 'none';
+    if (!showGracia) {
+      document.getElementById('credGraciaMeses').value = '0';
+    }
   }
   // Comisión: monto ($) para nómina, porcentaje (%) para créditos y arrendamientos
   var comInput = document.getElementById('credComision');
@@ -5448,7 +5523,12 @@ function guardarCredito() {
     } else if (tipo === 'arrendamiento' && vrPct === 0) {
       vrPctFinal = 0; // VR explícito de 0
     }
-    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPctFinal, valorEquipo, comision);
+    // Periodo de gracia
+    var graciaMeses = parseInt(document.getElementById('credGraciaMeses').value) || 0;
+    var graciaTipo = document.getElementById('credGraciaTipo').value || 'capital';
+    var graciaConfig = graciaMeses > 0 ? { meses: graciaMeses, tipo: graciaTipo } : null;
+
+    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPctFinal, valorEquipo, comision, graciaConfig);
   }
   const fondeoId = document.getElementById('credFondeo').value;
   if (fondeoId) credito.fondeoId = parseInt(fondeoId);
@@ -8866,6 +8946,8 @@ function abrirNuevoFondeo() {
   document.getElementById('fondCLABE').value = '';
   document.getElementById('fondCuentaBanco').value = '';
   document.getElementById('fondNotas').value = '';
+  document.getElementById('fondGraciaMeses').value = '0';
+  document.getElementById('fondGraciaTipo').value = 'capital';
   document.getElementById('fondTipoTasa').value = 'fija';
   document.getElementById('fondSpread').value = '';
   document.getElementById('fondPeriodoRevision').value = 'mensual';
@@ -8892,6 +8974,9 @@ function editarFondeo(id) {
   document.getElementById('fondCLABE').value = f.clabe || '';
   document.getElementById('fondCuentaBanco').value = f.cuentaBanco || '';
   document.getElementById('fondNotas').value = f.notas || '';
+  // Periodo de gracia
+  document.getElementById('fondGraciaMeses').value = f.graciaConfig ? f.graciaConfig.meses : 0;
+  document.getElementById('fondGraciaTipo').value = f.graciaConfig ? f.graciaConfig.tipo : 'capital';
   // Variable rate fields
   document.getElementById('fondTipoTasa').value = f.tipoTasa || 'fija';
   document.getElementById('fondSpread').value = f.spread ? (f.spread * 100).toFixed(2) : '';
@@ -8957,6 +9042,10 @@ function guardarFondeo() {
       f.cuentaBanco = document.getElementById('fondCuentaBanco').value.trim();
       f.notas = document.getElementById('fondNotas').value;
       f.moneda = document.getElementById('fondMoneda').value || 'MXN';
+      // Periodo de gracia
+      var gMeses = parseInt(document.getElementById('fondGraciaMeses').value) || 0;
+      var gTipo = document.getElementById('fondGraciaTipo').value || 'capital';
+      f.graciaConfig = gMeses > 0 ? { meses: gMeses, tipo: gTipo } : null;
       // Handle variable rate fields
       const tipoTasaElem = document.getElementById('fondTipoTasa');
       if (tipoTasaElem) {
@@ -9005,6 +9094,10 @@ function guardarFondeo() {
       notas: document.getElementById('fondNotas').value,
       moneda: document.getElementById('fondMoneda').value || 'MXN'
     };
+    // Periodo de gracia
+    var gMesesNew = parseInt(document.getElementById('fondGraciaMeses').value) || 0;
+    var gTipoNew = document.getElementById('fondGraciaTipo').value || 'capital';
+    fondeo.graciaConfig = gMesesNew > 0 ? { meses: gMesesNew, tipo: gTipoNew } : null;
     if (fondeo.tipo === 'cuenta_corriente') {
       fondeo.limite = fondeo.monto;
       fondeo.saldoDispuesto = 0;
