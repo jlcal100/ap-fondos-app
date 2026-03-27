@@ -3053,11 +3053,20 @@ function checkStorageUsage() {
 function actualizarIndicadorTIIE() {
   var el = document.getElementById('tiieIndicator');
   if (!el) return;
-  var tiie = getTIIEVigente();
-  if (tiie && tiie.tasa) {
-    var pct = (tiie.tasa * 100).toFixed(2);
+  var tiieVal = typeof getTIIEVigente === 'function' ? getTIIEVigente() : null;
+  var tasa = null, fecha = 'N/D';
+  if (typeof tiieVal === 'number' && tiieVal > 0) {
+    tasa = tiieVal;
+    var hist = getStore('tiie_historico');
+    if (hist.length > 0) fecha = hist[hist.length - 1].fecha || 'N/D';
+  } else if (tiieVal && tiieVal.tasa) {
+    tasa = tiieVal.tasa;
+    fecha = tiieVal.fecha || 'N/D';
+  }
+  if (tasa) {
+    var pct = (tasa * 100).toFixed(2);
     el.textContent = 'TIIE: ' + pct + '%';
-    el.title = 'TIIE 28 días vigente: ' + pct + '% — Fecha: ' + (tiie.fecha || 'N/D');
+    el.title = 'TIIE 28 días vigente: ' + pct + '% — Fecha: ' + fecha;
     el.style.color = 'var(--primary)';
   } else {
     el.textContent = 'TIIE: --';
