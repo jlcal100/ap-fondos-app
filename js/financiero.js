@@ -156,6 +156,7 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
     pago: calcPago(monto, tasa, plazo, periodicidad, vrPct, tipo),
     estado: 'vigente', diasMora: 0, valorResidual: vrPct, valorEquipo, comision,
     fondeoId: null, notas: '', amortizacion: amort,
+    tipoTasa: 'fija', tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: [],
     createdAt: new Date().toISOString()
   };
 }
