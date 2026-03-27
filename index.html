@@ -9192,7 +9192,9 @@ function verFondeo(id) {
   } else {
     toolbarHTML += `<button class="btn btn-primary btn-sm" onclick="registrarPagoFondeo(${f.id})">Registrar Pago</button>`;
   }
-  toolbarHTML += `<button class="btn btn-outline btn-sm" onclick="editarFondeo(${f.id})">Editar</button></div>`;
+  toolbarHTML += `<button class="btn btn-outline btn-sm" onclick="editarFondeo(${f.id})">Editar</button>
+        <span style="border-left:1px solid var(--gray-200);height:24px;margin:0 4px"></span>
+        <button class="btn btn-outline btn-sm" onclick="generarContratoFondeoPDF(${f.id})">📄 Contrato</button></div>`;
 
   panel.innerHTML = `
     <div class="detail-panel-header">
@@ -15471,7 +15473,10 @@ function _getCreditoYCliente(id) {
 var _periLabel = { mensual: 'Mensual', quincenal: 'Quincenal', semanal: 'Semanal', diario: 'Diario' };
 
 // ════════════════════════════════════════════════════════════════
-//  1. CONTRATO DE CRÉDITO / ARRENDAMIENTO PDF
+//  1. CONTRATO DE CRÉDITO / ARRENDAMIENTO PDF (Legalmente completo)
+//  Tipos: Mutuo con Interés (crédito simple/nómina), Arrendamiento Financiero
+//  Base legal: LGTOC Art. 358-364 (mutuo), Art. 408-418 (arrendamiento),
+//  CCF Art. 2384-2397 (mutuo civil), LGOACC (SOFOM)
 // ════════════════════════════════════════════════════════════════
 function generarContratoPDF(id) {
   var data = _getCreditoYCliente(id);
@@ -15483,110 +15488,507 @@ function generarContratoPDF(id) {
   var w = doc.internal.pageSize.getWidth();
   var m = 18;
   var maxW = w - m * 2;
+  var pageH = doc.internal.pageSize.getHeight();
 
   var esArrendamiento = c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
-  var tipoContrato = c.tipo === 'arrendamiento' ? 'CONTRATO DE ARRENDAMIENTO FINANCIERO' : (c.tipo === 'arrendamiento_puro' ? 'CONTRATO DE ARRENDAMIENTO PURO' : 'CONTRATO DE CRÉDITO SIMPLE');
+  var esNomina = c.tipo === 'nomina';
+  var tipoContrato = esArrendamiento
+    ? (c.tipo === 'arrendamiento_puro' ? 'CONTRATO DE ARRENDAMIENTO PURO' : 'CONTRATO DE ARRENDAMIENTO FINANCIERO')
+    : (esNomina ? 'CONTRATO DE MUTUO CON INTERÉS Y DESCUENTO VÍA NÓMINA' : 'CONTRATO DE MUTUO CON INTERÉS');
   var fechaHoy = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
   var montoTxt = '$' + Number(c.monto).toLocaleString('es-MX', { minimumFractionDigits: 2 });
   var montoLetras = numeroALetras(c.monto);
   var tasaPct = (c.tasa * 100).toFixed(2);
   var tasaMoraPct = ((c.tasaMoratoria || c.tasa * 1.5) * 100).toFixed(2);
   var vrPct = (c.valorResidual || 0).toFixed(2);
+  var tieneGracia = c.graciaConfig && c.graciaConfig.meses > 0;
+  var labelAcreditado = esArrendamiento ? 'EL ARRENDATARIO' : 'EL MUTUATARIO';
+  var labelAcreditante = esArrendamiento ? 'EL ARRENDADOR' : 'EL MUTUANTE';
+  var nClausula = 0;
+  function nextClausula() { nClausula++; return _clausulaRomano(nClausula); }
 
   // ── Encabezado ──
   var y = _pdfHeader(doc, tipoContrato, 'Contrato: ' + c.numero);
 
-  // ── Preámbulo ──
-  y = _pdfSeccion(doc, y, 'DECLARACIONES', m);
-  y = _pdfParrafo(doc, y, 'En la ciudad de México, a ' + fechaHoy + ', celebran el presente ' + tipoContrato.toLowerCase() + ', por una parte ' + EMPRESA.razonSocial + ' (en lo sucesivo "EL ACREDITANTE"), y por la otra ' + cli.nombre + ' con RFC ' + cli.rfc + (cli.curp ? ', CURP ' + cli.curp : '') + (cli.direccion ? ', con domicilio en ' + cli.direccion + (cli.ciudad ? ', ' + cli.ciudad : '') + (cli.estado ? ', ' + cli.estado : '') + (cli.cp ? ', C.P. ' + cli.cp : '') : '') + ' (en lo sucesivo "EL ACREDITADO"), conforme a las siguientes:', m, maxW);
+  // ══════ ANTECEDENTES ══════
+  y = _pdfSeccion(doc, y, 'ANTECEDENTES', m);
+  y = _pdfParrafo(doc, y, 'En la Ciudad de México, a ' + fechaHoy + ', comparecen para celebrar el presente contrato:', m, maxW);
 
-  // ── Cláusula 1: Objeto ──
-  y = _pdfSeccion(doc, y, 'CLÁUSULA PRIMERA — OBJETO', m);
+  // Parte A
+  y = _pdfParrafo(doc, y, 'I. ' + EMPRESA.razonSocial + ', con Registro Federal de Contribuyentes ' + EMPRESA.rfc + ', con domicilio fiscal en C.P. ' + EMPRESA.cp + ', constituida conforme a las leyes mexicanas como Sociedad Financiera de Objeto Múltiple, Entidad No Regulada (SOFOM E.N.R.), representada en este acto por su apoderado legal (en lo sucesivo "' + labelAcreditante + '").', m, maxW);
+
+  // Parte B
+  var domCli = (cli.direccion || '[Sin domicilio registrado]') + (cli.ciudad ? ', ' + cli.ciudad : '') + (cli.estado ? ', ' + cli.estado : '') + (cli.cp ? ', C.P. ' + cli.cp : '');
+  var tipoPersonaTxt = cli.tipo === 'moral'
+    ? ', persona moral constituida conforme a las leyes de México,'
+    : ', persona física,';
+  y = _pdfParrafo(doc, y, 'II. ' + cli.nombre + tipoPersonaTxt + ' con RFC ' + (cli.rfc || '[POR DEFINIR]') + (cli.curp ? ', CURP ' + cli.curp : '') + ', con domicilio en ' + domCli + (cli.email ? ', correo electrónico: ' + cli.email : '') + (cli.telefono ? ', teléfono: ' + cli.telefono : '') + ' (en lo sucesivo "' + labelAcreditado + '").', m, maxW);
+
+  // ══════ DECLARACIONES ══════
+  y = _pdfSeccion(doc, y, 'DECLARACIONES', m);
+  y = _pdfParrafo(doc, y, 'I. Declara ' + labelAcreditante + ' que: a) Es una sociedad legalmente constituida y en pleno ejercicio de sus facultades; b) Su representante legal cuenta con las facultades suficientes para obligarla en los términos del presente contrato; c) Su objeto social le permite celebrar operaciones de ' + (esArrendamiento ? 'arrendamiento financiero' : 'otorgamiento de créditos') + ' conforme a la Ley General de Organizaciones y Actividades Auxiliares del Crédito; d) Cuenta con los recursos para cumplir las obligaciones derivadas de este contrato.', m, maxW);
+
+  y = _pdfParrafo(doc, y, 'II. Declara ' + labelAcreditado + ' que: a) ' + (cli.tipo === 'moral' ? 'Es una persona moral legalmente constituida' : 'Es una persona física con capacidad legal') + ' para obligarse en los términos del presente contrato; b) La información y documentación proporcionada a ' + labelAcreditante + ' es verídica y vigente; c) Conoce y acepta las condiciones financieras del presente contrato; d) No se encuentra en estado de insolvencia, concurso mercantil o cualquier situación que limite su capacidad de pago.' + (esNomina ? ' e) Mantiene una relación laboral vigente con su empleador y autoriza expresamente el descuento vía nómina para el cumplimiento de las obligaciones aquí pactadas.' : ''), m, maxW);
+
+  // ══════ CLÁUSULAS ══════
+
+  // ── Cláusula I: Objeto ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — OBJETO DEL CONTRATO', m);
   if (esArrendamiento) {
-    y = _pdfParrafo(doc, y, 'EL ACREDITANTE se obliga a otorgar en arrendamiento financiero a EL ACREDITADO, el(los) bien(es) descrito(s) a continuación, con un valor total de ' + montoTxt + ' (' + montoLetras + '), quien se obliga a pagar las rentas convenidas durante el plazo forzoso del presente contrato.', m, maxW);
+    y = _pdfParrafo(doc, y, labelAcreditante + ' se obliga a conceder en arrendamiento financiero a ' + labelAcreditado + ', quien acepta, el uso y goce temporal de el(los) bien(es) que se describen a continuación (en lo sucesivo "EL EQUIPO"), de conformidad con lo dispuesto en los artículos 408 al 418 de la Ley General de Títulos y Operaciones de Crédito.', m, maxW);
     if (c.valorEquipo) {
-      y = _pdfParrafo(doc, y, 'Valor del equipo: $' + Number(c.valorEquipo).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + '. Descripción del equipo: [Especificar marca, modelo, serie y características del equipo arrendado].', m, maxW);
+      y = _pdfParrafo(doc, y, 'Descripción del equipo: [Especificar marca, modelo, serie y características]. Valor del equipo: $' + Number(c.valorEquipo).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + '. Valor total del contrato de arrendamiento: ' + montoTxt + ' (' + montoLetras + ').', m, maxW);
+    } else {
+      y = _pdfParrafo(doc, y, 'Descripción del equipo: [Especificar marca, modelo, serie y características del bien arrendado]. Monto total del arrendamiento: ' + montoTxt + ' (' + montoLetras + ').', m, maxW);
     }
   } else {
-    y = _pdfParrafo(doc, y, 'EL ACREDITANTE se obliga a otorgar a EL ACREDITADO un crédito simple por la cantidad de ' + montoTxt + ' (' + montoLetras + '), que se destinará al fin que EL ACREDITADO determine, obligándose este último a la devolución de dicha cantidad más los accesorios pactados en el presente contrato.', m, maxW);
+    y = _pdfParrafo(doc, y, labelAcreditante + ' se obliga a entregar en mutuo con interés a ' + labelAcreditado + ', quien acepta, la cantidad de ' + montoTxt + ' (' + montoLetras + '), de conformidad con lo establecido en los artículos 358 al 364 de la Ley General de Títulos y Operaciones de Crédito y 2384 al 2397 del Código Civil Federal, obligándose ' + labelAcreditado + ' a restituir dicha cantidad junto con los intereses y accesorios pactados en el presente instrumento.', m, maxW);
+    if (esNomina) {
+      y = _pdfParrafo(doc, y, 'El presente crédito será liquidado mediante descuentos directos a la nómina de ' + labelAcreditado + ', conforme a la autorización irrevocable otorgada en la Cláusula correspondiente del presente contrato.', m, maxW);
+    }
   }
 
-  // ── Cláusula 2: Condiciones ──
-  y = _pdfSeccion(doc, y, 'CLÁUSULA SEGUNDA — CONDICIONES FINANCIERAS', m);
+  // ── Cláusula II: Condiciones Financieras ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — CONDICIONES FINANCIERAS', m);
   var condiciones = [
     ['Número de contrato:', c.numero],
-    ['Monto del crédito:', montoTxt],
-    ['Tasa de interés anual fija:', tasaPct + '%'],
-    ['Tasa de interés moratoria:', tasaMoraPct + '%'],
-    ['Plazo:', c.plazo + ' meses'],
+    [esArrendamiento ? 'Monto del arrendamiento:' : 'Monto del crédito:', montoTxt],
+    ['Tasa de interés ordinaria anual:', tasaPct + '% fija'],
+    ['Tasa de interés moratoria anual:', tasaMoraPct + '%'],
+    ['Plazo total:', c.plazo + ' meses'],
     ['Periodicidad de pago:', _periLabel[c.periodicidad] || c.periodicidad],
-    ['Fecha de inicio:', new Date(c.fechaInicio).toLocaleDateString('es-MX')],
+    ['Fecha de disposición / inicio:', new Date(c.fechaInicio).toLocaleDateString('es-MX')],
     ['Fecha de vencimiento:', c.fechaVencimiento ? new Date(c.fechaVencimiento).toLocaleDateString('es-MX') : 'N/A'],
-    ['Pago periódico estimado:', '$' + Number(c.pago).toLocaleString('es-MX', { minimumFractionDigits: 2 })],
-    ['Moneda:', c.moneda || 'MXN']
+    ['Pago periódico:', '$' + Number(c.pago).toLocaleString('es-MX', { minimumFractionDigits: 2 })],
+    ['Moneda:', c.moneda || 'MXN — Pesos Mexicanos']
   ];
   if (esArrendamiento) {
-    condiciones.push(['Valor residual:', vrPct + '% sobre monto original']);
+    condiciones.push(['Valor residual:', vrPct + '% sobre valor original']);
+    if (c.valorEquipo) condiciones.push(['Valor del equipo:', '$' + Number(c.valorEquipo).toLocaleString('es-MX', { minimumFractionDigits: 2 })]);
   }
   if (c.comision) {
-    condiciones.push(['Comisión por apertura:', '$' + Number(c.comision).toLocaleString('es-MX', { minimumFractionDigits: 2 })]);
+    condiciones.push([esNomina ? 'Comisión por apertura (monto):' : 'Comisión por apertura:', '$' + Number(c.comision).toLocaleString('es-MX', { minimumFractionDigits: 2 })]);
   }
+  if (tieneGracia) {
+    condiciones.push(['Periodo de gracia:', c.graciaConfig.meses + ' meses — ' + (c.graciaConfig.tipo === 'total' ? 'Sin pago (capitalización de intereses)' : 'Solo pago de intereses')]);
+  }
+  // Método de cálculo
+  condiciones.push(['Método de amortización:', esArrendamiento ? 'Renta fija (flat)' : 'Francés (cuota fija sobre saldo insoluto)']);
+  condiciones.push(['Base de cálculo:', '360/360 (año comercial)']);
+
   condiciones.forEach(function(row) {
-    if (y > doc.internal.pageSize.getHeight() - 25) { doc.addPage(); y = 20; }
+    if (y > pageH - 25) { doc.addPage(); y = 20; }
     doc.setFont('helvetica', 'bold');
     doc.text(row[0], m + 2, y);
     doc.setFont('helvetica', 'normal');
-    doc.text(row[1], m + 58, y);
+    doc.text(row[1], m + 64, y);
     y += 5;
   });
   y += 3;
 
-  // ── Cláusula 3: Forma de pago ──
-  y = _pdfSeccion(doc, y, 'CLÁUSULA TERCERA — FORMA DE PAGO', m);
-  y = _pdfParrafo(doc, y, 'EL ACREDITADO se obliga a realizar los pagos correspondientes de manera ' + (_periLabel[c.periodicidad] || c.periodicidad).toLowerCase() + ', de acuerdo con la tabla de amortización anexa al presente contrato, la cual forma parte integral del mismo. Los pagos deberán realizarse mediante transferencia electrónica a la cuenta que EL ACREDITANTE designe para tal efecto.', m, maxW);
-
-  // ── Cláusula 4: Intereses moratorios ──
-  y = _pdfSeccion(doc, y, 'CLÁUSULA CUARTA — INTERESES MORATORIOS', m);
-  y = _pdfParrafo(doc, y, 'En caso de mora en el pago de cualquiera de las amortizaciones, EL ACREDITADO pagará intereses moratorios a una tasa anual del ' + tasaMoraPct + '%, calculados sobre el saldo vencido desde la fecha de vencimiento de cada pago hasta la fecha en que se realice el pago efectivo. Los intereses moratorios se calcularán sobre saldos insolutos vencidos y serán exigibles sin necesidad de requerimiento alguno.', m, maxW);
-
-  // ── Cláusula 5: Vencimiento anticipado ──
-  y = _pdfSeccion(doc, y, 'CLÁUSULA QUINTA — VENCIMIENTO ANTICIPADO', m);
-  y = _pdfParrafo(doc, y, 'EL ACREDITANTE podrá dar por vencido anticipadamente el presente contrato y exigir el pago total del saldo insoluto más accesorios, sin necesidad de declaración judicial, en los siguientes casos: a) Falta de pago de una o más amortizaciones en los términos convenidos. b) Si EL ACREDITADO proporciona información falsa. c) Si EL ACREDITADO es declarado en concurso mercantil o insolvencia. d) Si las garantías otorgadas sufren menoscabo significativo.', m, maxW);
-
-  // ── Cláusula 6: Pago anticipado ──
-  y = _pdfSeccion(doc, y, 'CLÁUSULA SEXTA — PAGO ANTICIPADO', m);
-  y = _pdfParrafo(doc, y, 'EL ACREDITADO podrá realizar pagos anticipados parciales o totales en cualquier momento durante la vigencia del contrato, sin penalización alguna, los cuales se aplicarán al saldo insoluto del capital.', m, maxW);
-
-  // ── Cláusula 7: Arrendamiento (si aplica) ──
+  // ── Cláusula III: Disposición / Entrega ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — ' + (esArrendamiento ? 'ENTREGA DEL BIEN' : 'DISPOSICIÓN DEL CRÉDITO'), m);
   if (esArrendamiento) {
-    y = _pdfSeccion(doc, y, 'CLÁUSULA SÉPTIMA — OPCIÓN DE COMPRA', m);
-    y = _pdfParrafo(doc, y, 'Al término del plazo forzoso del arrendamiento, EL ACREDITADO tendrá derecho a ejercer la opción de compra del bien arrendado, pagando el valor residual equivalente al ' + vrPct + '% del valor original del equipo, es decir, $' + (c.monto * (c.valorResidual || 0) / 100).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + '. Las partes acuerdan que los intereses se calculan bajo el método flat (sobre monto original) y el IVA aplicable se calculará conforme a la legislación vigente.', m, maxW);
+    y = _pdfParrafo(doc, y, labelAcreditante + ' entregará EL EQUIPO a ' + labelAcreditado + ' en la fecha y lugar que convengan las partes, levantando un acta de entrega-recepción que formará parte integral del presente contrato. ' + labelAcreditado + ' se obliga a verificar el estado del equipo al momento de la entrega.', m, maxW);
+  } else {
+    y = _pdfParrafo(doc, y, labelAcreditante + ' pondrá a disposición de ' + labelAcreditado + ' la cantidad señalada en la Cláusula anterior, mediante transferencia electrónica (SPEI) a la cuenta bancaria que este último designe. ' + (cli.clabe ? 'Cuenta CLABE: ' + cli.clabe + (cli.banco ? ' (' + cli.banco + ')' : '') + '.' : 'Los datos bancarios serán proporcionados por ' + labelAcreditado + ' previo a la disposición.'), m, maxW);
   }
 
-  // ── Cláusula: Jurisdicción ──
-  y = _pdfSeccion(doc, y, esArrendamiento ? 'CLÁUSULA OCTAVA — JURISDICCIÓN' : 'CLÁUSULA SÉPTIMA — JURISDICCIÓN', m);
-  y = _pdfParrafo(doc, y, 'Para la interpretación y cumplimiento del presente contrato, las partes se someten a la jurisdicción de los tribunales competentes de la Ciudad de México, renunciando expresamente a cualquier otro fuero que por razón de sus domicilios presentes o futuros pudiera corresponderles.', m, maxW);
+  // ── Cláusula IV: Intereses Ordinarios ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — INTERESES ORDINARIOS', m);
+  y = _pdfParrafo(doc, y, labelAcreditado + ' se obliga a pagar a ' + labelAcreditante + ' intereses ordinarios sobre ' + (esArrendamiento ? 'el monto financiado' : 'el saldo insoluto del capital') + ' a una tasa fija anual del ' + tasaPct + '%, calculados sobre la base de un año de 360 días. Los intereses se devengarán día a día desde la fecha de disposición y serán pagaderos de manera ' + (_periLabel[c.periodicidad] || c.periodicidad).toLowerCase() + ' conforme a la tabla de amortización que como Anexo "A" forma parte integral del presente contrato.', m, maxW);
 
-  // ── Cláusula: Ley aplicable ──
-  y = _pdfSeccion(doc, y, esArrendamiento ? 'CLÁUSULA NOVENA — LEY APLICABLE' : 'CLÁUSULA OCTAVA — LEY APLICABLE', m);
-  y = _pdfParrafo(doc, y, 'El presente contrato se regirá e interpretará de conformidad con la legislación mercantil y financiera aplicable de los Estados Unidos Mexicanos, incluyendo la Ley General de Organizaciones y Actividades Auxiliares del Crédito y las disposiciones que emita la Comisión Nacional Bancaria y de Valores.', m, maxW);
+  // ── Cláusula V: Forma de Pago ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — FORMA Y LUGAR DE PAGO', m);
+  if (esNomina) {
+    y = _pdfParrafo(doc, y, labelAcreditado + ' autoriza de manera expresa e irrevocable a su empleador actual para que, en cada periodo de pago de nómina, descuente de su salario la cantidad correspondiente a la amortización pactada y la transfiera directamente a ' + labelAcreditante + '. En caso de que por cualquier circunstancia el descuento vía nómina no sea posible (incluyendo pero sin limitarse a: terminación de la relación laboral, licencias sin goce de sueldo o insuficiencia salarial), ' + labelAcreditado + ' se obliga a realizar los pagos directamente mediante transferencia electrónica (SPEI) a la cuenta que ' + labelAcreditante + ' designe, dentro de los plazos establecidos en la tabla de amortización.', m, maxW);
+  } else {
+    y = _pdfParrafo(doc, y, labelAcreditado + ' se obliga a realizar los pagos correspondientes de manera ' + (_periLabel[c.periodicidad] || c.periodicidad).toLowerCase() + ', de acuerdo con la tabla de amortización (Anexo "A"). Los pagos deberán realizarse mediante transferencia electrónica (SPEI) a la cuenta bancaria que ' + labelAcreditante + ' designe para tal efecto. El pago se tendrá por realizado en la fecha en que los fondos sean acreditados en dicha cuenta.', m, maxW);
+  }
 
-  // ── Firmas ──
-  y = _pdfFirmas(doc, y, EMPRESA.nombreCorto, cli.nombre);
+  // ── Cláusula VI: Comisiones ──
+  if (c.comision) {
+    y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — COMISIONES', m);
+    y = _pdfParrafo(doc, y, labelAcreditado + ' pagará a ' + labelAcreditante + ' una comisión por apertura de $' + Number(c.comision).toLocaleString('es-MX', { minimumFractionDigits: 2 }) + ' (' + numeroALetras(c.comision) + '), la cual será cobrada al momento de la disposición del crédito' + (esNomina ? ' y podrá ser descontada del monto a depositar' : '') + '. No se cobrarán comisiones adicionales por pagos anticipados, consultas de saldo ni por la emisión de estados de cuenta.', m, maxW);
+  }
+
+  // ── Periodo de Gracia (si aplica) ──
+  if (tieneGracia) {
+    y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — PERIODO DE GRACIA', m);
+    if (c.graciaConfig.tipo === 'capital') {
+      y = _pdfParrafo(doc, y, 'Las partes acuerdan un periodo de gracia de ' + c.graciaConfig.meses + ' meses contados a partir de la fecha de disposición, durante el cual ' + labelAcreditado + ' únicamente estará obligado al pago de los intereses ordinarios devengados, sin amortización de capital. Al término del periodo de gracia, el capital se amortizará conforme al calendario de pagos establecido en el Anexo "A".', m, maxW);
+    } else {
+      y = _pdfParrafo(doc, y, 'Las partes acuerdan un periodo de gracia de ' + c.graciaConfig.meses + ' meses contados a partir de la fecha de disposición, durante el cual ' + labelAcreditado + ' no estará obligado a realizar pago alguno. Los intereses ordinarios que se devenguen durante este periodo se capitalizarán al saldo insoluto. Al término del periodo de gracia, el nuevo saldo (capital más intereses capitalizados) se amortizará conforme al calendario de pagos del Anexo "A".', m, maxW);
+    }
+  }
+
+  // ── Intereses Moratorios ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — INTERESES MORATORIOS', m);
+  y = _pdfParrafo(doc, y, 'En caso de mora en el pago de cualquiera de las amortizaciones, ' + labelAcreditado + ' pagará intereses moratorios a una tasa anual del ' + tasaMoraPct + '%, calculados sobre el monto del capital vencido y no pagado, desde la fecha de vencimiento del pago respectivo hasta la fecha de su liquidación total. Los intereses moratorios se causarán sin necesidad de requerimiento alguno por el simple transcurso del plazo, siendo exigibles de pleno derecho.', m, maxW);
+
+  // ── Aplicación de pagos ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — ORDEN DE APLICACIÓN DE PAGOS', m);
+  y = _pdfParrafo(doc, y, 'Los pagos realizados por ' + labelAcreditado + ' se aplicarán en el siguiente orden: 1) Gastos de cobranza y honorarios legales, si los hubiere; 2) Intereses moratorios; 3) Intereses ordinarios vencidos; 4) Capital vencido; 5) Capital vigente. Lo anterior de conformidad con el artículo 2094 del Código Civil Federal.', m, maxW);
+
+  // ── Vencimiento Anticipado ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — CAUSAS DE VENCIMIENTO ANTICIPADO', m);
+  y = _pdfParrafo(doc, y, labelAcreditante + ' podrá dar por vencido anticipadamente el presente contrato y exigir el pago inmediato del saldo insoluto más todos los accesorios, sin necesidad de declaración judicial y sin responsabilidad alguna, en cualquiera de los siguientes supuestos:', m, maxW);
+  var causasVenc = [
+    'a) Falta de pago puntual de una o más amortizaciones de capital, intereses, o cualquier cantidad adeudada conforme al presente contrato.',
+    'b) Si ' + labelAcreditado + ' proporciona información o documentación falsa, incompleta o engañosa.',
+    'c) Si ' + labelAcreditado + ' es declarado en concurso mercantil, quiebra, suspensión de pagos o insolvencia.',
+    'd) Si las garantías otorgadas sufren menoscabo significativo o se extinguen por cualquier causa.',
+    'e) Si ' + labelAcreditado + ' incumple cualquier otra obligación derivada del presente contrato.',
+    'f) Si se inician procedimientos judiciales o administrativos en contra de ' + labelAcreditado + ' que afecten su capacidad de pago.'
+  ];
+  if (esNomina) {
+    causasVenc.push('g) Si ' + labelAcreditado + ' es separado de su empleo o su relación laboral termina por cualquier causa y no restablece el mecanismo de pago dentro de los 15 días naturales siguientes.');
+  }
+  if (esArrendamiento) {
+    causasVenc.push('g) Si ' + labelAcreditado + ' subarrienda, traspasa, grava o enajena EL EQUIPO sin consentimiento previo y por escrito de ' + labelAcreditante + '.');
+    causasVenc.push('h) Si EL EQUIPO sufre daño, destrucción total o parcial, o se pierde por cualquier causa y ' + labelAcreditado + ' no lo notifica dentro de los 5 días hábiles siguientes.');
+  }
+  causasVenc.forEach(function(causa) {
+    y = _pdfParrafo(doc, y, causa, m + 3, maxW - 3);
+  });
+
+  // ── Pago Anticipado ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — PAGO ANTICIPADO', m);
+  y = _pdfParrafo(doc, y, labelAcreditado + ' podrá realizar pagos anticipados, parciales o totales, del saldo insoluto del capital en cualquier momento durante la vigencia del presente contrato, sin penalización alguna, previo aviso por escrito a ' + labelAcreditante + ' con al menos 5 días hábiles de anticipación. Los pagos anticipados se aplicarán al saldo insoluto del capital, recalculándose en su caso los pagos periódicos subsecuentes.', m, maxW);
+
+  // ── Arrendamiento: cláusulas específicas ──
+  if (esArrendamiento) {
+    // Uso y conservación
+    y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — USO Y CONSERVACIÓN DEL EQUIPO', m);
+    y = _pdfParrafo(doc, y, labelAcreditado + ' se obliga a: a) Usar EL EQUIPO exclusivamente conforme a su naturaleza y destino; b) Mantener EL EQUIPO en buen estado de conservación y funcionamiento, a su exclusivo costo; c) No mover EL EQUIPO del domicilio declarado sin autorización escrita de ' + labelAcreditante + '; d) Permitir inspecciones periódicas de EL EQUIPO por parte de ' + labelAcreditante + '; e) Contratar y mantener vigente un seguro de cobertura amplia sobre EL EQUIPO, con ' + labelAcreditante + ' como beneficiario preferente.', m, maxW);
+
+    // Propiedad
+    y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — PROPIEDAD DEL EQUIPO', m);
+    y = _pdfParrafo(doc, y, 'Durante la vigencia del presente contrato, EL EQUIPO será propiedad de ' + labelAcreditante + '. ' + labelAcreditado + ' reconoce que su derecho sobre EL EQUIPO se limita al uso y goce temporal conforme a los términos de este contrato, y que en ningún caso adquiere derechos de propiedad sobre el mismo hasta en tanto ejerza la opción de compra y pague la totalidad del valor residual pactado.', m, maxW);
+
+    // Opción de compra
+    y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — OPCIÓN A COMPRA', m);
+    var vrMonto = c.monto * (c.valorResidual || 0) / 100;
+    y = _pdfParrafo(doc, y, 'Al término del plazo forzoso del arrendamiento financiero, ' + labelAcreditado + ' podrá ejercer cualquiera de las siguientes opciones terminales, conforme al artículo 410 de la Ley General de Títulos y Operaciones de Crédito:', m, maxW);
+    y = _pdfParrafo(doc, y, 'a) Comprar EL EQUIPO a un precio de $' + vrMonto.toLocaleString('es-MX', { minimumFractionDigits: 2 }) + ' (' + numeroALetras(vrMonto) + '), equivalente al ' + vrPct + '% del valor original, precio inferior al valor de mercado al momento de la compra;', m + 3, maxW - 3);
+    y = _pdfParrafo(doc, y, 'b) Prorrogar el plazo del contrato bajo las condiciones que se acuerden;', m + 3, maxW - 3);
+    y = _pdfParrafo(doc, y, 'c) Participar en el precio de la venta de EL EQUIPO a un tercero, en los términos que convengan las partes.', m + 3, maxW - 3);
+
+    // IVA
+    y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — IMPUESTO AL VALOR AGREGADO', m);
+    y = _pdfParrafo(doc, y, 'Las rentas pactadas no incluyen el Impuesto al Valor Agregado (IVA), el cual será calculado y cobrado adicionalmente a la tasa vigente al momento de la emisión de cada factura. ' + labelAcreditante + ' emitirá el Comprobante Fiscal Digital por Internet (CFDI) correspondiente a cada renta.', m, maxW);
+  }
+
+  // ── Nómina: cláusulas específicas ──
+  if (esNomina) {
+    y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — AUTORIZACIÓN DE DESCUENTO VÍA NÓMINA', m);
+    y = _pdfParrafo(doc, y, labelAcreditado + ' otorga su consentimiento expreso e irrevocable a su patrón o empleador para que descuente de su salario, aguinaldo, gratificaciones, bonos, comisiones, participación de utilidades y/o cualquier prestación de carácter laboral, las cantidades necesarias para cubrir las amortizaciones del presente crédito, y las entregue directamente a ' + labelAcreditante + '. Esta autorización subsistirá durante toda la vigencia del crédito y no podrá ser revocada unilateralmente mientras exista saldo pendiente.', m, maxW);
+
+    y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — OBLIGACIONES ADICIONALES DEL MUTUATARIO', m);
+    y = _pdfParrafo(doc, y, labelAcreditado + ' se obliga a: a) Notificar por escrito a ' + labelAcreditante + ' cualquier cambio de empleo, patrón o condiciones laborales dentro de los 5 días hábiles siguientes; b) En caso de cambio de empleo, gestionar con su nuevo empleador la continuidad del descuento vía nómina dentro de los 15 días hábiles siguientes; c) En caso de terminación de la relación laboral, aplicar la liquidación, finiquito o cualquier cantidad percibida al pago del saldo insoluto, previo acuerdo con ' + labelAcreditante + '; d) Mantener informado a ' + labelAcreditante + ' de cualquier circunstancia que pudiera afectar su capacidad de pago.', m, maxW);
+  }
+
+  // ── Garantías ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — GARANTÍAS', m);
+  if (esArrendamiento) {
+    y = _pdfParrafo(doc, y, 'En garantía del cumplimiento de las obligaciones derivadas del presente contrato, EL EQUIPO quedará en todo momento como garantía a favor de ' + labelAcreditante + ', quien conserva la propiedad del mismo. Adicionalmente, ' + labelAcreditado + ' suscribirá el(los) pagaré(s) correspondiente(s) a favor de ' + labelAcreditante + '.', m, maxW);
+  } else if (esNomina) {
+    y = _pdfParrafo(doc, y, 'En garantía del cumplimiento de las obligaciones derivadas del presente contrato, ' + labelAcreditado + ' suscribirá un pagaré a favor de ' + labelAcreditante + ' por el monto total del crédito más intereses. Adicionalmente, la autorización irrevocable de descuento vía nómina constituye una garantía de fuente de pago.', m, maxW);
+  } else {
+    y = _pdfParrafo(doc, y, 'En garantía del cumplimiento de las obligaciones derivadas del presente contrato, ' + labelAcreditado + ' suscribirá un pagaré a la orden de ' + labelAcreditante + ' por el monto total adeudado. Las partes podrán convenir garantías adicionales (hipotecaria, prendaria, fianza, u otras) las cuales se formalizarán en documento por separado que formará parte integral de este contrato.', m, maxW);
+  }
+
+  // ── Gastos y Costos ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — GASTOS Y COSTOS', m);
+  y = _pdfParrafo(doc, y, 'Todos los gastos, derechos, impuestos, honorarios notariales y de registro que se generen con motivo de la celebración, formalización y ejecución del presente contrato, serán a cargo de ' + labelAcreditado + ', salvo pacto en contrario. En caso de que ' + labelAcreditante + ' se vea en la necesidad de ejercer acciones judiciales o extrajudiciales para el cobro de cualquier cantidad adeudada, ' + labelAcreditado + ' se obliga a cubrir la totalidad de los gastos de cobranza y honorarios legales que se generen.', m, maxW);
+
+  // ── Confidencialidad ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — CONFIDENCIALIDAD Y PROTECCIÓN DE DATOS', m);
+  y = _pdfParrafo(doc, y, 'Las partes se obligan a mantener la confidencialidad de la información proporcionada con motivo del presente contrato. ' + labelAcreditante + ' tratará los datos personales de ' + labelAcreditado + ' conforme a la Ley Federal de Protección de Datos Personales en Posesión de los Particulares y su Reglamento. ' + labelAcreditado + ' autoriza a ' + labelAcreditante + ' a consultar su historial crediticio ante las Sociedades de Información Crediticia (Buró de Crédito / Círculo de Crédito) y a reportar el comportamiento del presente crédito.', m, maxW);
+
+  // ── PLD (Prevención de Lavado de Dinero) ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — PREVENCIÓN DE LAVADO DE DINERO', m);
+  y = _pdfParrafo(doc, y, labelAcreditado + ' declara bajo protesta de decir verdad que los recursos utilizados para el pago del presente crédito provienen de fuentes lícitas y que no se encuentra en la lista de personas bloqueadas o sancionadas por autoridades nacionales o internacionales. ' + labelAcreditante + ' cumple con las disposiciones de la ' + EMPRESA.pldMarco + ' y se reserva el derecho de reportar operaciones inusuales o relevantes ante la Unidad de Inteligencia Financiera (UIF).', m, maxW);
+
+  // ── Notificaciones ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — DOMICILIOS Y NOTIFICACIONES', m);
+  y = _pdfParrafo(doc, y, 'Las partes señalan como domicilios para oír y recibir toda clase de notificaciones y documentos los indicados en el proemio del presente contrato. Cualquier cambio de domicilio deberá notificarse por escrito a la otra parte con al menos 10 días hábiles de anticipación. Las notificaciones surtirán efectos al día hábil siguiente de su entrega en el domicilio señalado o al momento de su envío por correo electrónico a las direcciones proporcionadas.', m, maxW);
+
+  // ── Jurisdicción ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — JURISDICCIÓN Y COMPETENCIA', m);
+  y = _pdfParrafo(doc, y, 'Para la interpretación, cumplimiento y ejecución del presente contrato, las partes se someten expresamente a la jurisdicción y competencia de los tribunales competentes de la Ciudad de México, renunciando expresamente a cualquier otro fuero que por razón de sus domicilios presentes o futuros o por cualquier otra causa pudiera corresponderles.', m, maxW);
+
+  // ── Ley Aplicable ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — LEY APLICABLE', m);
+  y = _pdfParrafo(doc, y, 'El presente contrato se regirá e interpretará de conformidad con la Ley General de Títulos y Operaciones de Crédito, la Ley General de Organizaciones y Actividades Auxiliares del Crédito, el Código de Comercio, el Código Civil Federal y demás legislación mercantil y financiera aplicable de los Estados Unidos Mexicanos.', m, maxW);
+
+  // ── Cláusula Final ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — DISPOSICIONES FINALES', m);
+  y = _pdfParrafo(doc, y, 'El presente contrato, junto con sus anexos, constituye la totalidad del acuerdo entre las partes respecto de su objeto, y deja sin efecto cualquier negociación, acuerdo o comunicación previa. Cualquier modificación al presente contrato deberá constar por escrito y ser firmada por ambas partes. Si alguna cláusula del presente contrato fuera declarada nula o inválida, las restantes conservarán plena vigencia y eficacia. El presente contrato se firma en dos ejemplares originales, quedando uno en poder de cada parte.', m, maxW);
+
+  // ══════ FIRMAS ══════
+  y = _pdfFirmasCompletas(doc, y, labelAcreditante, labelAcreditado, EMPRESA.razonSocial, cli.nombre);
+
+  // ── Testigos ──
+  y = _pdfTestigos(doc, y);
 
   // ── Nota legal ──
-  if (y > doc.internal.pageSize.getHeight() - 20) { doc.addPage(); y = 20; }
+  if (y > pageH - 20) { doc.addPage(); y = 20; }
   doc.setFontSize(7);
   doc.setTextColor(130, 130, 130);
   y += 5;
-  y = _pdfParrafo(doc, y, 'Este documento ha sido generado electrónicamente y constituye un borrador de contrato. Las partes deberán revisar y, en su caso, adecuar las cláusulas antes de su firma definitiva. Se recomienda consultar a un asesor legal para su formalización.', m, maxW);
+  y = _pdfParrafo(doc, y, 'AVISO: Este documento ha sido generado electrónicamente por ' + EMPRESA.razonSocial + ' y constituye un borrador de contrato sujeto a revisión legal. Las partes deberán revisar y, en su caso, adecuar las cláusulas antes de su firma definitiva. Se recomienda consultar a un asesor legal para su formalización. El Anexo "A" (Tabla de Amortización) se genera por separado.', m, maxW);
 
   // ── Pie de página ──
   _pdfPie(doc);
 
-  doc.save('Contrato_' + c.numero + '.pdf');
-  toast('Contrato PDF generado: ' + c.numero, 'success');
-  addAudit('Contrato PDF generado', 'Créditos', c.numero + ' — ' + cli.nombre);
+  var tipoLabel2 = esArrendamiento ? 'ArrendFinanciero' : (esNomina ? 'MutuoNomina' : 'MutuoInteres');
+  doc.save('Contrato_' + tipoLabel2 + '_' + c.numero + '.pdf');
+  toast('Contrato de ' + (esArrendamiento ? 'Arrendamiento Financiero' : 'Mutuo con Interés') + ' generado: ' + c.numero, 'success');
+  addAudit('Contrato PDF generado', 'Créditos', tipoLabel2 + ' — ' + c.numero + ' — ' + cli.nombre);
+}
+
+// Helper: Números romanos para cláusulas
+function _clausulaRomano(n) {
+  var romanos = ['', 'PRIMERA', 'SEGUNDA', 'TERCERA', 'CUARTA', 'QUINTA', 'SEXTA', 'SÉPTIMA', 'OCTAVA', 'NOVENA', 'DÉCIMA',
+    'DÉCIMA PRIMERA', 'DÉCIMA SEGUNDA', 'DÉCIMA TERCERA', 'DÉCIMA CUARTA', 'DÉCIMA QUINTA', 'DÉCIMA SEXTA',
+    'DÉCIMA SÉPTIMA', 'DÉCIMA OCTAVA', 'DÉCIMA NOVENA', 'VIGÉSIMA', 'VIGÉSIMA PRIMERA', 'VIGÉSIMA SEGUNDA',
+    'VIGÉSIMA TERCERA', 'VIGÉSIMA CUARTA', 'VIGÉSIMA QUINTA'];
+  return romanos[n] || n.toString();
+}
+
+// Helper: Firmas completas con roles
+function _pdfFirmasCompletas(doc, y, labelA, labelB, nombreA, nombreB) {
+  var w = doc.internal.pageSize.getWidth();
+  var m = 18;
+  var pageH = doc.internal.pageSize.getHeight();
+  if (y > pageH - 70) { doc.addPage(); y = 30; }
+  y += 18;
+  var col1 = m + 20, col2 = w / 2 + 20;
+  doc.setDrawColor(100, 100, 100);
+  doc.line(col1 - 15, y, col1 + 60, y);
+  doc.line(col2 - 15, y, col2 + 60, y);
+  y += 5;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(27, 42, 74);
+  doc.text(labelA, col1 + 22, y, { align: 'center' });
+  doc.text(labelB, col2 + 22, y, { align: 'center' });
+  y += 4;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(50, 50, 50);
+  doc.text(nombreA, col1 + 22, y, { align: 'center' });
+  doc.text(nombreB, col2 + 22, y, { align: 'center' });
+  y += 4;
+  doc.text('Representante Legal', col1 + 22, y, { align: 'center' });
+  return y + 10;
+}
+
+// Helper: Testigos
+function _pdfTestigos(doc, y) {
+  var w = doc.internal.pageSize.getWidth();
+  var m = 18;
+  var pageH = doc.internal.pageSize.getHeight();
+  if (y > pageH - 55) { doc.addPage(); y = 30; }
+  y += 10;
+  doc.setFontSize(9);
+  doc.setFont('helvetica', 'bold');
+  doc.setTextColor(27, 42, 74);
+  doc.text('TESTIGOS', w / 2, y, { align: 'center' });
+  y += 15;
+  var col1 = m + 20, col2 = w / 2 + 20;
+  doc.setDrawColor(100, 100, 100);
+  doc.line(col1 - 15, y, col1 + 60, y);
+  doc.line(col2 - 15, y, col2 + 60, y);
+  y += 5;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(8);
+  doc.setTextColor(50, 50, 50);
+  doc.text('TESTIGO 1', col1 + 22, y, { align: 'center' });
+  doc.text('TESTIGO 2', col2 + 22, y, { align: 'center' });
+  y += 4;
+  doc.text('Nombre: ____________________', col1 - 10, y);
+  doc.text('Nombre: ____________________', col2 - 10, y);
+  y += 4;
+  doc.text('RFC: ______________________', col1 - 10, y);
+  doc.text('RFC: ______________________', col2 - 10, y);
+  return y + 8;
+}
+
+// ════════════════════════════════════════════════════════════════
+//  1-C. CONTRATO DE FONDEO (MUTUO CON INTERÉS)
+//  El fondeador presta a la empresa
+// ════════════════════════════════════════════════════════════════
+function generarContratoFondeoPDF(id) {
+  var fondeos = getStore('fondeos');
+  var f = fondeos.find(function(fo) { return fo.id === id; });
+  if (!f) return toast('Fondeo no encontrado', 'error');
+  if (!window.jspdf) return toast('jsPDF no cargada', 'error');
+  var jsPDF = window.jspdf.jsPDF;
+  var doc = new jsPDF('p', 'mm', 'letter');
+  var w = doc.internal.pageSize.getWidth();
+  var m = 18;
+  var maxW = w - m * 2;
+  var pageH = doc.internal.pageSize.getHeight();
+
+  var esCC = f.esRevolvente || f.tipo === 'cuenta_corriente';
+  var tipoContrato = esCC ? 'CONTRATO DE CRÉDITO EN CUENTA CORRIENTE' : 'CONTRATO DE MUTUO CON INTERÉS';
+  var fechaHoy = new Date().toLocaleDateString('es-MX', { year: 'numeric', month: 'long', day: 'numeric' });
+  var montoTxt = '$' + Number(f.monto || f.limite || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 });
+  var montoLetras = numeroALetras(f.monto || f.limite || 0);
+  var tasaPct = ((f.tasa || 0) * 100).toFixed(2);
+  var tieneGracia = f.graciaConfig && f.graciaConfig.meses > 0;
+
+  var nClausula = 0;
+  function nextClausula() { nClausula++; return _clausulaRomano(nClausula); }
+
+  // ── Encabezado ──
+  var y = _pdfHeader(doc, tipoContrato, 'Fondeo: ' + (f.numero || 'FD-' + f.id));
+
+  // ══════ ANTECEDENTES ══════
+  y = _pdfSeccion(doc, y, 'ANTECEDENTES', m);
+  y = _pdfParrafo(doc, y, 'En la Ciudad de México, a ' + fechaHoy + ', comparecen para celebrar el presente contrato:', m, maxW);
+
+  // En fondeos: el FONDEADOR es quien presta dinero a la EMPRESA
+  y = _pdfParrafo(doc, y, 'I. ' + (f.fondeador || '[NOMBRE DEL FONDEADOR]') + ' (en lo sucesivo "EL MUTUANTE" o "EL FONDEADOR"), quien declara tener la capacidad legal y los recursos suficientes para celebrar el presente contrato y otorgar los recursos aquí pactados.', m, maxW);
+
+  y = _pdfParrafo(doc, y, 'II. ' + EMPRESA.razonSocial + ', con RFC ' + EMPRESA.rfc + ', con domicilio fiscal en C.P. ' + EMPRESA.cp + ', constituida conforme a las leyes mexicanas como SOFOM E.N.R., representada por su apoderado legal (en lo sucesivo "EL MUTUATARIO" o "LA EMPRESA").', m, maxW);
+
+  // ══════ DECLARACIONES ══════
+  y = _pdfSeccion(doc, y, 'DECLARACIONES', m);
+  y = _pdfParrafo(doc, y, 'I. Declara EL MUTUANTE que: a) Cuenta con la capacidad legal para celebrar el presente contrato; b) Los recursos que proporcionará provienen de fuentes lícitas; c) Conoce y acepta las condiciones financieras del presente contrato; d) Ha realizado la evaluación de riesgo correspondiente respecto de EL MUTUATARIO.', m, maxW);
+
+  y = _pdfParrafo(doc, y, 'II. Declara EL MUTUATARIO que: a) Es una SOFOM E.N.R. legalmente constituida cuyo objeto social incluye la celebración de operaciones de crédito, arrendamiento financiero y factoraje financiero; b) Su representante legal cuenta con las facultades suficientes para obligarla; c) Los recursos obtenidos se destinarán exclusivamente a sus operaciones de intermediación financiera; d) No se encuentra en estado de insolvencia o concurso mercantil.', m, maxW);
+
+  // ══════ CLÁUSULAS ══════
+
+  // ── Cláusula I: Objeto ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — OBJETO DEL CONTRATO', m);
+  if (esCC) {
+    y = _pdfParrafo(doc, y, 'EL MUTUANTE se obliga a otorgar a EL MUTUATARIO una línea de crédito en cuenta corriente por un monto máximo de ' + montoTxt + ' (' + montoLetras + '), de la cual EL MUTUATARIO podrá realizar disposiciones parciales conforme a sus necesidades operativas, obligándose a la restitución de las cantidades dispuestas más los intereses pactados. La línea será de carácter revolvente, permitiendo nuevas disposiciones conforme se restituya capital.', m, maxW);
+  } else {
+    y = _pdfParrafo(doc, y, 'EL MUTUANTE se obliga a entregar en mutuo con interés a EL MUTUATARIO la cantidad de ' + montoTxt + ' (' + montoLetras + '), de conformidad con los artículos 358 al 364 de la Ley General de Títulos y Operaciones de Crédito y 2384 al 2397 del Código Civil Federal, obligándose EL MUTUATARIO a restituir dicha cantidad junto con los intereses y accesorios pactados.', m, maxW);
+  }
+
+  // ── Cláusula II: Condiciones Financieras ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — CONDICIONES FINANCIERAS', m);
+  var condiciones = [
+    ['Número de fondeo:', f.numero || 'FD-' + f.id],
+    [esCC ? 'Línea de crédito:' : 'Monto del préstamo:', montoTxt],
+    ['Fondeador:', f.fondeador || 'N/A'],
+    ['Tipo de fondeador:', f.tipo || 'N/A'],
+    ['Tasa de interés anual:', tasaPct + '%'],
+    ['Plazo:', (f.plazo || 0) + ' meses'],
+    ['Periodicidad de pago:', _periLabel[f.periodicidad] || f.periodicidad || 'Mensual'],
+    ['Fecha de inicio:', f.fechaInicio ? new Date(f.fechaInicio).toLocaleDateString('es-MX') : 'N/A'],
+    ['Fecha de vencimiento:', f.fechaVencimiento ? new Date(f.fechaVencimiento).toLocaleDateString('es-MX') : 'N/A'],
+    ['Moneda:', 'MXN — Pesos Mexicanos'],
+    ['Método de amortización:', 'Francés (cuota fija sobre saldo insoluto)'],
+    ['Base de cálculo:', '360/360 (año comercial)']
+  ];
+  if (esCC) {
+    condiciones.push(['Saldo dispuesto actual:', '$' + Number(f.saldoDispuesto || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })]);
+    condiciones.push(['Disponible:', '$' + Number(f.disponibleFondeo || 0).toLocaleString('es-MX', { minimumFractionDigits: 2 })]);
+  }
+  if (f.garantia) {
+    condiciones.push(['Garantía:', f.garantia]);
+  }
+  if (tieneGracia) {
+    condiciones.push(['Periodo de gracia:', f.graciaConfig.meses + ' meses — ' + (f.graciaConfig.tipo === 'total' ? 'Sin pago (capitalización)' : 'Solo intereses')]);
+  }
+
+  condiciones.forEach(function(row) {
+    if (y > pageH - 25) { doc.addPage(); y = 20; }
+    doc.setFont('helvetica', 'bold');
+    doc.text(row[0], m + 2, y);
+    doc.setFont('helvetica', 'normal');
+    doc.text(row[1], m + 64, y);
+    y += 5;
+  });
+  y += 3;
+
+  // ── Cláusula III: Disposición ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — DISPOSICIÓN DE RECURSOS', m);
+  if (esCC) {
+    y = _pdfParrafo(doc, y, 'EL MUTUATARIO podrá disponer de la línea de crédito mediante solicitudes escritas dirigidas a EL MUTUANTE, quien transferirá los recursos mediante transferencia electrónica (SPEI) a la cuenta bancaria de EL MUTUATARIO dentro de los 3 días hábiles siguientes a la solicitud, sujeto a disponibilidad dentro del límite autorizado.', m, maxW);
+  } else {
+    y = _pdfParrafo(doc, y, 'EL MUTUANTE entregará a EL MUTUATARIO la totalidad de los recursos pactados mediante transferencia electrónica (SPEI) a la cuenta bancaria que EL MUTUATARIO designe, en la fecha convenida por las partes.', m, maxW);
+  }
+
+  // ── Cláusula IV: Intereses ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — INTERESES', m);
+  y = _pdfParrafo(doc, y, 'EL MUTUATARIO se obliga a pagar a EL MUTUANTE intereses sobre el saldo insoluto del capital dispuesto a una tasa fija anual del ' + tasaPct + '%, calculados sobre la base de un año de 360 días. Los intereses se devengarán día a día y serán pagaderos de manera ' + (_periLabel[f.periodicidad] || f.periodicidad || 'mensual').toLowerCase() + '.', m, maxW);
+
+  // ── Cláusula V: Forma de Pago ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — FORMA DE PAGO', m);
+  y = _pdfParrafo(doc, y, 'EL MUTUATARIO realizará los pagos de capital e intereses mediante transferencia electrónica (SPEI) a la cuenta bancaria que EL MUTUANTE designe. Los pagos se realizarán conforme al calendario de amortización que como Anexo "A" forma parte integral del presente contrato. El pago se considerará efectuado en la fecha en que los fondos sean acreditados en la cuenta del MUTUANTE.', m, maxW);
+
+  // ── Periodo de Gracia (si aplica) ──
+  if (tieneGracia) {
+    y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — PERIODO DE GRACIA', m);
+    if (f.graciaConfig.tipo === 'capital') {
+      y = _pdfParrafo(doc, y, 'Las partes acuerdan un periodo de gracia de ' + f.graciaConfig.meses + ' meses contados a partir de la fecha de disposición, durante el cual EL MUTUATARIO únicamente pagará los intereses ordinarios devengados, sin amortización de capital.', m, maxW);
+    } else {
+      y = _pdfParrafo(doc, y, 'Las partes acuerdan un periodo de gracia de ' + f.graciaConfig.meses + ' meses contados a partir de la fecha de disposición, durante el cual EL MUTUATARIO no realizará pago alguno. Los intereses devengados durante este periodo se capitalizarán al saldo insoluto.', m, maxW);
+    }
+  }
+
+  // ── Vencimiento anticipado ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — CAUSAS DE VENCIMIENTO ANTICIPADO', m);
+  y = _pdfParrafo(doc, y, 'EL MUTUANTE podrá dar por vencido anticipadamente el presente contrato en los siguientes supuestos: a) Falta de pago oportuno de capital o intereses; b) Si EL MUTUATARIO proporciona información falsa; c) Si EL MUTUATARIO es declarado en concurso mercantil o insolvencia; d) Si la autorización de EL MUTUATARIO como SOFOM es revocada o suspendida; e) Si el índice de morosidad de la cartera de EL MUTUATARIO excede los parámetros acordados; f) Incumplimiento de cualquier obligación del presente contrato.', m, maxW);
+
+  // ── Pago anticipado ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — PAGO ANTICIPADO', m);
+  y = _pdfParrafo(doc, y, 'EL MUTUATARIO podrá realizar pagos anticipados del saldo insoluto, parciales o totales, previo aviso por escrito a EL MUTUANTE con al menos 10 días hábiles de anticipación, sin penalización alguna.', m, maxW);
+
+  // ── Garantías ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — GARANTÍAS', m);
+  y = _pdfParrafo(doc, y, 'En garantía del cumplimiento de las obligaciones del presente contrato, EL MUTUATARIO otorgará: ' + (f.garantia ? f.garantia + '.' : 'Las garantías que las partes convengan, las cuales se formalizarán en documento por separado.') + ' Adicionalmente, EL MUTUATARIO se obliga a mantener a favor de EL MUTUANTE una cesión fiduciaria o prendaria sobre la cartera de créditos originada con los recursos del presente fondeo, en los términos que las partes acuerden.', m, maxW);
+
+  // ── Destino de recursos ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — DESTINO DE LOS RECURSOS', m);
+  y = _pdfParrafo(doc, y, 'EL MUTUATARIO se obliga a destinar los recursos recibidos exclusivamente a la originación de créditos y/o arrendamientos financieros dentro de su actividad como SOFOM E.N.R. EL MUTUATARIO no podrá destinar los recursos a fines distintos sin el consentimiento previo y por escrito de EL MUTUANTE.', m, maxW);
+
+  // ── Obligaciones de información ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — OBLIGACIONES DE INFORMACIÓN', m);
+  y = _pdfParrafo(doc, y, 'EL MUTUATARIO se obliga a proporcionar a EL MUTUANTE: a) Estados financieros trimestrales auditados o dictaminados; b) Reporte mensual de la cartera de créditos originada con los recursos del fondeo; c) Notificación inmediata de cualquier evento que pueda afectar su capacidad de pago; d) Cualquier otra información que EL MUTUANTE razonablemente solicite para evaluar el cumplimiento del presente contrato.', m, maxW);
+
+  // ── PLD ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — PREVENCIÓN DE LAVADO DE DINERO', m);
+  y = _pdfParrafo(doc, y, 'Ambas partes declaran cumplir con las disposiciones aplicables en materia de prevención de lavado de dinero y financiamiento al terrorismo, conforme a la legislación vigente. Los recursos objeto del presente contrato provienen y se destinarán a actividades lícitas.', m, maxW);
+
+  // ── Jurisdicción ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — JURISDICCIÓN', m);
+  y = _pdfParrafo(doc, y, 'Para la interpretación, cumplimiento y ejecución del presente contrato, las partes se someten a la jurisdicción de los tribunales competentes de la Ciudad de México, renunciando a cualquier otro fuero que pudiera corresponderles.', m, maxW);
+
+  // ── Ley Aplicable ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — LEY APLICABLE', m);
+  y = _pdfParrafo(doc, y, 'El presente contrato se regirá por la Ley General de Títulos y Operaciones de Crédito, la Ley General de Organizaciones y Actividades Auxiliares del Crédito, el Código de Comercio, el Código Civil Federal y demás legislación mercantil aplicable.', m, maxW);
+
+  // ── Disposiciones finales ──
+  y = _pdfSeccion(doc, y, 'CLÁUSULA ' + nextClausula() + ' — DISPOSICIONES FINALES', m);
+  y = _pdfParrafo(doc, y, 'El presente contrato, junto con sus anexos, constituye el acuerdo íntegro entre las partes. Cualquier modificación requerirá constar por escrito y ser firmada por ambas partes. Se firma en dos ejemplares originales, quedando uno en poder de cada parte.', m, maxW);
+
+  // ══════ FIRMAS ══════
+  y = _pdfFirmasCompletas(doc, y, 'EL MUTUANTE', 'EL MUTUATARIO', f.fondeador || '[FONDEADOR]', EMPRESA.razonSocial);
+
+  // ── Testigos ──
+  y = _pdfTestigos(doc, y);
+
+  // ── Nota legal ──
+  if (y > pageH - 20) { doc.addPage(); y = 20; }
+  doc.setFontSize(7);
+  doc.setTextColor(130, 130, 130);
+  y += 5;
+  y = _pdfParrafo(doc, y, 'AVISO: Este documento ha sido generado electrónicamente por ' + EMPRESA.razonSocial + ' y constituye un borrador de contrato sujeto a revisión legal. Las partes deberán revisar y adecuar las cláusulas antes de su firma definitiva.', m, maxW);
+
+  // ── Pie de página ──
+  _pdfPie(doc);
+
+  doc.save('Contrato_Fondeo_' + (f.numero || 'FD-' + f.id) + '.pdf');
+  toast('Contrato de Fondeo generado: ' + (f.numero || 'FD-' + f.id), 'success');
+  addAudit('Contrato Fondeo PDF', 'Fondeos', (f.numero || 'FD-' + f.id) + ' — ' + (f.fondeador || ''));
 }
 
 // ════════════════════════════════════════════════════════════════
