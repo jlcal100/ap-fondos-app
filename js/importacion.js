@@ -388,15 +388,15 @@ function descargarPlantilla(tipo) {
   if (tipo === 'clientes') {
     headers = ['nombre', 'rfc', 'tipo', 'curp', 'telefono', 'email', 'direccion', 'ciudad', 'estado', 'cp', 'ingresos', 'score', 'sector', 'notas'];
     sampleData = [
-      ['Grupo Industrial del Norte SA de CV', 'GIN200101ABC', 'moral', '', '8112345678', 'contacto@gin.com', 'Av. Constitución 456', 'Monterrey', 'Nuevo León', '64000', 2500000, 720, 'Manufactura', ''],
-      ['María López Hernández', 'LOHM850315ABC', 'fisica', 'LOHM850315MNLLRR01', '5523456789', 'maria.lopez@gmail.com', 'Col. Roma Norte #123', 'CDMX', 'CDMX', '06700', 45000, 680, 'Servicios', 'Cliente referido']
+      ['Juan Pérez López', 'PELJ850101ABC', 'fisica', 'PELJ850101HDFRPN09', '5551234567', 'juan@empresa.com', 'Av. Reforma 123, Col. Centro', 'CDMX', 'CDMX', '06600', 45000, 720, 'Comercio', 'Cliente referido'],
+      ['Comercializadora ABC, S.A. de C.V.', 'CAB200315XX0', 'moral', '', '8112345678', 'contacto@abc.com.mx', 'Blvd. Insurgentes 456', 'Monterrey', 'Nuevo León', '64000', 350000, 680, 'Manufactura', '']
     ];
     sheetName = 'Clientes';
   } else if (tipo === 'fondeos') {
     headers = ['fondeador', 'monto', 'tasa', 'plazo', 'fecha_inicio', 'tipo', 'periodicidad', 'garantia', 'notas'];
     sampleData = [
-      ['Banco Nacional', 5000000, 12, 36, '2025-01-15', 'banco', 'mensual', 'Cartera de créditos', ''],
-      ['Fondo de Inversión Alpha', 2000000, 14, 24, '2025-06-01', 'fondo', 'trimestral', '', 'Renovable']
+      ['Banco Nacional de México', 5000000, 12, 36, '2025-01-01', 'linea_credito', 'mensual', 'Cartera crediticia', 'Línea revolvente'],
+      ['Inversionista Privado A', 2000000, 15, 24, '2025-02-01', 'prestamo', 'mensual', 'Pagaré', '']
     ];
     sheetName = 'Fondeos';
   }

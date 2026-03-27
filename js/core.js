@@ -393,29 +393,41 @@ function initData() {
       { id: 1, nombre: 'Administrador', email: 'admin@apfondos.com', rol: 'admin', activo: true, ultimoAcceso: new Date().toISOString() }
     ]);
   }
-  // Seed sample data for demo
+  // Seed data
   if (getStore('clientes').length === 0) {
     setStore('clientes', [
-      { id: 1, tipo: 'moral', nombre: 'Grupo Industrial del Norte SA de CV', rfc: 'GIN200101ABC', curp: '', telefono: '8112345678', email: 'contacto@gin.com', direccion: 'Av. Constitución 456', ciudad: 'Monterrey', estado: 'Nuevo León', cp: '64000', ingresos: 2500000, score: 720, sector: 'Manufactura', notas: '' },
-      { id: 2, tipo: 'fisica', nombre: 'María López Hernández', rfc: 'LOHM850315ABC', curp: 'LOHM850315MNLLRR01', telefono: '5523456789', email: 'maria.lopez@gmail.com', direccion: 'Col. Roma Norte #123', ciudad: 'CDMX', estado: 'CDMX', cp: '06700', ingresos: 45000, score: 680, sector: 'Servicios', notas: '' },
-      { id: 3, tipo: 'moral', nombre: 'Transportes del Pacífico SA', rfc: 'TPA190501XYZ', curp: '', telefono: '3312345678', email: 'admin@transpac.mx', direccion: 'Blvd. Tlaquepaque 789', ciudad: 'Guadalajara', estado: 'Jalisco', cp: '44100', ingresos: 1800000, score: 700, sector: 'Transporte', notas: '' }
+      { id: 1, tipo: 'fisica', nombre: 'Juan Pérez López', rfc: 'PELJ850101ABC', curp: 'PELJ850101HDFRPN09', telefono: '5551234567', email: 'juan@empresa.com', direccion: 'Av. Reforma 123, Col. Centro', ciudad: 'CDMX', estado: 'CDMX', cp: '06600', ingresos: 45000, score: 720, sector: 'Comercio', notas: 'Cliente referido' },
+      { id: 2, tipo: 'moral', nombre: 'Comercializadora ABC, S.A. de C.V.', rfc: 'CAB200315XX0', curp: '', telefono: '8112345678', email: 'contacto@abc.com.mx', direccion: 'Blvd. Insurgentes 456', ciudad: 'Monterrey', estado: 'Nuevo León', cp: '64000', ingresos: 350000, score: 680, sector: 'Manufactura', notas: '' },
+      { id: 3, tipo: 'fisica', nombre: 'XOCHIL MERARI MARAVILLA DE LA ROSA', rfc: 'MARX940201DA1', curp: 'MARX940201MMCRSC03', telefono: '7222691304', email: 'xochitlmaravilla44@gmail.com', direccion: 'SAN ANTONIO 8 COL.RIO HONDITO', ciudad: 'OCOYOACAC', estado: 'Estado de México', cp: '52740', ingresos: 9500, score: 0, sector: 'Comercio', notas: 'Oficial Gasolinero' },
+      { id: 4, tipo: 'moral', nombre: 'CORPORATIVO AP SA DE CV', rfc: 'CAP1506113H1', curp: '', telefono: '7222321614', email: 'apfondos@corporativoap.com.mx', direccion: 'AV.TECNOLOGICO 1131 NORTE COL.BELLAVISTA', ciudad: 'METEPEC', estado: 'Estado de México', cp: '52172', ingresos: 10000000, score: 0, sector: 'Comercio', notas: 'Compra Venta Gasolina y Diesel' },
+      { id: 5, tipo: 'fisica', nombre: 'ANDREA MARIN GASCA', rfc: 'MAGA9412158J1', curp: 'MAGA941215MDFRSN09', telefono: '7223819790', email: 'andyadriel041518@gmail.com', direccion: 'FRANCISCO VILLA S/N COL.GUADALUPE', ciudad: 'LERMA', estado: 'Estado de México', cp: '52000', ingresos: 9500, score: 0, sector: 'Comercio', notas: 'Oficial Gasolinero' },
+      { id: 6, tipo: 'moral', nombre: 'ENERGETICOS ENCINOS SA DE CV', rfc: 'EEN110211JN3', curp: '', telefono: '7222105606', email: 'encinos179@corporativoap.com.mx', direccion: 'AV. 5 DE MAYO 718 COL.LAS AMERICAS', ciudad: 'TOLUCA', estado: 'Estado de México', cp: '50130', ingresos: 4000000, score: 0, sector: 'Comercio', notas: 'Compra Venta Gasolina y Diesel' }
     ]);
   }
   if (getStore('creditos').length === 0) {
-    const hoy = new Date();
-    const hace6m = new Date(hoy); hace6m.setMonth(hace6m.getMonth() - 6);
-    const hace3m = new Date(hoy); hace3m.setMonth(hace3m.getMonth() - 3);
-
-    const cred1 = crearCreditoObj(1, 'CS-001', 1, 'credito_simple', 1500000, 0.24, 0, 24, 'mensual', hace6m.toISOString().split('T')[0], 0, 0, 0);
-    const cred2 = crearCreditoObj(2, 'AR-001', 3, 'arrendamiento', 2000000, 0.22, 0, 36, 'mensual', hace3m.toISOString().split('T')[0], 1, 2000000, 0);
-    const cred3 = crearCreditoObj(3, 'NM-001', 2, 'nomina', 80000, 0.36, 0, 12, 'quincenal', hace3m.toISOString().split('T')[0], 0, 0, 0);
-    setStore('creditos', [cred1, cred2, cred3]);
+    // clienteId mapping: PELJ=1, CAB=2, MARX=3, CAP=4, MAGA=5, EEN=6
+    const cred1 = crearCreditoObj(1, 'CS-001', 1, 'credito_simple', 1500000, 0.24, 0.36, 24, 'mensual', '2025-01-15', 0, 0, 15000);
+    cred1.pagosRealizados = 14; cred1.saldo = 662500; cred1.notas = 'Capital de trabajo - 14 de 24 pagos';
+    const cred2 = crearCreditoObj(2, 'AR-001', 2, 'arrendamiento', 2000000, 0.22, 0.33, 36, 'mensual', '2025-03-01', 10, 2000000, 20000);
+    cred2.pagosRealizados = 12; cred2.saldo = 1425000; cred2.notas = 'Maquinaria CNC - 12 de 36 pagos';
+    const cred3 = crearCreditoObj(3, 'NM-001', 1, 'nomina', 50000, 0.28, 0.42, 12, 'quincenal', '2025-06-01', 0, 0, 500);
+    cred3.pagosRealizados = 15; cred3.saldo = 18750; cred3.notas = 'Préstamo nómina - 15 de 24 periodos';
+    const cred4 = crearCreditoObj(4, 'NM-002', 5, 'nomina', 12348, 0.40, 0.76, 24, 'quincenal', '2026-04-15', 0, 0, 348);
+    cred4.pagosRealizados = 0; cred4.saldo = 12348; cred4.notas = 'Prestamo nómina 24 quincenas';
+    const cred5 = crearCreditoObj(5, 'CS-002', 6, 'credito_simple', 602262, 0.15, 0.30, 35, 'mensual', '2025-12-16', 0, 0, 0);
+    cred5.pagosRealizados = 3; cred5.saldo = 561687.30; cred5.notas = 'Mutuo 35 meses';
+    const cred6 = crearCreditoObj(6, 'NM-003', 3, 'nomina', 40464, 0.36, 0.60, 24, 'mensual', '2026-03-31', 0, 0, 464);
+    cred6.pagosRealizados = 4; cred6.saldo = 40464; cred6.notas = 'Préstamo nómina - 24 meses';
+    const cred7 = crearCreditoObj(7, 'AR-002', 4, 'arrendamiento', 263754.20, 0.26, 0.48, 12, 'mensual', '2026-03-25', 5, 305954.87, 0);
+    cred7.pagosRealizados = 1; cred7.saldo = 315663.95; cred7.notas = 'Camry refinanciamiento';
+    setStore('creditos', [cred1, cred2, cred3, cred4, cred5, cred6, cred7]);
   }
   if (getStore('fondeos').length === 0) {
-    const hace1a = new Date(); hace1a.setFullYear(hace1a.getFullYear() - 1);
     setStore('fondeos', [
-      { id: 1, numero: 'FD-001', fondeador: 'Banco Nacional', tipo: 'banco', monto: 5000000, saldo: 3500000, tasa: 0.12, plazo: 36, periodicidad: 'mensual', fechaInicio: hace1a.toISOString().split('T')[0], fechaVencimiento: addMonths(hace1a, 36), estado: 'vigente', garantia: 'Cartera de créditos', notas: '' },
-      { id: 2, numero: 'FD-002', fondeador: 'Fondo de Inversión Alpha', tipo: 'fondo', monto: 2000000, saldo: 1800000, tasa: 0.14, plazo: 24, periodicidad: 'trimestral', fechaInicio: new Date(new Date().setMonth(new Date().getMonth() - 4)).toISOString().split('T')[0], fechaVencimiento: addMonths(new Date(new Date().setMonth(new Date().getMonth() - 4)), 24), estado: 'vigente', garantia: '', notas: '' }
+      { id: 1, numero: 'FD-001', fondeador: 'Banco Nacional de México', tipo: 'linea_credito', monto: 5000000, saldo: 5000000, tasa: 0.12, plazo: 36, periodicidad: 'mensual', fechaInicio: '2025-01-01', fechaVencimiento: addMonths(new Date('2025-01-01'), 36), estado: 'vigente', garantia: 'Cartera crediticia', moneda: 'MXN', notas: 'Línea revolvente' },
+      { id: 2, numero: 'FD-002', fondeador: 'Inversionista Privado A', tipo: 'prestamo', monto: 2000000, saldo: 2000000, tasa: 0.15, plazo: 24, periodicidad: 'mensual', fechaInicio: '2025-02-01', fechaVencimiento: addMonths(new Date('2025-02-01'), 24), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: '' },
+      { id: 3, numero: 'FD-003', fondeador: 'Banco Mercantil del Norte', tipo: 'linea_credito', monto: 1000000, saldo: 1000000, tasa: 0.1475, plazo: 60, periodicidad: 'mensual', fechaInicio: '2023-07-15', fechaVencimiento: addMonths(new Date('2023-07-15'), 60), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: 'Amortizable tasa fija' },
+      { id: 4, numero: 'FD-004', fondeador: 'MULTISERVICIOS DUAL SA DE CV', tipo: 'cuenta_corriente', monto: 2900000, saldo: 2900000, tasa: 0.12, plazo: 24, periodicidad: 'mensual', fechaInicio: '2025-05-05', fechaVencimiento: addMonths(new Date('2025-05-05'), 24), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: 'Revolvente tasa fija' }
     ]);
   }
 }
