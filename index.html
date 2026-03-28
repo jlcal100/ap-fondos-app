@@ -1969,9 +1969,9 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
           <button class="btn btn-outline" onclick="exportarDatos()">📥 Backup JSON</button>
           <button class="btn btn-outline" onclick="exportarBackupExcel()">📥 Backup Excel</button>
           <label class="btn btn-outline" style="cursor:pointer">📤 Importar Datos<input type="file" accept=".json" style="display:none" onchange="importarDatos(this)"></label>
-          <button class="btn btn-outline" onclick="purgarDatosAntiguos()">🗑 Purgar Antiguos</button>
+          <button class="btn btn-outline admin-only-btn" onclick="purgarDatosAntiguos()">🗑 Purgar Antiguos</button>
           <button class="btn btn-outline" onclick="editarTipoCambio()">💱 Tipo Cambio</button>
-          <button class="btn btn-outline" style="color:var(--red)" onclick="resetDatos()">🔄 Resetear</button>
+          <button class="btn btn-outline admin-only-btn" style="color:var(--red)" onclick="resetDatos()">🔄 Resetear</button>
           <span style="border-left:1px solid var(--gray-200);margin:0 4px"></span>
           <button class="btn btn-primary" onclick="verDiagnostico()">🩺 Diagnóstico</button>
           <button class="btn btn-outline" onclick="verLogErrores()">🐛 Log Errores <span id="errorBadge" style="background:var(--red);color:white;font-size:10px;font-weight:700;border-radius:10px;padding:1px 6px;display:none">0</span></button>
@@ -3492,6 +3492,11 @@ function updateUserUI() {
   document.querySelectorAll('.nav-item[data-page]').forEach(nav => {
     const page = nav.getAttribute('data-page');
     nav.style.display = hasPermiso(page, 'ver') ? '' : 'none';
+  });
+  // Botones solo para admin general
+  var esAdminGral = currentUser && currentUser.rol === 'admin';
+  document.querySelectorAll('.admin-only-btn').forEach(function(btn) {
+    btn.style.display = esAdminGral ? '' : 'none';
   });
 }
 
