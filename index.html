@@ -3859,9 +3859,17 @@ function cargarEfectivo() {
 }
 
 function resetDatos() {
-  showConfirm('Resetear todos los datos', 'Se borrarán todos los registros. ¿Continuar?', 'Sí, resetear').then(ok => {
+  showConfirm('Resetear todos los datos', 'Se borrarán TODOS los registros (localStorage y base de datos). ¿Continuar?', 'Sí, resetear').then(ok => {
     if (!ok) return;
-    STORE_KEYS.concat(['documentos','cierres_contables']).forEach(k => localStorage.removeItem('apf_' + k));
+    var allKeys = STORE_KEYS.concat(['documentos','cierres_contables']);
+    // Limpiar localStorage
+    allKeys.forEach(k => localStorage.removeItem('apf_' + k));
+    // Limpiar base de datos (PostgreSQL) si está conectado
+    if (typeof ApiClient !== 'undefined' && ApiClient.isLoggedIn()) {
+      allKeys.forEach(function(k) {
+        try { ApiClient.write(k, []); } catch(e) { console.warn('Reset API error for ' + k, e); }
+      });
+    }
     toast('Datos reseteados. Recargando...', 'warning');
     setTimeout(() => location.reload(), 1000);
   });
