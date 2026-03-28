@@ -2609,7 +2609,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       <div class="form-row">
         <div class="form-group"><label class="form-label">Contraseña *</label><input type="password" class="form-input" id="usrPassword"></div>
         <div class="form-group"><label class="form-label">Rol *</label>
-          <select class="form-select" id="usrRol"><option value="admin">Administrador</option><option value="analista">Analista</option><option value="operador">Operador</option><option value="capturista">Capturista</option><option value="viewer">Solo Lectura</option><option value="soporte">Soporte Técnico</option></select>
+          <select class="form-select" id="usrRol"><option value="admin">Administrador General</option><option value="admin_limitado">Administrador</option><option value="analista">Analista</option><option value="operador">Operador</option><option value="capturista">Capturista</option><option value="viewer">Solo Lectura</option><option value="soporte">Soporte Técnico</option></select>
         </div>
       </div>
     </div>
@@ -3215,14 +3215,14 @@ function bumpVersion(obj) {
 function initData() {
   if (getStore('usuarios').length === 0) {
     setStore('usuarios', [
-      { id: 1, nombre: 'Administrador', email: EMPRESA.emailAdmin, rol: 'admin', activo: true, ultimoAcceso: new Date().toISOString() }
+      { id: 1, nombre: 'JLCA', email: EMPRESA.emailAdmin, rol: 'admin', activo: true, ultimoAcceso: new Date().toISOString() },
+      { id: 2, nombre: 'Administrador', email: 'administrador@apfondos.com', rol: 'admin_limitado', activo: true, ultimoAcceso: null },
+      { id: 3, nombre: 'Operador', email: 'operador@apfondos.com', rol: 'operador', activo: true, ultimoAcceso: null }
     ]);
   }
   // Seed data
   if (getStore('clientes').length === 0) {
     setStore('clientes', [
-      { id: 1, tipo: 'fisica', nombre: 'Juan Pérez López', rfc: 'PELJ850101ABC', curp: 'PELJ850101HDFRPN09', telefono: '5551234567', email: 'juan@empresa.com', direccion: 'Av. Reforma 123, Col. Centro', ciudad: 'CDMX', estado: 'CDMX', cp: '06600', ingresos: 45000, score: 720, sector: 'Comercio', notas: 'Cliente referido' },
-      { id: 2, tipo: 'moral', nombre: 'Comercializadora ABC, S.A. de C.V.', rfc: 'CAB200315XX0', curp: '', telefono: '8112345678', email: 'contacto@abc.com.mx', direccion: 'Blvd. Insurgentes 456', ciudad: 'Monterrey', estado: 'Nuevo León', cp: '64000', ingresos: 350000, score: 680, sector: 'Manufactura', notas: '' },
       { id: 3, tipo: 'fisica', nombre: 'XOCHIL MERARI MARAVILLA DE LA ROSA', rfc: 'MARX940201DA1', curp: 'MARX940201MMCRSC03', telefono: '7222691304', email: 'xochitlmaravilla44@gmail.com', direccion: 'SAN ANTONIO 8 COL.RIO HONDITO', ciudad: 'OCOYOACAC', estado: 'Estado de México', cp: '52740', ingresos: 9500, score: 0, sector: 'Comercio', notas: 'Oficial Gasolinero' },
       { id: 4, tipo: 'moral', nombre: 'CORPORATIVO AP SA DE CV', rfc: 'CAP1506113H1', curp: '', telefono: '7222321614', email: 'apfondos@corporativoap.com.mx', direccion: 'AV.TECNOLOGICO 1131 NORTE COL.BELLAVISTA', ciudad: 'METEPEC', estado: 'Estado de México', cp: '52172', ingresos: 10000000, score: 0, sector: 'Comercio', notas: 'Compra Venta Gasolina y Diesel' },
       { id: 5, tipo: 'fisica', nombre: 'ANDREA MARIN GASCA', rfc: 'MAGA9412158J1', curp: 'MAGA941215MDFRSN09', telefono: '7223819790', email: 'andyadriel041518@gmail.com', direccion: 'FRANCISCO VILLA S/N COL.GUADALUPE', ciudad: 'LERMA', estado: 'Estado de México', cp: '52000', ingresos: 9500, score: 0, sector: 'Comercio', notas: 'Oficial Gasolinero' },
@@ -3230,12 +3230,6 @@ function initData() {
     ]);
   }
   if (getStore('creditos').length === 0) {
-    const cred1 = crearCreditoObj(1, 'CS-001', 1, 'credito_simple', 1500000, 0.24, 0.36, 24, 'mensual', '2025-01-15', 0, 0, 15000);
-    cred1.pagosRealizados = 14; cred1.saldo = 662500; cred1.notas = 'Capital de trabajo - 14 de 24 pagos';
-    const cred2 = crearCreditoObj(2, 'AR-001', 2, 'arrendamiento', 2000000, 0.22, 0.33, 36, 'mensual', '2025-03-01', 10, 2000000, 20000);
-    cred2.pagosRealizados = 12; cred2.saldo = 1425000; cred2.notas = 'Maquinaria CNC - 12 de 36 pagos';
-    const cred3 = crearCreditoObj(3, 'NM-001', 1, 'nomina', 50000, 0.28, 0.42, 12, 'quincenal', '2025-06-01', 0, 0, 500);
-    cred3.pagosRealizados = 15; cred3.saldo = 18750; cred3.notas = 'Préstamo nómina - 15 de 24 periodos';
     const cred4 = crearCreditoObj(4, 'NM-002', 5, 'nomina', 12348, 0.40, 0.76, 24, 'quincenal', '2026-04-15', 0, 0, 348);
     cred4.pagosRealizados = 0; cred4.saldo = 12348; cred4.notas = 'Prestamo nómina 24 quincenas';
     const cred5 = crearCreditoObj(5, 'CS-002', 6, 'credito_simple', 602262, 0.15, 0.30, 35, 'mensual', '2025-12-16', 0, 0, 0);
@@ -3244,7 +3238,7 @@ function initData() {
     cred6.pagosRealizados = 4; cred6.saldo = 40464; cred6.notas = 'Préstamo nómina - 24 meses';
     const cred7 = crearCreditoObj(7, 'AR-002', 4, 'arrendamiento', 263754.20, 0.26, 0.48, 12, 'mensual', '2026-03-25', 5, 305954.87, 0);
     cred7.pagosRealizados = 1; cred7.saldo = 315663.95; cred7.notas = 'Camry refinanciamiento';
-    setStore('creditos', [cred1, cred2, cred3, cred4, cred5, cred6, cred7]);
+    setStore('creditos', [cred4, cred5, cred6, cred7]);
   }
   if (getStore('fondeos').length === 0) {
     setStore('fondeos', [
@@ -3404,6 +3398,11 @@ const ACCION_LABELS = {
 // Permisos predeterminados por rol
 const ROL_PERMISOS_DEFAULT = {
   admin: 'ALL', // Admin tiene todo
+  admin_limitado: {
+    dashboard: ['ver'], clientes: ['ver', 'crear', 'editar', 'eliminar'], creditos: ['ver', 'crear', 'editar', 'eliminar', 'liquidar'],
+    pagos: ['ver', 'crear'], cotizador: ['ver', 'crear', 'exportar'], fondeos: ['ver', 'crear', 'editar', 'eliminar'],
+    contabilidad: ['ver', 'crear', 'exportar'], reportes: ['ver', 'exportar'], calendario: ['ver'], aprobaciones: ['ver', 'aprobar', 'rechazar'], conciliacion: ['ver', 'crear', 'exportar'], fiscal: ['ver', 'crear', 'exportar'], admin: ['ver', 'backup']
+  },
   analista: {
     dashboard: ['ver'], clientes: ['ver', 'crear', 'editar'], creditos: ['ver', 'crear', 'editar'],
     pagos: ['ver', 'crear'], cotizador: ['ver', 'crear', 'exportar'], fondeos: ['ver'],
@@ -3497,11 +3496,12 @@ function updateUserUI() {
 }
 
 function showLoginSelector() {
+  var _rolLabels = { admin: 'Admin General', admin_limitado: 'Administrador', analista: 'Analista', operador: 'Operador', capturista: 'Capturista', viewer: 'Solo Lectura', soporte: 'Soporte' };
   const users = getStore('usuarios').filter(u => u.activo);
   const html = users.map(u =>
     `<button class="btn btn-outline" style="width:100%;margin-bottom:8px;justify-content:flex-start" onclick="loginAs(${u.id});closeModal('modalLogin')">
       <span class="avatar" style="width:32px;height:32px;background:var(--navy);color:white;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${esc(u.nombre.substring(0,2).toUpperCase())}</span>
-      <span>${esc(u.nombre)} <small style="color:var(--gray-400)">— ${esc(u.rol)}</small></span>
+      <span>${esc(u.nombre)} <small style="color:var(--gray-400)">— ${esc(_rolLabels[u.rol] || u.rol)}</small></span>
     </button>`
   ).join('');
   document.getElementById('loginUserList').innerHTML = html || '<p style="color:var(--gray-400)">No hay usuarios activos</p>';
@@ -10297,6 +10297,7 @@ function renderSecurityLog() {
 function renderUsuarios() {
   // Sprint W: Renderizar status de backup
   renderBackupStatus();
+  var ROL_LABELS = { admin: 'Admin General', admin_limitado: 'Administrador', analista: 'Analista', operador: 'Operador', capturista: 'Capturista', viewer: 'Solo Lectura', soporte: 'Soporte' };
   const users = getStore('usuarios');
   document.getElementById('tbUsuarios').innerHTML = users.map(u => {
     const permisos = getUserPermisos(u);
@@ -10307,11 +10308,12 @@ function renderUsuarios() {
       const count = Object.values(u.permisos).reduce((s, a) => s + a.length, 0);
       permDesc = '<span class="badge badge-blue">' + count + ' permisos (personalizado)</span>';
     } else {
-      permDesc = '<span class="badge badge-gray" style="background:var(--gray-200);color:var(--gray-600)">Por defecto (' + esc(u.rol) + ')</span>';
+      permDesc = '<span class="badge badge-gray" style="background:var(--gray-200);color:var(--gray-600)">Por defecto (' + (ROL_LABELS[u.rol] || u.rol) + ')</span>';
     }
+    var rolLabel = ROL_LABELS[u.rol] || u.rol;
     return `<tr>
     <td>${u.id}</td><td>${esc(u.nombre)}</td><td>${esc(u.email)}</td>
-    <td><span class="badge badge-blue">${esc(u.rol)}</span></td>
+    <td><span class="badge badge-blue">${esc(rolLabel)}</span></td>
     <td>${permDesc}</td>
     <td>${u.activo ? '<span class="badge badge-green">Sí</span>' : '<span class="badge badge-red">No</span>'}</td>
     <td>${u.ultimoAcceso ? new Date(u.ultimoAcceso).toLocaleString('es-MX') : '-'}</td>
