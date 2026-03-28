@@ -28,6 +28,11 @@ const ACCION_LABELS = {
 // Permisos predeterminados por rol
 const ROL_PERMISOS_DEFAULT = {
   admin: 'ALL', // Admin tiene todo
+  admin_limitado: {
+    dashboard: ['ver'], clientes: ['ver', 'crear', 'editar', 'eliminar'], creditos: ['ver', 'crear', 'editar', 'eliminar', 'liquidar'],
+    pagos: ['ver', 'crear'], cotizador: ['ver', 'crear', 'exportar'], fondeos: ['ver', 'crear', 'editar', 'eliminar'],
+    contabilidad: ['ver', 'crear', 'exportar'], reportes: ['ver', 'exportar'], calendario: ['ver'], aprobaciones: ['ver', 'aprobar', 'rechazar'], conciliacion: ['ver', 'crear', 'exportar'], admin: ['ver', 'backup']
+  },
   analista: {
     dashboard: ['ver'], clientes: ['ver', 'crear', 'editar'], creditos: ['ver', 'crear', 'editar'],
     pagos: ['ver', 'crear'], cotizador: ['ver', 'crear', 'exportar'], fondeos: ['ver'],
