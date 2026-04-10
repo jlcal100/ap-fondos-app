@@ -138,6 +138,27 @@ var ApiClient = (function() {
     return apiRequest('PUT', '/api/auth/users/' + id, userData);
   }
 
+  // Cambiar la contraseña del usuario autenticado (él mismo)
+  function changeMyPassword(currentPassword, newPassword) {
+    return apiRequest('PUT', '/api/auth/me/password', {
+      currentPassword: currentPassword,
+      newPassword: newPassword
+    }).then(function(res) {
+      if (res && res.success) return res;
+      throw new Error((res && res.error) || 'Error al cambiar la contraseña');
+    });
+  }
+
+  // Resetear la contraseña de cualquier usuario (solo admin)
+  function resetUserPassword(id, newPassword) {
+    return apiRequest('PUT', '/api/auth/users/' + id + '/password', {
+      newPassword: newPassword
+    }).then(function(res) {
+      if (res && res.success) return res;
+      throw new Error((res && res.error) || 'Error al resetear la contraseña');
+    });
+  }
+
   return {
     login: login,
     logout: logout,
@@ -150,6 +171,8 @@ var ApiClient = (function() {
     register: register,
     getUsers: getUsers,
     updateUser: updateUser,
+    changeMyPassword: changeMyPassword,
+    resetUserPassword: resetUserPassword,
     VALID_KEYS: VALID_KEYS,
     getCache: function() { return _cache; }
   };
