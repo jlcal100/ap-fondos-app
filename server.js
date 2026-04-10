@@ -263,6 +263,109 @@ app.put('/api/auth/users/:id', authenticateToken, requireAdmin, async (req, res)
   }
 });
 
+// ============ PASSWORD POLICY ============
+// Política: mín 12 chars, 1 mayúscula, 1 minúscula, 1 número, 1 carácter especial
+function validatePasswordPolicy(pwd) {
+  if (!pwd || typeof pwd !== 'string') return 'Contraseña obligatoria';
+  if (pwd.length < 12) return 'Mínimo 12 caracteres';
+  if (!/[A-Z]/.test(pwd)) return 'Debe incluir al menos una mayúscula';
+  if (!/[a-z]/.test(pwd)) return 'Debe incluir al menos una minúscula';
+  if (!/[0-9]/.test(pwd)) return 'Debe incluir al menos un número';
+  if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?`~]/.test(pwd)) return 'Debe incluir al menos un carácter especial';
+  return null;
+}
+
+// PUT /api/auth/me/password — Usuario autenticado cambia su propia contraseña
+app.put('/api/auth/me/password', authenticateToken, async (req, res) => {
+  try {
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Contraseña actual y nueva son obligatorias' });
+    }
+
+    const policyError = validatePasswordPolicy(newPassword);
+    if (policyError) {
+      return res.status(400).json({ error: policyError });
+    }
+
+    if (currentPassword === newPassword) {
+      return res.status(400).json({ error: 'La nueva contraseña debe ser diferente a la actual' });
+    }
+
+    // Obtener usuario actual
+    const userResult = await pool.query(
+      'SELECT id, password_hash FROM users WHERE id = $1',
+      [req.user.id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const user = userResult.rows[0];
+
+    // Validar contraseña actual
+    const passwordMatch = await bcryptjs.compare(currentPassword, user.password_hash);
+    if (!passwordMatch) {
+      return res.status(401).json({ error: 'Contraseña actual incorrecta' });
+    }
+
+    // Hashear y guardar la nueva
+    const newHash = await bcryptjs.hash(newPassword, 10);
+    await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2',
+      [newHash, user.id]
+    );
+
+    res.json({ success: true, message: 'Contraseña actualizada correctamente' });
+  } catch (error) {
+    console.error('Change own password error:', error);
+    res.status(500).json({ error: 'Error al cambiar la contraseña' });
+  }
+});
+
+// PUT /api/auth/users/:id/password — Admin resetea la contraseña de cualquier usuario
+app.put('/api/auth/users/:id/password', authenticateToken, requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { newPassword } = req.body;
+
+    if (!newPassword) {
+      return res.status(400).json({ error: 'Nueva contraseña obligatoria' });
+    }
+
+    const policyError = validatePasswordPolicy(newPassword);
+    if (policyError) {
+      return res.status(400).json({ error: policyError });
+    }
+
+    const userResult = await pool.query(
+      'SELECT id, username, nombre FROM users WHERE id = $1',
+      [id]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Usuario no encontrado' });
+    }
+
+    const newHash = await bcryptjs.hash(newPassword, 10);
+    await pool.query(
+      'UPDATE users SET password_hash = $1 WHERE id = $2',
+      [newHash, id]
+    );
+
+    res.json({
+      success: true,
+      message: 'Contraseña reseteada correctamente',
+      user: userResult.rows[0]
+    });
+  } catch (error) {
+    console.error('Admin reset password error:', error);
+    res.status(500).json({ error: 'Error al resetear la contraseña' });
+  }
+});
+
 // ============ DATA API ROUTES ============
 
 // GET /api/data/:key (requires auth)
