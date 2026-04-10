@@ -2628,6 +2628,49 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
     <div class="modal-body">
       <p style="color:var(--gray-400);margin-bottom:12px;font-size:13px">Inicia sesión como uno de los usuarios activos:</p>
       <div id="loginUserList"></div>
+      <hr style="margin:16px 0;border:none;border-top:1px solid var(--gray-200)">
+      <button class="btn btn-outline" style="width:100%;justify-content:flex-start" onclick="closeModal('modalLogin');abrirCambiarPassword()">
+        🔑 <span style="margin-left:8px">Cambiar mi contraseña</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Cambiar mi contraseña -->
+<div class="modal-overlay" id="modalCambiarPassword">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header"><h3>Cambiar mi contraseña</h3><button class="modal-close" onclick="closeModal('modalCambiarPassword')">&times;</button></div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">La contraseña debe tener mínimo 12 caracteres, una mayúscula, una minúscula, un número y un carácter especial.</p>
+      <div class="form-group"><label class="form-label">Contraseña actual *</label><input type="password" class="form-input" id="cpActual" autocomplete="current-password"></div>
+      <div class="form-group"><label class="form-label">Nueva contraseña *</label><input type="password" class="form-input" id="cpNueva" autocomplete="new-password"></div>
+      <div class="form-group"><label class="form-label">Confirmar nueva contraseña *</label><input type="password" class="form-input" id="cpConfirm" autocomplete="new-password"></div>
+      <div id="cpError" style="display:none;background:#FEE2E2;color:#DC2626;padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:13px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalCambiarPassword')">Cancelar</button>
+      <button class="btn btn-primary" id="cpBtnGuardar" onclick="guardarCambioPassword()">Guardar</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Resetear contraseña (admin) -->
+<div class="modal-overlay" id="modalResetPassword">
+  <div class="modal" style="max-width:440px">
+    <div class="modal-header"><h3>Resetear contraseña</h3><button class="modal-close" onclick="closeModal('modalResetPassword')">&times;</button></div>
+    <div class="modal-body">
+      <p style="color:var(--text-muted);font-size:13px;margin-bottom:16px">Estableciendo nueva contraseña para <strong id="rpUserName">—</strong>. El usuario deberá usarla en su próximo acceso.</p>
+      <div class="form-group"><label class="form-label">Nueva contraseña temporal *</label><input type="password" class="form-input" id="rpNueva" autocomplete="new-password"></div>
+      <div class="form-group"><label class="form-label">Confirmar contraseña *</label><input type="password" class="form-input" id="rpConfirm" autocomplete="new-password"></div>
+      <div style="display:flex;gap:8px;align-items:center;margin-bottom:12px">
+        <button class="btn btn-outline" style="flex:1" onclick="generarPasswordTemporal()">🎲 Generar segura</button>
+        <button class="btn btn-outline" style="flex:1" onclick="togglePasswordVisibility('rpNueva')">👁 Ver</button>
+      </div>
+      <div id="rpError" style="display:none;background:#FEE2E2;color:#DC2626;padding:10px 14px;border-radius:8px;margin-bottom:12px;font-size:13px"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalResetPassword')">Cancelar</button>
+      <button class="btn btn-primary" id="rpBtnGuardar" onclick="guardarResetPassword()">Resetear</button>
     </div>
   </div>
 </div>
@@ -3217,7 +3260,9 @@ function initData() {
     setStore('usuarios', [
       { id: 1, nombre: 'JLCA', email: EMPRESA.emailAdmin, rol: 'admin', activo: true, ultimoAcceso: new Date().toISOString() },
       { id: 2, nombre: 'Administrador', email: 'administrador@apfondos.com', rol: 'admin_limitado', activo: true, ultimoAcceso: null },
-      { id: 3, nombre: 'Operador', email: 'operador@apfondos.com', rol: 'operador', activo: true, ultimoAcceso: null }
+      { id: 3, nombre: 'Operador', email: 'operador@apfondos.com', rol: 'operador', activo: true, ultimoAcceso: null },
+      { id: 4, nombre: 'Adriana Martinez', email: 'adrianamartinez@corporativoap.com.mx', rol: 'admin_limitado', activo: true, ultimoAcceso: null },
+      { id: 5, nombre: 'Aide Reyes', email: 'apfondos@corporativoap.com.mx', rol: 'analista', activo: true, ultimoAcceso: null }
     ]);
   }
   // Seed data
@@ -3465,6 +3510,129 @@ function logoutUser() {
   currentUser = null;
   localStorage.removeItem('ap_currentUser');
   showLoginSelector();
+}
+
+// ============================================================
+//  CAMBIO / RESETEO DE CONTRASEÑAS
+// ============================================================
+var _resetPasswordTargetId = null;
+
+function abrirCambiarPassword() {
+  if (typeof ApiClient === 'undefined' || !ApiClient.isLoggedIn()) {
+    return toast('Debes iniciar sesión en el backend para cambiar tu contraseña', 'error');
+  }
+  ['cpActual','cpNueva','cpConfirm'].forEach(function(id){ var el=document.getElementById(id); if(el) el.value=''; });
+  var err = document.getElementById('cpError'); if (err) { err.style.display='none'; err.textContent=''; }
+  openModal('modalCambiarPassword');
+}
+
+function guardarCambioPassword() {
+  var actual = document.getElementById('cpActual').value;
+  var nueva = document.getElementById('cpNueva').value;
+  var confirm = document.getElementById('cpConfirm').value;
+  var errDiv = document.getElementById('cpError');
+  var btn = document.getElementById('cpBtnGuardar');
+
+  function showError(msg) { errDiv.textContent = msg; errDiv.style.display='block'; }
+  errDiv.style.display = 'none';
+
+  if (!actual || !nueva || !confirm) return showError('Completa todos los campos');
+  if (nueva !== confirm) return showError('La nueva contraseña y su confirmación no coinciden');
+  if (actual === nueva) return showError('La nueva contraseña debe ser diferente a la actual');
+
+  var pwdResult = V.validPassword(nueva);
+  if (!pwdResult.ok) return showError(pwdResult.msg || 'Contraseña no cumple la política');
+
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  ApiClient.changeMyPassword(actual, nueva)
+    .then(function() {
+      addAudit('Cambio de contraseña', 'Seguridad', currentUser ? currentUser.nombre : '');
+      if (typeof logSecurityEvent === 'function') logSecurityEvent('password_change', 'Cambio de contraseña propia');
+      closeModal('modalCambiarPassword');
+      toast('Contraseña actualizada correctamente', 'success');
+    })
+    .catch(function(err) {
+      showError(err.message || 'Error al cambiar la contraseña');
+    })
+    .then(function() {
+      btn.disabled = false; btn.textContent = 'Guardar';
+    });
+}
+
+function abrirResetPassword(userId, userName) {
+  if (!hasPermiso('admin', 'usuarios')) return toast('Sin permiso para resetear contraseñas', 'error');
+  if (typeof ApiClient === 'undefined' || !ApiClient.isLoggedIn()) {
+    return toast('Debes iniciar sesión en el backend para resetear contraseñas', 'error');
+  }
+  _resetPasswordTargetId = userId;
+  document.getElementById('rpUserName').textContent = userName || '—';
+  document.getElementById('rpNueva').value = '';
+  document.getElementById('rpConfirm').value = '';
+  document.getElementById('rpNueva').type = 'password';
+  var err = document.getElementById('rpError'); if (err) { err.style.display='none'; err.textContent=''; }
+  openModal('modalResetPassword');
+}
+
+function generarPasswordTemporal() {
+  // Genera una contraseña que cumple la política: 14 chars, upper, lower, num, special
+  var upper = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  var lower = 'abcdefghijkmnopqrstuvwxyz';
+  var nums = '23456789';
+  var special = '!@#$%^&*';
+  var all = upper + lower + nums + special;
+  function pick(s) { return s.charAt(Math.floor(Math.random() * s.length)); }
+  var pwd = [pick(upper), pick(lower), pick(nums), pick(special)];
+  for (var i = 0; i < 10; i++) pwd.push(pick(all));
+  // Shuffle
+  for (var i = pwd.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = pwd[i]; pwd[i] = pwd[j]; pwd[j] = tmp;
+  }
+  var result = pwd.join('');
+  document.getElementById('rpNueva').value = result;
+  document.getElementById('rpConfirm').value = result;
+  document.getElementById('rpNueva').type = 'text';
+  toast('Contraseña generada — cópiala antes de guardar', 'info');
+}
+
+function togglePasswordVisibility(inputId) {
+  var el = document.getElementById(inputId);
+  if (!el) return;
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+function guardarResetPassword() {
+  var nueva = document.getElementById('rpNueva').value;
+  var confirm = document.getElementById('rpConfirm').value;
+  var errDiv = document.getElementById('rpError');
+  var btn = document.getElementById('rpBtnGuardar');
+
+  function showError(msg) { errDiv.textContent = msg; errDiv.style.display='block'; }
+  errDiv.style.display = 'none';
+
+  if (!_resetPasswordTargetId) return showError('Usuario no seleccionado');
+  if (!nueva || !confirm) return showError('Completa ambos campos');
+  if (nueva !== confirm) return showError('Las contraseñas no coinciden');
+
+  var pwdResult = V.validPassword(nueva);
+  if (!pwdResult.ok) return showError(pwdResult.msg || 'Contraseña no cumple la política');
+
+  btn.disabled = true; btn.textContent = 'Guardando...';
+  ApiClient.resetUserPassword(_resetPasswordTargetId, nueva)
+    .then(function(res) {
+      var targetName = res && res.user ? res.user.nombre : '';
+      addAudit('Reset contraseña', 'Admin', targetName);
+      if (typeof logSecurityEvent === 'function') logSecurityEvent('password_reset', 'Reset por admin: ' + targetName);
+      closeModal('modalResetPassword');
+      toast('Contraseña reseteada para ' + targetName, 'success');
+      _resetPasswordTargetId = null;
+    })
+    .catch(function(err) {
+      showError(err.message || 'Error al resetear la contraseña');
+    })
+    .then(function() {
+      btn.disabled = false; btn.textContent = 'Resetear';
+    });
 }
 
 function loadSession() {
@@ -10332,6 +10500,7 @@ function renderUsuarios() {
     <td>${u.ultimoAcceso ? new Date(u.ultimoAcceso).toLocaleString('es-MX') : '-'}</td>
     <td>
       ${u.rol !== 'admin' ? '<button class="btn btn-outline btn-sm" onclick="openPermisosEditor(' + u.id + ')" style="margin-right:4px">Permisos</button>' : ''}
+      <button class="btn btn-outline btn-sm" onclick="abrirResetPassword(${u.id}, '${esc(u.nombre).replace(/'/g, "\\'")}')" style="margin-right:4px" title="Resetear contraseña">🔑</button>
       <button class="btn btn-outline btn-sm" onclick="toggleUsuario(${u.id})">${u.activo ? 'Desactivar' : 'Activar'}</button>
     </td>
   </tr>`;
