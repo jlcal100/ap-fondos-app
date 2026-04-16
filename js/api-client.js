@@ -159,6 +159,111 @@ var ApiClient = (function() {
     });
   }
 
+  // ============================================================
+  // FISCAL / CFDI — Facturama PAC
+  // ============================================================
+  // Lee la configuración fiscal (emisor + ambiente + flags de credenciales).
+  // NUNCA regresa apiUser/apiPass — solo booleanos apiUserConfigured/apiPassConfigured.
+  function fiscalGetConfig() {
+    return apiRequest('GET', '/api/fiscal/config').then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res;
+    });
+  }
+
+  // Guarda la configuración fiscal (solo admin).
+  // Si apiUser/apiPass vienen como strings no vacíos, el backend los cifra.
+  // Si vienen null/undefined/'', el backend conserva el valor existente.
+  function fiscalPutConfig(config) {
+    return apiRequest('PUT', '/api/fiscal/config', config).then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res;
+    });
+  }
+
+  // Prueba credenciales llamando a /api-lite/csds de Facturama (solo admin).
+  // Actualiza automáticamente csd_no_cert y csd_vigencia del CSD activo.
+  function fiscalTest() {
+    return apiRequest('POST', '/api/fiscal/test', {}).then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res;
+    });
+  }
+
+  // Timbra un CFDI. cfdi debe incluir: cliente, movimientos, subtotal, iva, total, periodo, serie
+  // El backend reserva folio atómicamente y llama a Facturama.
+  // Regresa { id, uuid, folio, serie, facturamaId, fechaTimbrado, estado }
+  function fiscalTimbrarCFDI(cfdi) {
+    return apiRequest('POST', '/api/fiscal/cfdi/timbrar', cfdi).then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res;
+    });
+  }
+
+  // Cancela un CFDI (solo admin). motivo: '01','02','03','04'. uuidReemplazo solo requerido si motivo='01'.
+  function fiscalCancelarCFDI(id, motivo, uuidReemplazo) {
+    return apiRequest('POST', '/api/fiscal/cfdi/' + id + '/cancelar', {
+      motivo: motivo,
+      uuidReemplazo: uuidReemplazo || null
+    }).then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res;
+    });
+  }
+
+  // Lista todos los CFDIs (timbrados, cancelados, errores).
+  function fiscalListCFDI() {
+    return apiRequest('GET', '/api/fiscal/cfdi').then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return Array.isArray(res) ? res : (res.data || []);
+    });
+  }
+
+  // Obtiene el PDF del CFDI en base64 (lazy-fetch desde Facturama si no está cacheado).
+  function fiscalGetPDF(id) {
+    return apiRequest('GET', '/api/fiscal/cfdi/' + id + '/pdf').then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res; // { ContentType, ContentEncoding, Content }
+    });
+  }
+
+  // Obtiene el XML timbrado (lazy-fetch desde Facturama si no está cacheado).
+  function fiscalGetXML(id) {
+    return apiRequest('GET', '/api/fiscal/cfdi/' + id + '/xml').then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res; // { ContentType, ContentEncoding, Content } o { xml: '...' }
+    });
+  }
+
+  // Envía el CFDI timbrado por email con PDF y XML adjuntos.
+  function fiscalEnviarCFDI(id, email, cc) {
+    return apiRequest('POST', '/api/fiscal/cfdi/' + id + '/email', {
+      to: email,
+      cc: cc || []
+    }).then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res;
+    });
+  }
+
+  // Timbra un REP (Complemento de Pagos) asociado a una factura PPD timbrada.
+  // data = { cfdi_relacionado_id, fecha, forma_pago, monto, num_operacion, moneda,
+  //          tipo_cambio, num_parcialidad, imp_saldo_anterior, imp_saldo_insoluto }
+  function fiscalTimbrarREP(data) {
+    return apiRequest('POST', '/api/fiscal/rep/timbrar', data).then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res;
+    });
+  }
+
+  // Prueba la configuración SMTP (solo admin).
+  function fiscalTestSmtp() {
+    return apiRequest('POST', '/api/fiscal/smtp/test', {}).then(function(res) {
+      if (res && res.error) throw new Error(res.error);
+      return res;
+    });
+  }
+
   return {
     login: login,
     logout: logout,
@@ -173,6 +278,18 @@ var ApiClient = (function() {
     updateUser: updateUser,
     changeMyPassword: changeMyPassword,
     resetUserPassword: resetUserPassword,
+    // Fiscal / CFDI
+    fiscalGetConfig: fiscalGetConfig,
+    fiscalPutConfig: fiscalPutConfig,
+    fiscalTest: fiscalTest,
+    fiscalTimbrarCFDI: fiscalTimbrarCFDI,
+    fiscalCancelarCFDI: fiscalCancelarCFDI,
+    fiscalListCFDI: fiscalListCFDI,
+    fiscalGetPDF: fiscalGetPDF,
+    fiscalGetXML: fiscalGetXML,
+    fiscalEnviarCFDI: fiscalEnviarCFDI,
+    fiscalTimbrarREP: fiscalTimbrarREP,
+    fiscalTestSmtp: fiscalTestSmtp,
     VALID_KEYS: VALID_KEYS,
     getCache: function() { return _cache; }
   };

@@ -1019,8 +1019,9 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       <!-- TAB: CFDI 4.0 -->
       <div id="fiscalCfdi">
         <div class="search-bar">
-          <h3 style="margin:0;flex:1">Generador CFDI 4.0 Pre-Timbrado</h3>
-          <button class="btn btn-primary btn-sm" onclick="generarCFDIsPeriodo()">📄 Generar CFDI</button>
+          <h3 style="margin:0;flex:1">CFDI 4.0 — Timbrado vía Facturama</h3>
+          <button class="btn btn-outline btn-sm" onclick="cargarCFDITimbrados().then(function(){ renderCFDITable(getStore('fiscal_cfdi')||[]); })">↻ Refrescar</button>
+          <button class="btn btn-primary btn-sm" onclick="generarCFDIsPeriodo()">📄 Generar Borradores del Período</button>
         </div>
         <div style="display:flex;gap:12px;margin-bottom:16px;align-items:center;flex-wrap:wrap">
           <span style="font-size:13px;color:var(--gray-500);font-weight:600">Período:</span>
@@ -1028,7 +1029,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         </div>
         <div class="table-wrapper">
           <table>
-            <thead><tr><th>Cliente</th><th>RFC</th><th>Subtotal Intereses</th><th>IVA (16%)</th><th>Total</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>Folio</th><th>Cliente</th><th style="text-align:right">Subtotal</th><th style="text-align:right">IVA</th><th style="text-align:right">Total</th><th>UUID</th><th>Acciones</th></tr></thead>
             <tbody id="tbCFDI"></tbody>
           </table>
         </div>
@@ -2152,8 +2153,11 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
               <input type="text" class="form-input" id="fiscalApiUrl" value="https://apisandbox.facturama.mx" readonly style="background:var(--gray-50)">
             </div>
           </div>
-          <div style="background:#FEF3C7;border:1px solid #FCD34D;border-radius:8px;padding:12px;margin-top:8px;font-size:12px;color:#92400E">
-            ⚠️ <strong>Importante:</strong> Las credenciales de Facturama se almacenarán cifradas en el servidor (no en el navegador). En el siguiente bloque (Bloque B) se implementará el endpoint seguro <code>/api/fiscal/config</code> para guardarlas.
+          <div style="background:#ECFDF5;border:1px solid #A7F3D0;border-radius:8px;padding:12px;margin-top:8px;font-size:12px;color:#065F46">
+            🔒 <strong>Seguridad:</strong> Las credenciales se cifran con AES-256-GCM en el servidor usando <code>FISCAL_ENCRYPTION_KEY</code>. Deja los campos en blanco para conservar las ya guardadas.
+          </div>
+          <div style="display:flex;gap:10px;margin-top:12px">
+            <button id="fiscalTestBtn" class="btn btn-outline" onclick="probarCredencialesFiscal()">🔌 Probar Credenciales</button>
           </div>
         </div>
 
@@ -2162,7 +2166,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
             <span class="card-title">Certificado de Sello Digital (CSD)</span>
             <span id="fiscalCSDStatus" style="font-size:12px;color:var(--gray-400)">No cargado</span>
           </div>
-          <p style="color:var(--gray-500);font-size:13px;margin-bottom:16px">El CSD es el certificado que el SAT entrega para sellar los CFDI. Consta de 3 archivos: <code>.cer</code>, <code>.key</code> y la contraseña. Estos se cargarán a Facturama desde su panel; aquí sólo se registra el estado.</p>
+          <p style="color:var(--gray-500);font-size:13px;margin-bottom:16px">El CSD es el certificado que el SAT entrega para sellar los CFDI. Consta de 3 archivos: <code>.cer</code>, <code>.key</code> y la contraseña. <strong>Se cargan en el panel de Facturama</strong> (no aquí). Al probar credenciales se sincroniza automáticamente el número de certificado y su vigencia.</p>
           <div class="form-row">
             <div class="form-group">
               <label class="form-label">No. de Certificado</label>
@@ -2173,12 +2177,11 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
               <input type="text" class="form-input" id="fiscalCSDVigencia" placeholder="dd/mm/aaaa" readonly style="background:var(--gray-50)">
             </div>
           </div>
-          <div style="font-size:12px;color:var(--gray-500)">Estos datos se sincronizarán automáticamente desde Facturama al timbrar el primer CFDI (Bloque B).</div>
         </div>
 
         <div style="display:flex;gap:10px;justify-content:flex-end">
           <button class="btn btn-outline" onclick="cargarConfigFiscal()">Recargar</button>
-          <button class="btn btn-primary" onclick="guardarConfigFiscal()">💾 Guardar Configuración Fiscal</button>
+          <button id="fiscalGuardarBtn" class="btn btn-primary" onclick="guardarConfigFiscal()">💾 Guardar Configuración Fiscal</button>
         </div>
       </div>
     </div>
@@ -17246,9 +17249,15 @@ function renderFiscal() {
     const hoy = new Date();
     periodo.value = hoy.getFullYear() + '-' + String(hoy.getMonth() + 1).padStart(2, '0');
   }
-  document.getElementById('tbCFDI').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gray-400)">Genera CFDIs para ver la tabla</td></tr>';
+  document.getElementById('tbCFDI').innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--gray-400)">Cargando CFDIs del servidor…</td></tr>';
   document.getElementById('tbDIOT').innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gray-400)">Genera DIOT para ver la tabla</td></tr>';
   document.getElementById('tbPolizas').innerHTML = '<tr><td colspan="8" style="text-align:center;padding:20px;color:var(--gray-400)">Genera Pólizas para ver la tabla</td></tr>';
+
+  // Cargar CFDIs ya timbrados del backend y renderizar con los borradores locales
+  cargarCFDITimbrados().then(function() {
+    var stored = getStore('fiscal_cfdi') || [];
+    renderCFDITable(stored);
+  });
 }
 
 function generarCFDIsPeriodo() {
@@ -17332,7 +17341,10 @@ function generarCFDIsPeriodo() {
   });
   setStore('fiscal_cfdi', stored);
 
-  renderCFDITable(cfdisArray);
+  // Refrescar estado timbrado desde backend antes de pintar
+  cargarCFDITimbrados().then(function() {
+    renderCFDITable(cfdisArray);
+  });
 
   // Avisar sobre receptores con datos fiscales incompletos
   var incompletos = [];
@@ -17350,23 +17362,328 @@ function generarCFDIsPeriodo() {
   }
 }
 
+// Cache de CFDIs timbrados que vienen del backend.
+// Se indexa por cfdi_local_id (nuestro id local "CFDI_<cliente>_<periodo>") para
+// cruzar con el renderCFDITable que trabaja sobre los CFDI generados localmente.
+window._cfdiTimbradosCache = window._cfdiTimbradosCache || {};
+
+function cargarCFDITimbrados() {
+  if (typeof ApiClient === 'undefined' || !ApiClient.fiscalListCFDI) return Promise.resolve([]);
+  return ApiClient.fiscalListCFDI().then(function(lista) {
+    var idx = {};
+    (lista || []).forEach(function(row) {
+      if (row.cfdi_local_id) idx[row.cfdi_local_id] = row;
+    });
+    window._cfdiTimbradosCache = idx;
+    return lista;
+  }).catch(function(err) {
+    console.warn('No se pudo cargar CFDIs timbrados:', err);
+    return [];
+  });
+}
+
 function renderCFDITable(cfdis) {
   const tb = document.getElementById('tbCFDI');
-  if (cfdis.length === 0) {
-    tb.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--gray-400)">Sin CFDIs generados</td></tr>';
+  if (!tb) return;
+  if (!cfdis || cfdis.length === 0) {
+    tb.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:20px;color:var(--gray-400)">Sin CFDIs generados</td></tr>';
     return;
   }
-  tb.innerHTML = cfdis.map(cfdi => {
-    const cliente = cfdi.cliente || {};
+  var timbrados = window._cfdiTimbradosCache || {};
+  tb.innerHTML = cfdis.map(function(cfdi) {
+    var cliente = cfdi.cliente || {};
+    var t = timbrados[cfdi.id];  // fila del backend si existe
+    var estado = t ? t.estado : 'borrador';
+    var badge = _cfdiEstadoBadge(estado);
+    var folioTxt = (t && t.serie && t.folio) ? (t.serie + '-' + t.folio) :
+                   (cfdi.serie && cfdi.folio) ? (cfdi.serie + '-' + cfdi.folio) : '—';
+
+    var acciones = '';
+    var cfdiIdEsc = esc(cfdi.id);
+    if (estado === 'timbrado') {
+      var backendId = t.id;
+      var emailDest = (cliente.emailFactura || cliente.email || '').replace(/'/g, "\\'");
+      var esFactura = !t.tipo_comprobante || t.tipo_comprobante === 'I';
+      acciones =
+        '<button class="btn btn-outline btn-xs" onclick="verPDFCFDI(' + backendId + ')" title="Ver PDF">📄</button> ' +
+        '<button class="btn btn-outline btn-xs" onclick="verXMLCFDI(' + backendId + ')" title="Ver XML">XML</button> ' +
+        '<button class="btn btn-outline btn-xs" onclick="enviarCFDIEmail(' + backendId + ', \'' + emailDest + '\')" title="Enviar por email">✉</button>';
+      // Solo mostrar REP en facturas de ingreso (no en REPs previos)
+      if (esFactura) {
+        acciones += ' <button class="btn btn-outline btn-xs" style="color:var(--green)" onclick="timbrarREP(' + backendId + ')" title="Registrar pago y timbrar REP">💰 REP</button>';
+      }
+      if (window.currentUser && window.currentUser.rol === 'admin') {
+        acciones += ' <button class="btn btn-outline btn-xs" style="color:var(--red)" onclick="cancelarCFDI(' + backendId + ')" title="Cancelar">✗</button>';
+      }
+    } else if (estado === 'cancelado') {
+      acciones = '<span style="color:var(--gray-400);font-size:12px">cancelado</span>';
+    } else if (estado === 'error') {
+      acciones =
+        '<button class="btn btn-outline btn-xs" onclick="timbrarCFDI(\'' + cfdiIdEsc + '\')" title="Reintentar">↻ Reintentar</button> ' +
+        '<button class="btn btn-outline btn-xs" title="' + esc(t.error_timbrado || '') + '" onclick="alert(' + JSON.stringify(t.error_timbrado || 'Sin detalle') + ')">⚠</button>';
+    } else {
+      // borrador (solo local, aún no timbrado)
+      acciones =
+        '<button class="btn btn-primary btn-xs" onclick="timbrarCFDI(\'' + cfdiIdEsc + '\')">⚡ Timbrar</button> ' +
+        '<button class="btn btn-outline btn-xs" onclick="descargarCFDIxml(\'' + cfdiIdEsc + '\')" title="XML previo (sin sellar)">XML previo</button>';
+    }
+
     return '<tr>' +
-      '<td>' + esc(cliente.nombre || 'Sin nombre') + '</td>' +
-      '<td>' + esc(cliente.rfc || 'N/D') + '</td>' +
+      '<td>' + badge + ' ' + folioTxt + '</td>' +
+      '<td>' + esc(cliente.nombre || 'Sin nombre') + '<div style="font-size:11px;color:var(--gray-500)">' + esc(cliente.rfc || 'N/D') + '</div></td>' +
       '<td style="text-align:right">' + fmt(cfdi.subtotal) + '</td>' +
       '<td style="text-align:right">' + fmt(cfdi.iva) + '</td>' +
       '<td style="text-align:right"><strong>' + fmt(cfdi.total) + '</strong></td>' +
-      '<td><button class="btn btn-outline btn-xs" onclick="descargarCFDIxml(\'' + cfdi.id + '\')">XML</button></td>' +
+      '<td style="font-size:11px;font-family:monospace">' + esc((t && t.uuid) || '—') + '</td>' +
+      '<td>' + acciones + '</td>' +
       '</tr>';
   }).join('');
+}
+
+function _cfdiEstadoBadge(estado) {
+  var color, bg, txt;
+  switch (estado) {
+    case 'timbrado':   color='#065F46'; bg='#D1FAE5'; txt='TIMBRADO'; break;
+    case 'cancelado':  color='#991B1B'; bg='#FEE2E2'; txt='CANCELADO'; break;
+    case 'error':      color='#92400E'; bg='#FEF3C7'; txt='ERROR'; break;
+    default:           color='#374151'; bg='#E5E7EB'; txt='BORRADOR';
+  }
+  return '<span style="background:' + bg + ';color:' + color + ';padding:2px 6px;border-radius:4px;font-size:10px;font-weight:700">' + txt + '</span>';
+}
+
+// ============================================================
+//   Timbrar un CFDI local contra el backend (Facturama)
+// ============================================================
+function timbrarCFDI(cfdiId) {
+  var stored = getStore('fiscal_cfdi') || [];
+  var cfdi = stored.find(function(c) { return c.id === cfdiId; });
+  if (!cfdi) return toast('CFDI no encontrado', 'error');
+
+  // Validación local previa (antes de pegarle a Facturama)
+  try { buildCFDIXml(cfdi); } catch (err) {
+    alert(err.message || 'CFDI inválido');
+    return toast('Revisa los datos fiscales antes de timbrar', 'error');
+  }
+
+  if (!confirm('¿Timbrar CFDI para ' + (cfdi.cliente && cfdi.cliente.nombre || 'cliente') + ' por $' + fmt(cfdi.total) + '?\n\nEsta operación es FISCAL y consume folio.')) return;
+
+  toast('Timbrando con Facturama…', 'info');
+  ApiClient.fiscalTimbrarCFDI({
+    cfdi_local_id: cfdi.id,
+    cliente: cfdi.cliente,
+    movimientos: cfdi.movimientos,
+    periodo: cfdi.periodo,
+    subtotal: cfdi.subtotal,
+    iva: cfdi.iva,
+    total: cfdi.total
+  })
+    .then(function(res) {
+      addAudit('Timbrar', 'CFDI', 'UUID ' + (res.uuid || '?') + ' — ' + (res.serie || '') + '-' + (res.folio || ''));
+      toast('CFDI timbrado — UUID ' + (res.uuid || ''), 'success');
+      return cargarCFDITimbrados();
+    })
+    .then(function() {
+      renderCFDITable(stored);
+    })
+    .catch(function(err) {
+      toast('Error al timbrar: ' + (err.message || err), 'error');
+      // Refrescar para reflejar un posible record de "error" guardado en BD
+      cargarCFDITimbrados().then(function() { renderCFDITable(stored); });
+    });
+}
+
+function cancelarCFDI(backendId) {
+  if (!(window.currentUser && window.currentUser.rol === 'admin')) {
+    return toast('Sólo admin puede cancelar CFDIs', 'error');
+  }
+  var motivo = prompt('Motivo de cancelación SAT:\n\n01 — Comprobante emitido con errores con relación\n02 — Comprobante emitido con errores sin relación\n03 — No se llevó a cabo la operación\n04 — Operación nominativa relacionada en factura global\n\nEscribe 01, 02, 03 o 04:', '02');
+  if (!motivo) return;
+  motivo = motivo.trim();
+  if (['01','02','03','04'].indexOf(motivo) < 0) return toast('Motivo inválido', 'error');
+
+  var uuidReemplazo = null;
+  if (motivo === '01') {
+    uuidReemplazo = prompt('UUID del CFDI de reemplazo:');
+    if (!uuidReemplazo) return toast('UUID de reemplazo requerido para motivo 01', 'error');
+    uuidReemplazo = uuidReemplazo.trim();
+  }
+
+  if (!confirm('¿Confirmar cancelación con motivo ' + motivo + '?\n\nEsta acción es FISCAL e irreversible.')) return;
+
+  ApiClient.fiscalCancelarCFDI(backendId, motivo, uuidReemplazo)
+    .then(function(res) {
+      addAudit('Cancelar', 'CFDI', 'ID backend ' + backendId + ' motivo ' + motivo);
+      toast('CFDI cancelado', 'success');
+      return cargarCFDITimbrados();
+    })
+    .then(function() {
+      var stored = getStore('fiscal_cfdi') || [];
+      renderCFDITable(stored);
+    })
+    .catch(function(err) {
+      toast('Error al cancelar: ' + (err.message || err), 'error');
+    });
+}
+
+function verPDFCFDI(backendId) {
+  toast('Descargando PDF…', 'info');
+  ApiClient.fiscalGetPDF(backendId)
+    .then(function(res) {
+      var content = res.base64 || res.Content || res.content;
+      if (!content) throw new Error('Respuesta vacía');
+      var byteChars = atob(content);
+      var bytes = new Uint8Array(byteChars.length);
+      for (var i=0; i<byteChars.length; i++) bytes[i] = byteChars.charCodeAt(i);
+      var blob = new Blob([bytes], { type: 'application/pdf' });
+      var url = URL.createObjectURL(blob);
+      window.open(url, '_blank');
+      setTimeout(function() { URL.revokeObjectURL(url); }, 60000);
+    })
+    .catch(function(err) { toast('Error al descargar PDF: ' + (err.message || err), 'error'); });
+}
+
+function verXMLCFDI(backendId) {
+  toast('Descargando XML…', 'info');
+  ApiClient.fiscalGetXML(backendId)
+    .then(function(res) {
+      var xml;
+      if (res.xml) {
+        xml = res.xml;
+      } else if (res.base64) {
+        xml = atob(res.base64);
+      } else if (res.Content || res.content) {
+        xml = atob(res.Content || res.content);
+      } else {
+        throw new Error('Respuesta vacía');
+      }
+      var blob = new Blob([xml], { type: 'application/xml' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'cfdi_' + backendId + '.xml';
+      a.click();
+      URL.revokeObjectURL(url);
+    })
+    .catch(function(err) { toast('Error al descargar XML: ' + (err.message || err), 'error'); });
+}
+
+// ============================================================
+//   Timbrar REP (Complemento de Pagos)
+// ============================================================
+// Abre un modal pidiendo: fecha, forma de pago, monto, referencia.
+// Después llama al backend que construye el REP y lo envía a Facturama.
+function timbrarREP(backendId) {
+  var t = null;
+  var cache = window._cfdiTimbradosCache || {};
+  for (var k in cache) if (cache[k].id === backendId) { t = cache[k]; break; }
+  if (!t) return toast('CFDI no encontrado en caché — refresca primero', 'error');
+  if (t.estado !== 'timbrado') return toast('Solo se puede hacer REP de CFDIs timbrados', 'error');
+
+  var total = Number(t.total) || 0;
+  var hoy = new Date().toISOString().slice(0,10);
+
+  // Modal minimalista inline
+  var html =
+    '<div id="modalREP" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:9999;display:flex;align-items:center;justify-content:center">' +
+      '<div style="background:#fff;border-radius:12px;padding:24px;width:480px;max-width:90vw;box-shadow:0 20px 60px rgba(0,0,0,0.3)">' +
+        '<h3 style="margin:0 0 16px">💰 Timbrar REP — ' + esc(t.serie + '-' + t.folio) + '</h3>' +
+        '<p style="color:var(--gray-500);font-size:13px;margin:0 0 16px">UUID factura: <code style="font-size:11px">' + esc(t.uuid || '') + '</code><br>Total factura: <strong>$' + fmt(total) + '</strong></p>' +
+        '<div class="form-row"><div class="form-group"><label class="form-label">Fecha de pago</label><input type="datetime-local" class="form-input" id="repFecha" value="' + hoy + 'T12:00"></div>' +
+          '<div class="form-group"><label class="form-label">Forma de pago (SAT)</label>' +
+            '<select class="form-select" id="repFormaPago">' +
+              '<option value="03">03 — Transferencia electrónica</option>' +
+              '<option value="01">01 — Efectivo</option>' +
+              '<option value="02">02 — Cheque nominativo</option>' +
+              '<option value="04">04 — Tarjeta de crédito</option>' +
+              '<option value="28">28 — Tarjeta de débito</option>' +
+              '<option value="99">99 — Por definir</option>' +
+            '</select>' +
+          '</div>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<div class="form-group"><label class="form-label">Monto pagado</label><input type="number" class="form-input" id="repMonto" step="0.01" min="0.01" max="' + total + '" value="' + total.toFixed(2) + '"></div>' +
+          '<div class="form-group"><label class="form-label">Referencia / No. Operación</label><input type="text" class="form-input" id="repRef" placeholder="REF-12345"></div>' +
+        '</div>' +
+        '<div class="form-row">' +
+          '<div class="form-group"><label class="form-label">No. Parcialidad</label><input type="number" class="form-input" id="repParcialidad" min="1" value="1"></div>' +
+          '<div class="form-group"><label class="form-label">Saldo anterior</label><input type="number" class="form-input" id="repSaldoAnt" step="0.01" value="' + total.toFixed(2) + '"></div>' +
+        '</div>' +
+        '<div style="display:flex;gap:10px;justify-content:flex-end;margin-top:16px">' +
+          '<button class="btn btn-outline" onclick="document.getElementById(\'modalREP\').remove()">Cancelar</button>' +
+          '<button class="btn btn-primary" id="repConfirmarBtn" onclick="confirmarREP(' + backendId + ')">⚡ Timbrar REP</button>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
+  document.body.insertAdjacentHTML('beforeend', html);
+}
+
+function confirmarREP(backendId) {
+  var fecha = document.getElementById('repFecha').value;
+  var formaPago = document.getElementById('repFormaPago').value;
+  var monto = parseFloat(document.getElementById('repMonto').value);
+  var ref = (document.getElementById('repRef').value || '').trim();
+  var parcialidad = parseInt(document.getElementById('repParcialidad').value) || 1;
+  var saldoAnt = parseFloat(document.getElementById('repSaldoAnt').value);
+
+  if (!fecha) return toast('Falta fecha de pago', 'error');
+  if (!formaPago) return toast('Falta forma de pago', 'error');
+  if (!monto || monto <= 0) return toast('Monto inválido', 'error');
+
+  // Convertir datetime-local (YYYY-MM-DDTHH:mm) a formato ISO sin tz (YYYY-MM-DDTHH:mm:ss)
+  var fechaISO = fecha.length === 16 ? fecha + ':00' : fecha;
+  var saldoInsoluto = Math.max(0, (saldoAnt || monto) - monto);
+
+  var payload = {
+    cfdi_relacionado_id: backendId,
+    fecha: fechaISO,
+    forma_pago: formaPago,
+    monto: monto,
+    num_operacion: ref,
+    moneda: 'MXN',
+    tipo_cambio: 1,
+    num_parcialidad: parcialidad,
+    imp_saldo_anterior: saldoAnt || monto,
+    imp_saldo_insoluto: saldoInsoluto
+  };
+
+  var btn = document.getElementById('repConfirmarBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Timbrando…'; }
+  toast('Timbrando REP con Facturama…', 'info');
+
+  ApiClient.fiscalTimbrarREP(payload)
+    .then(function(res) {
+      addAudit('Timbrar', 'REP', 'UUID ' + res.uuid + ' — pago $' + fmt(monto) + ' sobre CFDI id ' + backendId);
+      toast('REP timbrado — UUID ' + (res.uuid || ''), 'success');
+      var m = document.getElementById('modalREP');
+      if (m) m.remove();
+      return cargarCFDITimbrados();
+    })
+    .then(function() {
+      var stored = getStore('fiscal_cfdi') || [];
+      renderCFDITable(stored);
+    })
+    .catch(function(err) {
+      toast('Error al timbrar REP: ' + (err.message || err), 'error');
+      if (btn) { btn.disabled = false; btn.textContent = '⚡ Timbrar REP'; }
+    });
+}
+
+// ============================================================
+//   Enviar CFDI por email
+// ============================================================
+function enviarCFDIEmail(backendId, emailDefault) {
+  var email = prompt('Destinatario del CFDI:', emailDefault || '');
+  if (!email) return;
+  email = email.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return toast('Email inválido', 'error');
+
+  toast('Enviando CFDI…', 'info');
+  ApiClient.fiscalEnviarCFDI(backendId, email)
+    .then(function(res) {
+      addAudit('Email', 'CFDI', 'Enviado a ' + email + ' (id ' + backendId + ')');
+      toast('CFDI enviado a ' + email, 'success');
+    })
+    .catch(function(err) { toast('Error al enviar: ' + (err.message || err), 'error'); });
 }
 
 function descargarCFDIxml(cfdiId) {
@@ -17514,8 +17831,32 @@ function revertirFolio(serie) {
   }
 }
 
+// Cache en memoria del último config leído del backend (para validaciones síncronas
+// como buildCFDIXml y getSiguienteFolio). Se refresca al cargar la pestaña Fiscal.
+window._fiscalConfigCache = window._fiscalConfigCache || null;
+
 function cargarConfigFiscal() {
-  var cfg = getFiscalConfig();
+  // 1) Primero renderizar con lo que haya en caché/localStorage para respuesta instantánea
+  var cfgLocal = getFiscalConfig();
+  _renderFiscalConfig(cfgLocal);
+
+  // 2) Luego leer del backend (fuente de verdad) y re-renderizar
+  if (typeof ApiClient !== 'undefined' && ApiClient.fiscalGetConfig) {
+    ApiClient.fiscalGetConfig().then(function(cfg) {
+      if (!cfg) return;
+      // Persistir en caché local para validaciones síncronas (sin credenciales).
+      window._fiscalConfigCache = cfg;
+      setFiscalConfig(cfg);
+      _renderFiscalConfig(cfg);
+    }).catch(function(err) {
+      console.warn('No se pudo leer config fiscal del servidor:', err);
+      // Mantener el render local
+    });
+  }
+}
+
+function _renderFiscalConfig(cfg) {
+  cfg = cfg || {};
   var set = function(id, val) { var el = document.getElementById(id); if (el) el.value = (val == null ? '' : val); };
   set('fiscalRazonSocial', cfg.razonSocial);
   set('fiscalRFC', cfg.rfc);
@@ -17524,21 +17865,24 @@ function cargarConfigFiscal() {
   set('fiscalSerieREP', cfg.serieREP);
   set('fiscalFolioFacturaInicial', cfg.folioFacturaInicial);
   set('fiscalFolioREPInicial', cfg.folioREPInicial);
-  set('fiscalAmbiente', cfg.ambiente);
+  set('fiscalAmbiente', cfg.ambiente || 'sandbox');
   set('fiscalApiUser', '');  // nunca mostrar credenciales
   set('fiscalApiPass', '');
-  set('fiscalApiUrl', cfg.ambiente === 'produccion' ? 'https://api.facturama.mx' : 'https://apisandbox.facturama.mx');
+  set('fiscalApiUrl', (cfg.ambiente === 'produccion') ? 'https://api.facturama.mx' : 'https://apisandbox.facturama.mx');
   set('fiscalCSDNoCert', cfg.csdNoCert);
   set('fiscalCSDVigencia', cfg.csdVigencia);
-  // Poblar select régimen
   var sel = document.getElementById('fiscalRegimen');
   if (sel) sel.innerHTML = satSelectOptions(SAT_REGIMEN_FISCAL, cfg.regimenFiscal || '601', false);
-  // Status
+
+  // Status Facturama (basado en booleanos del backend)
   var st = document.getElementById('fiscalFacturamaStatus');
   if (st) {
-    if (cfg.apiUserConfigured) {
-      st.textContent = 'Configurado (' + cfg.ambiente + ')';
+    if (cfg.apiUserConfigured && cfg.apiPassConfigured) {
+      st.textContent = 'Configurado (' + (cfg.ambiente || 'sandbox') + ')';
       st.style.color = 'var(--green)';
+    } else if (cfg.apiUserConfigured || cfg.apiPassConfigured) {
+      st.textContent = 'Incompleto — falta usuario o password';
+      st.style.color = 'var(--orange)';
     } else {
       st.textContent = 'No configurado';
       st.style.color = 'var(--gray-400)';
@@ -17546,7 +17890,7 @@ function cargarConfigFiscal() {
   }
   var stCSD = document.getElementById('fiscalCSDStatus');
   if (stCSD) {
-    if (cfg.csdNoCert) { stCSD.textContent = 'Cargado'; stCSD.style.color = 'var(--green)'; }
+    if (cfg.csdNoCert) { stCSD.textContent = 'Cargado (' + cfg.csdNoCert + ')'; stCSD.style.color = 'var(--green)'; }
     else { stCSD.textContent = 'No cargado'; stCSD.style.color = 'var(--gray-400)'; }
   }
   // Cambio de ambiente actualiza URL
@@ -17560,8 +17904,29 @@ function cargarConfigFiscal() {
   }
 }
 
+// Probar credenciales contra Facturama (/api-lite/csds)
+function probarCredencialesFiscal() {
+  if (!(window.currentUser && window.currentUser.rol === 'admin')) {
+    return toast('Sólo el administrador puede probar credenciales', 'error');
+  }
+  var btn = document.getElementById('fiscalTestBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Probando…'; }
+  ApiClient.fiscalTest()
+    .then(function(res) {
+      toast('Credenciales Facturama OK — CSD detectado', 'success');
+      // Refresca config (para traer csdNoCert/csdVigencia auto-actualizado)
+      cargarConfigFiscal();
+    })
+    .catch(function(err) {
+      toast('Error al probar credenciales: ' + (err.message || err), 'error');
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.textContent = 'Probar Credenciales'; }
+    });
+}
+
 function guardarConfigFiscal() {
-  if (!hasPermiso('admin', 'editar') && !(window.currentUser && window.currentUser.rol === 'admin')) {
+  if (!(window.currentUser && window.currentUser.rol === 'admin')) {
     return toast('Sólo el administrador puede modificar la configuración fiscal', 'error');
   }
   var razonSocial = (document.getElementById('fiscalRazonSocial').value || '').trim();
@@ -17576,35 +17941,46 @@ function guardarConfigFiscal() {
 
   // Validaciones
   if (!razonSocial || razonSocial.length < 3) return toast('Razón social inválida', 'error');
-  // Acepta RFC moral (12) o física (13)
   if (!/^[A-ZÑ&]{3,4}\d{6}[A-Z\d]{3}$/i.test(rfc)) return toast('RFC inválido', 'error');
   if (!/^\d{5}$/.test(cp)) return toast('C.P. debe tener 5 dígitos', 'error');
   if (!regimen) return toast('Selecciona un régimen fiscal', 'error');
 
-  var cfg = getFiscalConfig();
-  cfg.razonSocial = razonSocial;
-  cfg.rfc = rfc;
-  cfg.cp = cp;
-  cfg.regimenFiscal = regimen;
-  cfg.serieFactura = serieFactura;
-  cfg.serieREP = serieREP;
-  cfg.folioFacturaInicial = folioFacturaInicial;
-  cfg.folioREPInicial = folioREPInicial;
-  cfg.ambiente = ambiente;
-  cfg.apiUrl = ambiente === 'produccion' ? 'https://api.facturama.mx' : 'https://apisandbox.facturama.mx';
-
-  // NOTA: las credenciales (apiUser/apiPass) NO se guardan aquí en el frontend.
-  // En Bloque B se enviarán al endpoint /api/fiscal/config y se cifrarán en BD.
+  // Payload — solo incluimos credenciales si el usuario las escribió
+  var payload = {
+    razonSocial: razonSocial,
+    rfc: rfc,
+    cp: cp,
+    regimenFiscal: regimen,
+    serieFactura: serieFactura,
+    serieREP: serieREP,
+    folioFacturaInicial: folioFacturaInicial,
+    folioREPInicial: folioREPInicial,
+    ambiente: ambiente
+  };
   var apiUser = (document.getElementById('fiscalApiUser').value || '').trim();
   var apiPass = (document.getElementById('fiscalApiPass').value || '').trim();
-  if (apiUser || apiPass) {
-    toast('Las credenciales de Facturama se almacenarán en el servidor en el Bloque B. Por ahora se ignoran.', 'warning');
-  }
+  if (apiUser) payload.apiUser = apiUser;
+  if (apiPass) payload.apiPass = apiPass;
 
-  setFiscalConfig(cfg);
-  addAudit('Editar', 'Fiscal', 'Configuración fiscal actualizada (RFC ' + rfc + ', régimen ' + regimen + ')');
-  toast('Configuración fiscal guardada', 'success');
-  cargarConfigFiscal();
+  var btn = document.getElementById('fiscalGuardarBtn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Guardando…'; }
+
+  ApiClient.fiscalPutConfig(payload)
+    .then(function(res) {
+      // Limpiar campos sensibles inmediatamente
+      var u = document.getElementById('fiscalApiUser'); if (u) u.value = '';
+      var p = document.getElementById('fiscalApiPass'); if (p) p.value = '';
+      addAudit('Editar', 'Fiscal', 'Configuración fiscal actualizada (RFC ' + rfc + ', régimen ' + regimen + ', ambiente ' + ambiente + ')');
+      toast('Configuración fiscal guardada', 'success');
+      // Recargar desde backend para reflejar flags apiUserConfigured/apiPassConfigured
+      cargarConfigFiscal();
+    })
+    .catch(function(err) {
+      toast('Error al guardar: ' + (err.message || err), 'error');
+    })
+    .finally(function() {
+      if (btn) { btn.disabled = false; btn.textContent = 'Guardar Configuración'; }
+    });
 }
 
 // ============================================================
