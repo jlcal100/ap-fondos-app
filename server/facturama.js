@@ -236,8 +236,8 @@ function buildREPPayload(rep, cfg) {
 
   const emisor = {
     Rfc: cfg.rfc,
-    Name: cfg.razon_social,
-    FiscalRegime: cfg.regimen_fiscal || '601'
+    Name: cfg.razonSocial,
+    FiscalRegime: cfg.regimenFiscal || '601'
   };
 
   const receptor = {
@@ -306,7 +306,7 @@ function buildREPPayload(rep, cfg) {
     ExpeditionPlace: cfg.cp,
     PaymentConditions: '',
     Folio: String(rep.folio || ''),
-    Serie: rep.serie || cfg.serie_rep || 'P',
+    Serie: rep.serie || cfg.serieREP || 'P',
     Date: rep.pago.fecha,
     Currency: 'XXX',                               // REP siempre XXX
     Issuer: emisor,

@@ -959,7 +959,7 @@ app.post('/api/fiscal/rep/timbrar', authenticateToken, async (req, res) => {
     if (!fiscalCrypto.isConfigured()) return res.status(400).json({ error: 'FISCAL_ENCRYPTION_KEY no configurada' });
     const cfg = await getFiscalConfigDecrypted();
     if (!cfg) return res.status(400).json({ error: 'Configuración fiscal no inicializada' });
-    if (!cfg.api_user || !cfg.api_pass) return res.status(400).json({ error: 'Credenciales de Facturama no configuradas' });
+    if (!cfg.apiUser || !cfg.apiPass) return res.status(400).json({ error: 'Credenciales de Facturama no configuradas' });
 
     const b = req.body || {};
     if (!b.cfdi_relacionado_id) return res.status(400).json({ error: 'Falta cfdi_relacionado_id' });
@@ -983,7 +983,7 @@ app.post('/api/fiscal/rep/timbrar', authenticateToken, async (req, res) => {
     const clienteOrig = payloadOrig.cliente || {};
 
     // Reservar folio para la serie REP
-    const serieREP = cfg.serie_rep || 'P';
+    const serieREP = cfg.serieREP || 'P';
     const folio = await reservarFolio(serieREP);
 
     // Calcular proporción de IVA si aplica: si la factura original tenía IVA (iva > 0),
