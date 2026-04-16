@@ -113,6 +113,26 @@ function guardarFondeo() {
       f.garantia = document.getElementById('fondGarantia').value;
       f.notas = document.getElementById('fondNotas').value;
       f.moneda = document.getElementById('fondMoneda').value || 'MXN';
+      // Handle variable rate fields
+      const tipoTasaElem = document.getElementById('fondTipoTasa');
+      if (tipoTasaElem) {
+        f.tipoTasa = tipoTasaElem.value;
+        if (tipoTasaElem.value === 'variable') {
+          const spreadVal = document.getElementById('fondSpread');
+          const periodoRevElem = document.getElementById('fondPeriodoRevision');
+          const tiieVigente = getTIIEVigente();
+          f.tasaReferencia = tiieVigente;
+          f.spread = parseFloat(spreadVal.value) / 100 || 0;
+          f.periodoRevision = periodoRevElem ? periodoRevElem.value : 'mensual';
+          if (!f.historialTasas) f.historialTasas = [];
+          f.historialTasas.push({
+            fecha: fechaInicio,
+            tiie: tiieVigente,
+            spread: f.spread,
+            tasaEfectiva: f.tasa
+          });
+        }
+      }
       addAudit('Editar', 'Fondeos', f.numero, datosAntes, f);
       return f;
     });
@@ -146,6 +166,25 @@ function guardarFondeo() {
       fondeo.disponibleFondeo = fondeo.monto;
       fondeo.disposiciones = [];
       fondeo.esRevolvente = true;
+    }
+    // Handle variable rate fields
+    const tipoTasaElem = document.getElementById('fondTipoTasa');
+    if (tipoTasaElem) {
+      fondeo.tipoTasa = tipoTasaElem.value;
+      if (tipoTasaElem.value === 'variable') {
+        const spreadVal = document.getElementById('fondSpread');
+        const periodoRevElem = document.getElementById('fondPeriodoRevision');
+        const tiieVigente = getTIIEVigente();
+        fondeo.tasaReferencia = tiieVigente;
+        fondeo.spread = parseFloat(spreadVal.value) / 100 || 0;
+        fondeo.periodoRevision = periodoRevElem ? periodoRevElem.value : 'mensual';
+        fondeo.historialTasas = [{
+          fecha: fechaInicio,
+          tiie: tiieVigente,
+          spread: fondeo.spread,
+          tasaEfectiva: fondeo.tasa
+        }];
+      }
     }
     fondeos.push(fondeo);
     setStore('fondeos', fondeos);
@@ -214,7 +253,9 @@ function verFondeo(id) {
   } else {
     toolbarHTML += `<button class="btn btn-primary btn-sm" onclick="registrarPagoFondeo(${f.id})">Registrar Pago</button>`;
   }
-  toolbarHTML += `<button class="btn btn-outline btn-sm" onclick="editarFondeo(${f.id})">Editar</button></div>`;
+  toolbarHTML += `<button class="btn btn-outline btn-sm" onclick="editarFondeo(${f.id})">Editar</button>
+        <span style="border-left:1px solid var(--gray-200);height:24px;margin:0 4px"></span>
+        <button class="btn btn-outline btn-sm" onclick="generarContratoFondeoPDF(${f.id})">📄 Contrato</button></div>`;
 
   panel.innerHTML = `
     <div class="detail-panel-header">

@@ -50,8 +50,90 @@ function openModalCredito() {
 }
 
 function toggleCreditoFields() {
-  const isArrend = document.getElementById('credTipo').value === 'arrendamiento';
+  const tipo = document.getElementById('credTipo').value;
+  const isArrend = tipo === 'arrendamiento' || tipo === 'arrendamiento_puro';
+  const isNomina = tipo === 'nomina';
   document.getElementById('credArrendFields').style.display = isArrend ? 'grid' : 'none';
+  // Hide variable rate fields for arrendamiento
+  const variableFields = document.getElementById('credVariableRateFields');
+  if (variableFields) {
+    variableFields.style.display = isArrend ? 'none' : '';
+  }
+  // Force tipoTasa to 'fija' for arrendamiento
+  const tipoTasa = document.getElementById('credTipoTasa');
+  if (tipoTasa) {
+    tipoTasa.disabled = isArrend;
+    if (isArrend) tipoTasa.value = 'fija';
+    toggleTasaFields();
+  }
+  // Comisión: monto ($) para nómina, porcentaje (%) para créditos y arrendamientos
+  var comInput = document.getElementById('credComision');
+  var comSuffix = document.getElementById('credComisionSuffix');
+  var comWrapper = document.getElementById('credComisionWrapper');
+  if (comInput && comWrapper) {
+    if (isNomina) {
+      comWrapper.className = 'input-prefix';
+      if (comSuffix) { comSuffix.className = 'prefix'; comSuffix.textContent = '$'; }
+      comInput.removeAttribute('max');
+      comInput.step = '1';
+      comInput.type = 'text';
+      comInput.setAttribute('oninput', 'formatMiles(this)');
+      comInput.value = '0';
+    } else {
+      comWrapper.className = 'input-suffix';
+      if (comSuffix) { comSuffix.className = 'suffix'; comSuffix.textContent = '%'; }
+      comInput.max = '100';
+      comInput.step = '0.5';
+      comInput.type = 'number';
+      comInput.removeAttribute('oninput');
+      comInput.value = '0';
+    }
+  }
+  // Periodo de gracia: solo para crédito simple y arrendamiento
+  var graciaFields = document.getElementById('credGraciaFields');
+  if (graciaFields) {
+    var showGracia = (tipo === 'credito_simple' || isArrend);
+    graciaFields.style.display = showGracia ? 'grid' : 'none';
+    if (!showGracia) {
+      document.getElementById('credGraciaMeses').value = '0';
+    }
+  }
+}
+
+function toggleTasaFields() {
+  const tipoTasa = document.getElementById('credTipoTasa');
+  if (!tipoTasa) return;
+  const isVariable = tipoTasa.value === 'variable';
+  const credTasa = document.getElementById('credTasa');
+  const spreadFields = document.getElementById('credVariableRateFields');
+
+  if (isVariable) {
+    // Show spread/revision fields
+    if (spreadFields) spreadFields.style.display = '';
+    if (credTasa) credTasa.readOnly = true;
+    // Calculate and display effective rate
+    calcularTasaEfectiva();
+  } else {
+    // Hide spread/revision fields
+    if (spreadFields) spreadFields.style.display = 'none';
+    if (credTasa) credTasa.readOnly = false;
+  }
+}
+
+function calcularTasaEfectiva() {
+  const tipoTasa = document.getElementById('credTipoTasa');
+  const credTasa = document.getElementById('credTasa');
+  const spreadVal = document.getElementById('credSpread');
+  const displayElem = document.getElementById('credTasaEfectivaDisplay');
+
+  if (!tipoTasa || tipoTasa.value !== 'variable' || !spreadVal || !displayElem) return;
+
+  const tiieVigente = getTIIEVigente();
+  const spread = parseFloat(spreadVal.value) / 100 || 0;
+  const tasaEfectiva = tiieVigente + spread;
+
+  if (credTasa) credTasa.value = (tasaEfectiva * 100).toFixed(2);
+  displayElem.textContent = `TIIE ${(tiieVigente*100).toFixed(2)}% + Spread ${(spread*100).toFixed(2)}% = Tasa Efectiva ${(tasaEfectiva*100).toFixed(2)}%`;
 }
 
 function guardarCredito() {
@@ -68,7 +150,8 @@ function guardarCredito() {
   const fechaInicio = document.getElementById('credFechaInicio').value;
   const vrPctVal = tipo === 'arrendamiento' ? document.getElementById('credVR').value : '0';
   const valorEquipoVal = tipo === 'arrendamiento' ? String(parseMiles('credValorEquipo')) : '0';
-  const comisionVal = String(parseMiles('credComision'));
+  const esNomina = tipo === 'nomina';
+  const comisionRaw = esNomina ? String(parseMiles('credComision')) : document.getElementById('credComision').value;
 
   // Validaciones
   var ok = true;
@@ -89,7 +172,10 @@ function guardarCredito() {
   if (tipo === 'arrendamiento') {
     ok = V.check('credValorEquipo', V.positiveNum(valorEquipoVal), 'Valor del equipo obligatorio para arrendamiento') && ok;
   }
-  ok = V.check('credComision', V.nonNegNum(comisionVal || '0'), 'Comisión no puede ser negativa') && ok;
+  ok = V.check('credComision', V.nonNegNum(comisionRaw || '0'), 'Comisión no puede ser negativa') && ok;
+  if (!esNomina) {
+    ok = V.check('credComision', parseFloat(comisionRaw || '0') <= 100, 'Comisión no puede ser mayor a 100%') && ok;
+  }
 
   if (!ok) return toast('Corrige los errores marcados en rojo', 'error');
 
@@ -108,12 +194,33 @@ function guardarCredito() {
   const plazo = parseInt(plazoVal);
   const vrPct = parseFloat(vrPctVal) || 0;
   const valorEquipo = parseFloat(valorEquipoVal) || 0;
-  const comision = parseFloat(comisionVal) || 0;
+  // Nómina: comisión es monto fijo. Créditos/Arrendamientos: comisión es % del monto
+  var comision;
+  if (esNomina) {
+    comision = parseFloat(comisionRaw) || 0;
+  } else {
+    var comisionPct = parseFloat(comisionRaw) || 0;
+    comision = +(monto * comisionPct / 100).toFixed(2);
+  }
 
   const id = nextId('creditos');
   const prefixMap = { credito_simple: 'CS', arrendamiento: 'AR', nomina: 'NM', cuenta_corriente: 'CC' };
   const prefix = prefixMap[tipo] || 'XX';
   const numero = `${prefix}-${String(id).padStart(3, '0')}`;
+
+  // Extract grace period config for credito_simple and arrendamiento
+  var graciaConfig = null;
+  if (tipo === 'credito_simple' || tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') {
+    const graciaMesesElem = document.getElementById('credGraciaMeses');
+    const graciaTipoElem = document.getElementById('credGraciaTipo');
+    if (graciaMesesElem && graciaTipoElem) {
+      const graciaMeses = parseInt(graciaMesesElem.value) || 0;
+      const graciaTipo = graciaTipoElem.value || 'capital';
+      if (graciaMeses > 0) {
+        graciaConfig = { meses: graciaMeses, tipo: graciaTipo };
+      }
+    }
+  }
 
   var credito;
   if (tipo === 'cuenta_corriente') {
@@ -123,16 +230,39 @@ function guardarCredito() {
       fechaInicio, estado: 'vigente', saldo: 0, limite: monto,
       disponible: monto, disposiciones: [], comision,
       fechaVencimiento: addMonths(new Date(fechaInicio), plazo),
-      esRevolvente: true
+      esRevolvente: true,
+      tipoTasa: 'fija', tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: []
     };
   } else {
-    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision);
+    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision, graciaConfig);
   }
   const fondeoId = document.getElementById('credFondeo').value;
   if (fondeoId) credito.fondeoId = parseInt(fondeoId);
   credito.notas = document.getElementById('credNotas').value;
   // Sprint Z: Moneda
   credito.moneda = document.getElementById('credMoneda').value || 'MXN';
+
+  // Handle variable rate fields
+  if (tipo !== 'arrendamiento') {
+    const tipoTasaElem = document.getElementById('credTipoTasa');
+    if (tipoTasaElem) {
+      credito.tipoTasa = tipoTasaElem.value;
+      if (tipoTasaElem.value === 'variable') {
+        const spreadVal = document.getElementById('credSpread');
+        const periodoRevElem = document.getElementById('credPeriodoRevision');
+        const tiieVigente = getTIIEVigente();
+        credito.tasaReferencia = tiieVigente;
+        credito.spread = parseFloat(spreadVal.value) / 100 || 0;
+        credito.periodoRevision = periodoRevElem ? periodoRevElem.value : 'mensual';
+        credito.historialTasas = [{
+          fecha: fechaInicio,
+          tiie: tiieVigente,
+          spread: credito.spread,
+          tasaEfectiva: tasa
+        }];
+      }
+    }
+  }
 
   // PLD: Verificar si el cliente tiene alertas pendientes de revisión
   var pldStore = getStore('pld') || [];

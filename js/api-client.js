@@ -10,7 +10,7 @@ var ApiClient = (function() {
   var _syncing = false;
 
   // Valid collection keys
-  var VALID_KEYS = ['clientes','creditos','pagos','fondeos','cotizaciones','contabilidad','usuarios','auditoria','valuaciones','aprobaciones','garantias','conciliaciones','bitacora'];
+  var VALID_KEYS = ['clientes','creditos','pagos','fondeos','cotizaciones','contabilidad','usuarios','auditoria','valuaciones','aprobaciones','garantias','conciliaciones','bitacora','tiie_historico'];
 
   function getToken() { return localStorage.getItem(TOKEN_KEY); }
   function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }
@@ -64,7 +64,7 @@ var ApiClient = (function() {
     var promises = VALID_KEYS.map(function(key) {
       return apiRequest('GET', '/api/data/' + key)
         .then(function(res) {
-          _cache[key] = res.data || [];
+          _cache[key] = Array.isArray(res) ? res : (res.data || []);
         })
         .catch(function(err) {
           console.warn('Failed to load ' + key + ':', err);
@@ -138,6 +138,27 @@ var ApiClient = (function() {
     return apiRequest('PUT', '/api/auth/users/' + id, userData);
   }
 
+  // Cambiar la contraseña del usuario autenticado (él mismo)
+  function changeMyPassword(currentPassword, newPassword) {
+    return apiRequest('PUT', '/api/auth/me/password', {
+      currentPassword: currentPassword,
+      newPassword: newPassword
+    }).then(function(res) {
+      if (res && res.success) return res;
+      throw new Error((res && res.error) || 'Error al cambiar la contraseña');
+    });
+  }
+
+  // Resetear la contraseña de cualquier usuario (solo admin)
+  function resetUserPassword(id, newPassword) {
+    return apiRequest('PUT', '/api/auth/users/' + id + '/password', {
+      newPassword: newPassword
+    }).then(function(res) {
+      if (res && res.success) return res;
+      throw new Error((res && res.error) || 'Error al resetear la contraseña');
+    });
+  }
+
   return {
     login: login,
     logout: logout,
@@ -150,6 +171,8 @@ var ApiClient = (function() {
     register: register,
     getUsers: getUsers,
     updateUser: updateUser,
+    changeMyPassword: changeMyPassword,
+    resetUserPassword: resetUserPassword,
     VALID_KEYS: VALID_KEYS,
     getCache: function() { return _cache; }
   };
@@ -223,8 +246,12 @@ function doLogin() {
         if (typeof window !== 'undefined') {
           window.currentUser = userData;
         }
-        // Initialize dashboard
-        if (typeof renderDashboard === 'function') renderDashboard();
+        // Initialize full app (initData + dashboard + everything)
+        if (typeof initApp === 'function') {
+          initApp();
+        } else if (typeof renderDashboard === 'function') {
+          renderDashboard();
+        }
         if (typeof toast === 'function') toast('Bienvenido, ' + userData.nombre, 'success');
       });
     })
