@@ -5703,7 +5703,7 @@ function verCliente(id) {
         <div class="kpi-grid">
           <div class="kpi-card navy"><div class="kpi-label">Cartera Activa</div><div class="kpi-value">${fmt(totalCartera)}</div></div>
           <div class="kpi-card blue"><div class="kpi-label">Ingresos Mensuales</div><div class="kpi-value">${fmt(c.ingresos)}</div></div>
-          <div class="kpi-card green"><div class="kpi-label">Score Crediticio</div><div class="kpi-value">${c.score || 'N/A'}</div></div>
+          <div class="kpi-card green"><div class="kpi-label">Score Crediticio</div><div class="kpi-value" style="font-size:${(c.score > 0) ? '' : '18px'}">${(c.score > 0) ? c.score : 'Sin calificar'}</div>${(c.score > 0) ? '' : '<button class="btn btn-outline btn-sm" style="margin-top:6px" onclick="event.stopPropagation();calificarClienteDesdeExpediente('+c.id+')">🧮 Calificar</button>'}</div>
           <div class="kpi-card orange"><div class="kpi-label">Total Créditos</div><div class="kpi-value">${creds.length}</div></div>
         </div>
       </div>
@@ -6222,15 +6222,29 @@ function verCredito(id) {
       <tbody>${disps.length ? disps.map(d => `<tr><td>${fmtDate(d.fecha)}</td><td>${fmt(d.monto)}</td><td>${fmt(d.saldoDespues)}</td><td>${fmt(d.disponibleDespues)}</td></tr>`).join('') : '<tr><td colspan="4" style="text-align:center;color:#999">Sin disposiciones registradas</td></tr>'}</tbody></table>
     </div>`;
   } else {
+    // FIX QA 2026-04-16 (v2): columnas separadas Cuota s/IVA (fija en francés) y IVA (decreciente)
+    // + aviso de Valor Residual al término en arrendamiento.
+    const esArr = c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
+    const amortArr = (c.amortizacion || []);
+    const ultima = amortArr[amortArr.length - 1];
+    const saldoFinalFin = ultima ? (ultima.saldoFinal || 0) : 0;
+    const vrMxn = (c.valorResidual || 0) > 0 ? +(c.monto * ((c.valorResidual || 0) / 100)).toFixed(2) : 0;
+    const avisoVR = (esArr && saldoFinalFin > 0.01)
+      ? `<div style="margin-top:8px;padding:10px 12px;background:#FEF3C7;border-left:4px solid #D97706;border-radius:4px;font-size:13px;color:#78350F">
+           <strong>⚠️ Valor Residual (VR):</strong> al término del arrendamiento queda un saldo de <strong>${fmt(saldoFinalFin)}</strong> correspondiente al VR pactado (${c.valorResidual || 0}% del monto). Se ejerce mediante <em>opción de compra</em> o renovación según contrato.
+         </div>`
+      : '';
     tableHTML = `<h4 style="margin-bottom:12px;margin-top:16px">Tabla de Amortización</h4>
     <div class="table-wrapper">
-      <table class="amort-table"><thead><tr><th>#</th><th>Fecha</th><th>Saldo Inicial</th><th>Capital</th><th>Interés</th><th>Pago Total</th><th>Saldo Final</th><th>Estado</th></tr></thead>
-      <tbody>${(c.amortizacion || []).map(a => `<tr class="${a.pagado ? 'paid' : ''}">
+      <table class="amort-table"><thead><tr><th>#</th><th>Fecha</th><th>Saldo Inicial</th><th>Capital</th><th>Interés</th><th>Cuota s/IVA</th><th>IVA 16%</th><th>Pago Total</th><th>Saldo Final</th><th>Estado</th></tr></thead>
+      <tbody>${amortArr.map(a => { var cuotaSinIVA = +((a.capital || 0) + (a.interes || 0)).toFixed(2); return `<tr class="${a.pagado ? 'paid' : ''}">
         <td>${a.numero}</td><td>${fmtDate(a.fecha)}</td><td>${fmt(a.saldoInicial)}</td>
-        <td>${fmt(a.capital)}</td><td>${fmt(a.interes)}</td><td>${fmt(a.pagoTotal)}</td>
+        <td>${fmt(a.capital)}</td><td>${fmt(a.interes)}</td>
+        <td>${fmt(cuotaSinIVA)}</td><td>${fmt(a.iva || 0)}</td>
+        <td><strong>${fmt(a.pagoTotal)}</strong></td>
         <td>${fmt(a.saldoFinal)}</td><td>${a.pagado ? '<span class="badge badge-green">Pagado</span>' : '<span class="badge badge-yellow">Pendiente</span>'}</td>
-      </tr>`).join('')}</tbody></table>
-    </div>`;
+      </tr>`; }).join('')}</tbody></table>
+    </div>${avisoVR}`;
   }
 
   let pagosHTML = pagos.length > 0 ? `<h4 style="margin:16px 0 12px">Historial de Pagos</h4>
@@ -15092,6 +15106,22 @@ function setScoringTab(tab) {
   if (tab === 'historial') renderScoringHistorial();
 }
 
+// FIX QA 2026-04-16 (v2): atajo para calificar un cliente desde su expediente.
+// Navega al módulo de scoring y precarga sus datos.
+function calificarClienteDesdeExpediente(clienteId) {
+  try {
+    if (typeof showPage === 'function') showPage('scoring');
+    setTimeout(function() {
+      var sel = document.getElementById('scorCliente');
+      if (sel) {
+        sel.value = String(clienteId);
+        if (typeof onScorClienteChange === 'function') onScorClienteChange();
+      }
+      if (typeof toast === 'function') toast('Datos del cliente precargados — completa ingresos/gastos/buró y calcula el score.', 'info');
+    }, 300);
+  } catch (e) { if (typeof toast === 'function') toast('No se pudo abrir scoring: ' + e.message, 'error'); }
+}
+
 function onScorClienteChange() {
   var sel = document.getElementById('scorCliente').value;
   if (!sel) {
@@ -21293,6 +21323,46 @@ function validarIntegridadInicio() {
 // ============================================================
 document.getElementById('currentDate').textContent = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+// FIX QA 2026-04-16 (v2): Sanar fondeos — recalcular saldo = monto - Σ disposiciones
+// cuando no tiene créditos vinculados ni disposiciones registradas pero el saldo diverge.
+function sanarFondeos(opts) {
+  opts = opts || {};
+  var dryRun = !!opts.dryRun;
+  var fondeos = getStore('fondeos') || [];
+  var creditos = getStore('creditos') || [];
+  var cambios = [];
+  var conCambios = 0;
+  fondeos.forEach(function(f) {
+    if (f.tipo === 'cuenta_corriente') return; // CC tiene su propia contabilidad
+    var detalle = { numero: f.numero };
+    var dirty = false;
+    var disposiciones = Array.isArray(f.disposiciones) ? f.disposiciones : [];
+    var sumDisp = disposiciones.reduce(function(s, d) { return s + (+d.monto || 0); }, 0);
+    var creditosVinc = creditos.filter(function(c) { return c.fondeoId === f.id; });
+    var sumMontoCreditos = creditosVinc.reduce(function(s, c) { return s + (+c.monto || 0); }, 0);
+    // Si ni disposiciones ni créditos vinculados justifican la diferencia, saldo debe ser igual al monto
+    var saldoEsperado;
+    if (sumDisp > 0) {
+      saldoEsperado = +(f.monto - sumDisp).toFixed(2);
+    } else if (sumMontoCreditos > 0) {
+      saldoEsperado = +(f.monto - sumMontoCreditos).toFixed(2);
+    } else {
+      saldoEsperado = f.monto;
+    }
+    if (Math.abs((f.saldo || 0) - saldoEsperado) > 0.01) {
+      detalle.saldoAntes = f.saldo;
+      detalle.saldoDespues = saldoEsperado;
+      detalle.sumDisposiciones = sumDisp;
+      detalle.sumCreditosVinc = sumMontoCreditos;
+      f.saldo = saldoEsperado;
+      dirty = true;
+    }
+    if (dirty) { conCambios++; cambios.push(detalle); }
+  });
+  if (!dryRun && conCambios > 0) setStore('fondeos', fondeos);
+  return { totalFondeos: fondeos.length, conCambios: conCambios, cambios: cambios };
+}
+
 // FIX QA 2026-04-16: Sanar créditos preexistentes (inyecta metodoCalculoInteres/cat,
 // corrige saldo>monto recalculándolo desde amortización, sincroniza pagado[] con pagosRealizados).
 // Idempotente vía flag localStorage ap_sanacion_v1_done.
@@ -21366,7 +21436,36 @@ function initApp() {
         console.table(resSan.cambios);
       }
     }
-  } catch (eSan) { console.warn('Sanación falló:', eSan && eSan.message); }
+  } catch (eSan) { console.warn('Sanación créditos falló:', eSan && eSan.message); }
+  // FIX QA 2026-04-16 (v2): one-shot sanación de fondeos preexistentes (FD-004)
+  try {
+    if (typeof sanarFondeos === 'function' && !localStorage.getItem('ap_sanacion_fondeos_v1_done')) {
+      var resSanFon = sanarFondeos();
+      localStorage.setItem('ap_sanacion_fondeos_v1_done', new Date().toISOString());
+      if (resSanFon.conCambios > 0 && typeof console !== 'undefined') {
+        console.log('[Sanación Fondeos QA 2026-04-16] Fondeos corregidos:', resSanFon.conCambios, 'de', resSanFon.totalFondeos);
+        console.table(resSanFon.cambios);
+      }
+    }
+  } catch (eSanF) { console.warn('Sanación fondeos falló:', eSanF && eSanF.message); }
+  // FIX QA 2026-04-16 (v2): seed default PLD config si no existe
+  try {
+    if (!localStorage.getItem('apf_pld_config')) {
+      var pldDefault = {
+        reporteAnio: new Date().getFullYear(),
+        valorUMA: 113.14, // UMA vigente 2026 (ajustar anualmente)
+        umbralAviso: 645000,   // 10,000 UMAs ≈ efectivo mínimo para aviso SAT
+        umbralEfectivo: 645000,
+        umbralInusual: 1500000,
+        oficial: '',
+        razonSocial: 'AP OPERADORA DE FONDOS, S.A. DE C.V.',
+        clavePortal: '',
+        seededAt: new Date().toISOString()
+      };
+      localStorage.setItem('apf_pld_config', JSON.stringify(pldDefault));
+      console.log('[PLD QA 2026-04-16] Config default sembrada:', pldDefault);
+    }
+  } catch (ePld) { console.warn('Seed PLD config falló:', ePld && ePld.message); }
   loadSession();
   restaurarFiltros();
   renderDashboard();
