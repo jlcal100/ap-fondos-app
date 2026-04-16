@@ -64,7 +64,10 @@ function calcularCotizacion() {
   const plazo = parseInt(document.getElementById('cotPlazo').value);
   const periodicidad = document.getElementById('cotPeriodicidad').value;
   const vrPct = cotizadorTipo === 'arrendamiento' ? parseFloat(document.getElementById('cotVR').value) || 0 : 0;
-  const ivaPct = cotizadorTipo === 'arrendamiento' ? parseInt(document.getElementById('cotIVA').value) || 0 : 0;
+  // FIX QA 2026-04-16: IVA 16% estándar sobre intereses para TODOS los tipos de crédito en México (SA de CV).
+  // Antes: sólo arrendamiento aplicaba IVA, lo cual subestimaba la cuota del crédito simple y nómina.
+  const ivaInput = parseInt(document.getElementById('cotIVA')?.value);
+  const ivaPct = (Number.isFinite(ivaInput) && ivaInput >= 0) ? ivaInput : 16;
   // Bug #20: Comisión de apertura
   const comisionPct = parseFloat(document.getElementById('cotComision').value) || 0;
   const comisionApertura = +(monto * (comisionPct / 100)).toFixed(2);
@@ -82,7 +85,7 @@ function calcularCotizacion() {
   const fechaHoy = new Date().toISOString().split('T')[0];
   const catOpciones = {
     ivaComision: +(comisionApertura * 0.16).toFixed(2),
-    // Si la tabla ya incluye IVA (arrendamiento con ivaPct > 0), no duplicar
+    // Si la tabla ya incluye IVA (ivaPct > 0), no duplicar en CAT
     ivaIntereses: ivaPct === 0
   };
   const cat = calcularCAT(monto, tabla, fechaHoy, comisionApertura, catOpciones);

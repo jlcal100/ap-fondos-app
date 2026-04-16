@@ -406,21 +406,72 @@ function initData() {
   }
   if (getStore('creditos').length === 0) {
     // clienteId mapping: PELJ=1, CAB=2, MARX=3, CAP=4, MAGA=5, EEN=6
+    // FIX QA 2026-04-16: aplicarPagosSeed garantiza que saldo, pagosRealizados,
+    // amortizacion[].pagado y store.pagos queden sincronizados y consistentes.
+    const _seedPagos = [];
+    const _seedMovs = [];
+    const aplicarPagosSeed = (cred, numPagos) => {
+      if (!numPagos || numPagos <= 0) return;
+      const ultima = Math.min(numPagos, (cred.amortizacion || []).length);
+      let saldoTras = cred.monto;
+      for (let i = 0; i < ultima; i++) {
+        const cuota = cred.amortizacion[i];
+        cuota.pagado = true;
+        cuota.fechaPago = cuota.fecha;
+        saldoTras = cuota.saldoFinal;
+        _seedPagos.push({
+          id: _seedPagos.length + 1,
+          creditoId: cred.id,
+          numeroCuota: cuota.numero,
+          fecha: cuota.fecha,
+          capital: cuota.capital,
+          interes: cuota.interes,
+          iva: cuota.iva || 0,
+          monto: cuota.pagoTotal,
+          saldoAnterior: cuota.saldoInicial,
+          saldoNuevo: cuota.saldoFinal,
+          metodo: 'transferencia',
+          referencia: 'SEED-' + cred.numero + '-' + cuota.numero,
+          createdAt: new Date().toISOString()
+        });
+        _seedMovs.push({
+          id: _seedMovs.length + 1,
+          tipo: 'pago',
+          fecha: cuota.fecha,
+          creditoId: cred.id,
+          monto: cuota.pagoTotal,
+          descripcion: 'Pago cuota ' + cuota.numero + ' ' + cred.numero
+        });
+      }
+      cred.pagosRealizados = ultima;
+      cred.saldo = +saldoTras.toFixed(2);
+      cred.saldoActual = cred.saldo;
+    };
+
     const cred1 = crearCreditoObj(1, 'CS-001', 1, 'credito_simple', 1500000, 0.24, 0.36, 24, 'mensual', '2025-01-15', 0, 0, 15000);
-    cred1.pagosRealizados = 14; cred1.saldo = 662500; cred1.notas = 'Capital de trabajo - 14 de 24 pagos';
+    cred1.notas = 'Capital de trabajo - 14 de 24 pagos';
+    aplicarPagosSeed(cred1, 14);
     const cred2 = crearCreditoObj(2, 'AR-001', 2, 'arrendamiento', 2000000, 0.22, 0.33, 36, 'mensual', '2025-03-01', 10, 2000000, 20000);
-    cred2.pagosRealizados = 12; cred2.saldo = 1425000; cred2.notas = 'Maquinaria CNC - 12 de 36 pagos';
+    cred2.notas = 'Maquinaria CNC - 12 de 36 pagos';
+    aplicarPagosSeed(cred2, 12);
     const cred3 = crearCreditoObj(3, 'NM-001', 1, 'nomina', 50000, 0.28, 0.42, 12, 'quincenal', '2025-06-01', 0, 0, 500);
-    cred3.pagosRealizados = 15; cred3.saldo = 18750; cred3.notas = 'Préstamo nómina - 15 de 24 periodos';
+    cred3.notas = 'Préstamo nómina - 15 de 24 periodos';
+    aplicarPagosSeed(cred3, 12); // antes decía 15 pero el plazo son 12 quincenas
     const cred4 = crearCreditoObj(4, 'NM-002', 5, 'nomina', 12348, 0.40, 0.76, 24, 'quincenal', '2026-04-15', 0, 0, 348);
-    cred4.pagosRealizados = 0; cred4.saldo = 12348; cred4.notas = 'Prestamo nómina 24 quincenas';
+    cred4.notas = 'Prestamo nómina 24 quincenas';
     const cred5 = crearCreditoObj(5, 'CS-002', 6, 'credito_simple', 602262, 0.15, 0.30, 35, 'mensual', '2025-12-16', 0, 0, 0);
-    cred5.pagosRealizados = 3; cred5.saldo = 561687.30; cred5.notas = 'Mutuo 35 meses';
+    cred5.notas = 'Mutuo 35 meses - 3 pagos realizados';
+    aplicarPagosSeed(cred5, 3);
     const cred6 = crearCreditoObj(6, 'NM-003', 3, 'nomina', 40464, 0.36, 0.60, 24, 'mensual', '2026-03-31', 0, 0, 464);
-    cred6.pagosRealizados = 4; cred6.saldo = 40464; cred6.notas = 'Préstamo nómina - 24 meses';
+    cred6.notas = 'Préstamo nómina - 4 de 24 pagos';
+    aplicarPagosSeed(cred6, 4);
     const cred7 = crearCreditoObj(7, 'AR-002', 4, 'arrendamiento', 263754.20, 0.26, 0.48, 12, 'mensual', '2026-03-25', 5, 305954.87, 0);
-    cred7.pagosRealizados = 1; cred7.saldo = 315663.95; cred7.notas = 'Camry refinanciamiento';
+    cred7.notas = 'Camry refinanciamiento - 1 de 12 pagos';
+    aplicarPagosSeed(cred7, 1);
+
     setStore('creditos', [cred1, cred2, cred3, cred4, cred5, cred6, cred7]);
+    if (getStore('pagos').length === 0 && _seedPagos.length) setStore('pagos', _seedPagos);
+    if (getStore('movimientos').length === 0 && _seedMovs.length) setStore('movimientos', _seedMovs);
   }
   if (getStore('fondeos').length === 0) {
     setStore('fondeos', [

@@ -200,6 +200,19 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
   // IVA 16% estándar sobre intereses para todos los tipos de crédito en México
   const amort = generarAmortizacion(monto, tasa, plazo, periodicidad, fechaInicio, vrPct, 16, tipo, graciaConfig || null);
   const fechaVenc = amort.length > 0 ? amort[amort.length - 1].fecha : fechaInicio;
+  // FIX QA 2026-04-16: metodoCalculoInteres diferencia amortización francesa (interés sobre saldo
+  // insoluto) vs arrendamiento flat (interés constante sobre monto original). tipoTasa: 'fija' se
+  // mantiene por compatibilidad, pero flat produce TAE efectiva ~1.8-2x la nominal.
+  const esArrendamiento = tipo === 'arrendamiento' || tipo === 'arrendamiento_puro';
+  const metodoCalculoInteres = esArrendamiento ? 'flat' : 'saldo_insoluto';
+  // CAT (Banxico Circular 21/2009) persistido al alta — ya no hay que recalcularlo cada render.
+  let cat = 0;
+  try {
+    if (typeof calcularCAT === 'function' && amort.length > 0) {
+      const comisionIVA = +((comision || 0) * 0.16).toFixed(2);
+      cat = calcularCAT(monto, amort, fechaInicio, comision || 0, { ivaComision: comisionIVA, ivaIntereses: false });
+    }
+  } catch (e) { cat = 0; }
   return {
     id, numero, clienteId, tipo, monto, saldo: monto, tasa, tasaMoratoria: tasaMora,
     plazo, periodicidad, fechaInicio, fechaVencimiento: fechaVenc,
@@ -207,7 +220,8 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
     estado: 'vigente', diasMora: 0, valorResidual: vrPct, valorEquipo, comision,
     fondeoId: null, notas: '', amortizacion: amort,
     graciaConfig: graciaConfig || null,
-    tipoTasa: 'fija', tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: [],
+    tipoTasa: 'fija', metodoCalculoInteres, cat: +cat || 0,
+    tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: [],
     createdAt: new Date().toISOString()
   };
 }
