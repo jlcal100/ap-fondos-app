@@ -21333,29 +21333,48 @@ function sanarFondeos(opts) {
   var cambios = [];
   var conCambios = 0;
   fondeos.forEach(function(f) {
-    if (f.tipo === 'cuenta_corriente') return; // CC tiene su propia contabilidad
-    var detalle = { numero: f.numero };
+    var detalle = { numero: f.numero, tipo: f.tipo };
     var dirty = false;
     var disposiciones = Array.isArray(f.disposiciones) ? f.disposiciones : [];
     var sumDisp = disposiciones.reduce(function(s, d) { return s + (+d.monto || 0); }, 0);
-    var creditosVinc = creditos.filter(function(c) { return c.fondeoId === f.id; });
-    var sumMontoCreditos = creditosVinc.reduce(function(s, c) { return s + (+c.monto || 0); }, 0);
-    // Si ni disposiciones ni créditos vinculados justifican la diferencia, saldo debe ser igual al monto
-    var saldoEsperado;
-    if (sumDisp > 0) {
-      saldoEsperado = +(f.monto - sumDisp).toFixed(2);
-    } else if (sumMontoCreditos > 0) {
-      saldoEsperado = +(f.monto - sumMontoCreditos).toFixed(2);
+    if (f.tipo === 'cuenta_corriente') {
+      // CC: si hay saldoDispuesto > 0 pero disposiciones[] vacío,
+      // crear "saldo inicial" para que el detalle del fondeo sea auditable.
+      var sDisp = +f.saldoDispuesto || 0;
+      if (sDisp > 0.01 && disposiciones.length === 0) {
+        f.disposiciones = [{
+          fecha: f.fechaInicio || new Date().toISOString().slice(0,10),
+          monto: sDisp,
+          concepto: 'Saldo inicial (disposición previa a la migración)',
+          saldoDespues: sDisp,
+          disponibleDespues: +(f.limite || f.monto) - sDisp,
+          origen: 'MIG-2026-04-16'
+        }];
+        detalle.disposicionInicialCreada = sDisp;
+        dirty = true;
+      }
+      // Coherencia limite/monto para CC
+      if (!f.limite && f.monto) { f.limite = f.monto; detalle.limiteSeteado = f.monto; dirty = true; }
     } else {
-      saldoEsperado = f.monto;
-    }
-    if (Math.abs((f.saldo || 0) - saldoEsperado) > 0.01) {
-      detalle.saldoAntes = f.saldo;
-      detalle.saldoDespues = saldoEsperado;
-      detalle.sumDisposiciones = sumDisp;
-      detalle.sumCreditosVinc = sumMontoCreditos;
-      f.saldo = saldoEsperado;
-      dirty = true;
+      // Préstamo / línea de crédito (no revolvente)
+      var creditosVinc = creditos.filter(function(c) { return c.fondeoId === f.id; });
+      var sumMontoCreditos = creditosVinc.reduce(function(s, c) { return s + (+c.monto || 0); }, 0);
+      var saldoEsperado;
+      if (sumDisp > 0) {
+        saldoEsperado = +(f.monto - sumDisp).toFixed(2);
+      } else if (sumMontoCreditos > 0) {
+        saldoEsperado = +(f.monto - sumMontoCreditos).toFixed(2);
+      } else {
+        saldoEsperado = f.monto;
+      }
+      if (Math.abs((f.saldo || 0) - saldoEsperado) > 0.01) {
+        detalle.saldoAntes = f.saldo;
+        detalle.saldoDespues = saldoEsperado;
+        detalle.sumDisposiciones = sumDisp;
+        detalle.sumCreditosVinc = sumMontoCreditos;
+        f.saldo = saldoEsperado;
+        dirty = true;
+      }
     }
     if (dirty) { conCambios++; cambios.push(detalle); }
   });
