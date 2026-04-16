@@ -4541,6 +4541,16 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
   // IVA 16% estándar sobre intereses para todos los tipos de crédito en México
   const amort = generarAmortizacion(monto, tasa, plazo, periodicidad, fechaInicio, vrPct, 16, tipo, graciaConfig || null);
   const fechaVenc = amort.length > 0 ? amort[amort.length - 1].fecha : fechaInicio;
+  // FIX QA 2026-04-16: persistir método de cálculo de interés y CAT (Banxico).
+  const esArrendamiento = tipo === 'arrendamiento' || tipo === 'arrendamiento_puro';
+  const metodoCalculoInteres = esArrendamiento ? 'flat' : 'saldo_insoluto';
+  var cat = 0;
+  try {
+    if (typeof calcularCAT === 'function' && amort.length > 0) {
+      var comisionIVA = +((comision || 0) * 0.16).toFixed(2);
+      cat = calcularCAT(monto, amort, fechaInicio, comision || 0, { ivaComision: comisionIVA, ivaIntereses: false });
+    }
+  } catch (e) { cat = 0; }
   return {
     id, numero, clienteId, tipo, monto, saldo: monto, tasa, tasaMoratoria: tasaMora,
     plazo, periodicidad, fechaInicio, fechaVencimiento: fechaVenc,
@@ -4549,6 +4559,7 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
     fondeoId: null, notas: '', amortizacion: amort,
     graciaConfig: graciaConfig || null,
     tipoTasa: 'fija', tasaReferencia: 0, spread: 0, periodoRevision: '', historialTasas: [],
+    metodoCalculoInteres: metodoCalculoInteres, cat: cat,
     createdAt: new Date().toISOString()
   };
 }
@@ -5788,7 +5799,7 @@ function renderCreditos() {
     return `<tr>
       <td><strong>${esc(c.numero)}</strong></td><td>${cli ? esc(cli.nombre) : '-'}</td>
       <td><span class="badge badge-blue">${tipoLabel[c.tipo]}</span></td>
-      <td>${esCC ? fmt(c.limite || c.monto) + ' <small style="color:var(--gray-400)">(límite)</small>' : fmt(c.monto)}${c.moneda && c.moneda !== 'MXN' ? '<br><small style="color:#8B5CF6;font-weight:600">'+c.moneda+' ≈'+fmt(toMXN(c.monto,c.moneda))+'</small>' : ''}</td><td>${(c.tasa * 100).toFixed(2)}%</td><td>${c.plazo}m</td>
+      <td>${esCC ? fmt(c.limite || c.monto) + ' <small style="color:var(--gray-400)">(límite)</small>' : fmt(c.monto)}${c.moneda && c.moneda !== 'MXN' ? '<br><small style="color:#8B5CF6;font-weight:600">'+c.moneda+' ≈'+fmt(toMXN(c.monto,c.moneda))+'</small>' : ''}</td><td>${(c.tasa * 100).toFixed(2)}%${(function(){var esFlat=c.metodoCalculoInteres==='flat'||c.tipo==='arrendamiento'||c.tipo==='arrendamiento_puro';var badge=esFlat?'<small style="color:#D97706;font-weight:600">flat</small>':'<small style="color:#059669;font-weight:600">s/saldo</small>';var catStr=c.cat?'<br><small style="color:#7C3AED">CAT '+(c.cat*100).toFixed(1)+'%</small>':'';return '<br>'+badge+catStr;})()}</td><td>${c.plazo}m</td>
       <td>${esCC ? fmt(c.saldo) + ' <small style="color:var(--green)">/ ' + fmt(c.disponible || 0) + ' disp.</small>' : fmt(c.saldo)}</td>
       <td><span class="badge ${estadoBadge[c.estado]}">${c.estado}</span>${c.reestructurado?'<br><small style="color:#8B5CF6;font-weight:600">🔄 REST×'+(c.numReestructuras||1)+'</small>':''}${(function(){var gc=getCoberturaGarantias(c.id);return gc.count>0?'<br><small style="color:'+(gc.cobertura>=100?'var(--green)':gc.cobertura>=50?'var(--orange)':'var(--red)')+'">🛡 '+gc.cobertura.toFixed(0)+'%</small>':'';})()}${(function(){var rc=calcularRiesgoCredito(c.id);return '<br><small style="color:'+RIESGO_COLORS[rc.calificacion]+'">⬤ '+rc.calificacion+'</small>';})()}</td>
       <td>
@@ -7228,7 +7239,9 @@ function calcularCotizacion() {
   // IVA aplica a todos los tipos de crédito en México (16% sobre intereses)
   // Arrendamiento financiero: IVA sobre intereses (no sobre capital, es financiamiento)
   // Crédito simple/nómina: IVA sobre intereses ordinarios y moratorios
-  const ivaPct = parseInt(document.getElementById('cotIVA').value) || 0;
+  // FIX QA 2026-04-16: default 16% (no 0) — alinea cotizador con crédito real (SA de CV grava intereses).
+  const ivaInput = parseInt(document.getElementById('cotIVA').value);
+  const ivaPct = (Number.isFinite(ivaInput) && ivaInput >= 0) ? ivaInput : 16;
   // Bug #20: Comisión de apertura
   const comisionPct = parseFloat(document.getElementById('cotComision').value) || 0;
   const comisionApertura = +(monto * (comisionPct / 100)).toFixed(2);
@@ -21280,9 +21293,80 @@ function validarIntegridadInicio() {
 // ============================================================
 document.getElementById('currentDate').textContent = new Date().toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
 
+// FIX QA 2026-04-16: Sanar créditos preexistentes (inyecta metodoCalculoInteres/cat,
+// corrige saldo>monto recalculándolo desde amortización, sincroniza pagado[] con pagosRealizados).
+// Idempotente vía flag localStorage ap_sanacion_v1_done.
+function sanarCreditos(opts) {
+  opts = opts || {};
+  var dryRun = !!opts.dryRun;
+  var creditos = getStore('creditos') || [];
+  var pagos = getStore('pagos') || [];
+  var movimientos = getStore('movimientos') || [];
+  var cambios = [];
+  var conCambios = 0;
+  creditos.forEach(function(c) {
+    var dirty = false;
+    var detalle = { numero: c.numero };
+    // 1) Método de cálculo
+    if (!c.metodoCalculoInteres) {
+      var esArr = c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
+      c.metodoCalculoInteres = esArr ? 'flat' : 'saldo_insoluto';
+      detalle.metodo = c.metodoCalculoInteres;
+      dirty = true;
+    }
+    // 2) CAT ausente → recalcular
+    if ((!c.cat || c.cat === 0) && Array.isArray(c.amortizacion) && c.amortizacion.length > 0 && typeof calcularCAT === 'function') {
+      try {
+        var com = c.comision || 0;
+        var comIVA = +(com * 0.16).toFixed(2);
+        c.cat = calcularCAT(c.monto, c.amortizacion, c.fechaInicio, com, { ivaComision: comIVA, ivaIntereses: false });
+        if (c.cat > 0) { detalle.cat = (c.cat * 100).toFixed(1) + '%'; dirty = true; }
+      } catch (e) { /* no-op */ }
+    }
+    // 3) Saldo > monto → recalcular desde amortización
+    if (c.saldo > c.monto && Array.isArray(c.amortizacion) && c.amortizacion.length > 0) {
+      var pagadosArr = c.amortizacion.filter(function(a) { return a.pagado; });
+      var capitalPagado = pagadosArr.reduce(function(s, a) { return s + (a.capital || 0); }, 0);
+      var nuevoSaldo = +(c.monto - capitalPagado).toFixed(2);
+      if (nuevoSaldo < 0) nuevoSaldo = 0;
+      detalle.saldoAntes = c.saldo;
+      detalle.saldoDespues = nuevoSaldo;
+      c.saldo = nuevoSaldo;
+      dirty = true;
+    }
+    // 4) Sincronizar amortizacion[].pagado con pagosRealizados
+    if (Array.isArray(c.amortizacion) && typeof c.pagosRealizados === 'number') {
+      var marcadas = c.amortizacion.filter(function(a) { return a.pagado; }).length;
+      if (marcadas < c.pagosRealizados) {
+        for (var i = 0; i < c.amortizacion.length && i < c.pagosRealizados; i++) {
+          if (!c.amortizacion[i].pagado) c.amortizacion[i].pagado = true;
+        }
+        detalle.pagosMarcadosAhora = c.pagosRealizados - marcadas;
+        dirty = true;
+      }
+    }
+    if (dirty) { conCambios++; cambios.push(detalle); }
+  });
+  if (!dryRun && conCambios > 0) {
+    setStore('creditos', creditos);
+  }
+  return { totalCreditos: creditos.length, conCambios: conCambios, cambios: cambios };
+}
+
 // App initialization function (called after login + data load)
 function initApp() {
   initData();
+  // FIX QA 2026-04-16: one-shot sanación de créditos preexistentes
+  try {
+    if (typeof sanarCreditos === 'function' && !localStorage.getItem('ap_sanacion_v1_done')) {
+      var resSan = sanarCreditos();
+      localStorage.setItem('ap_sanacion_v1_done', new Date().toISOString());
+      if (resSan.conCambios > 0 && typeof console !== 'undefined') {
+        console.log('[Sanación QA 2026-04-16] Créditos corregidos:', resSan.conCambios, 'de', resSan.totalCreditos);
+        console.table(resSan.cambios);
+      }
+    }
+  } catch (eSan) { console.warn('Sanación falló:', eSan && eSan.message); }
   loadSession();
   restaurarFiltros();
   renderDashboard();
