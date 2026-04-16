@@ -227,6 +227,103 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
 }
 
 // ============================================================
+//  sanarCreditos — MIGRACIÓN ONE-SHOT (fix QA 2026-04-16)
+// ============================================================
+// Corrige inconsistencias en créditos existentes donde:
+//   - saldo > monto (imposible)
+//   - pagosRealizados != número de cuotas marcadas como pagadas
+//   - store.pagos no tiene los registros correspondientes a pagosRealizados
+//   - falta metodoCalculoInteres o cat
+// Retorna un resumen de los cambios aplicados.
+function sanarCreditos(opts) {
+  opts = opts || {};
+  const creditos = getStore('creditos') || [];
+  const pagos = getStore('pagos') || [];
+  const movs = getStore('movimientos') || [];
+  const cambios = [];
+  let nextPagoId = (pagos.reduce((m, p) => Math.max(m, p.id || 0), 0) || 0) + 1;
+  let nextMovId = (movs.reduce((m, p) => Math.max(m, p.id || 0), 0) || 0) + 1;
+
+  creditos.forEach(c => {
+    const change = { numero: c.numero, fixes: [] };
+    const amort = c.amortizacion || [];
+    const esArr = c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
+
+    // 1. Añadir metodoCalculoInteres y cat si faltan
+    if (!c.metodoCalculoInteres) {
+      c.metodoCalculoInteres = esArr ? 'flat' : 'saldo_insoluto';
+      change.fixes.push('+metodoCalculoInteres=' + c.metodoCalculoInteres);
+    }
+    if ((c.cat === undefined || c.cat === null) && typeof calcularCAT === 'function' && amort.length) {
+      try {
+        const comisionIVA = +((c.comision || 0) * 0.16).toFixed(2);
+        c.cat = calcularCAT(c.monto, amort, c.fechaInicio, c.comision || 0, { ivaComision: comisionIVA, ivaIntereses: false });
+        change.fixes.push('+cat=' + (c.cat * 100).toFixed(2) + '%');
+      } catch (e) { c.cat = 0; }
+    }
+
+    // 2. Si saldo > monto → recalcular desde amortización
+    if (c.saldo > c.monto + 0.5 && amort.length) {
+      const pagosReales = pagos.filter(p => p.creditoId === c.id).length;
+      const marcadasPagadas = amort.filter(x => x.pagado || x.pagada).length;
+      const n = Math.max(pagosReales, marcadasPagadas, c.pagosRealizados || 0, 0);
+      const ult = Math.min(n, amort.length);
+      const nuevoSaldo = ult > 0 ? +amort[ult - 1].saldoFinal.toFixed(2) : c.monto;
+      change.fixes.push('saldo ' + c.saldo + ' → ' + nuevoSaldo);
+      c.saldo = nuevoSaldo;
+      c.saldoActual = nuevoSaldo;
+    }
+
+    // 3. Sincronizar amortizacion[].pagado con pagosRealizados
+    const pagosRealizados = c.pagosRealizados || 0;
+    if (pagosRealizados > 0) {
+      const marcadasPagadas = amort.filter(x => x.pagado || x.pagada).length;
+      if (marcadasPagadas !== pagosRealizados) {
+        for (let i = 0; i < amort.length; i++) {
+          const debePagada = i < pagosRealizados;
+          if ((amort[i].pagado || amort[i].pagada) !== debePagada) {
+            amort[i].pagado = debePagada;
+            if (debePagada && !amort[i].fechaPago) amort[i].fechaPago = amort[i].fecha;
+          }
+        }
+        change.fixes.push('amort.pagado sincronizado (' + marcadasPagadas + '→' + pagosRealizados + ')');
+      }
+      // 4. Completar store.pagos con registros SEED-MIG si no existen
+      const pagosExistentes = pagos.filter(p => p.creditoId === c.id).length;
+      if (pagosExistentes < pagosRealizados) {
+        for (let i = pagosExistentes; i < pagosRealizados && i < amort.length; i++) {
+          const cu = amort[i];
+          pagos.push({
+            id: nextPagoId++, creditoId: c.id, numeroCuota: cu.numero, fecha: cu.fecha,
+            capital: cu.capital, interes: cu.interes, iva: cu.iva || 0, monto: cu.pagoTotal,
+            saldoAnterior: cu.saldoInicial, saldoNuevo: cu.saldoFinal,
+            metodo: 'migracion', referencia: 'MIG-' + c.numero + '-' + cu.numero,
+            createdAt: new Date().toISOString()
+          });
+          movs.push({ id: nextMovId++, tipo: 'pago', fecha: cu.fecha, creditoId: c.id, monto: cu.pagoTotal, descripcion: 'Migración — Pago cuota ' + cu.numero + ' ' + c.numero });
+        }
+        change.fixes.push('+' + (pagosRealizados - pagosExistentes) + ' pagos migrados');
+      }
+    }
+
+    // 5. Último fix: saldoActual alineado con saldo
+    if (c.saldoActual !== c.saldo) {
+      c.saldoActual = c.saldo;
+      change.fixes.push('saldoActual = saldo');
+    }
+
+    if (change.fixes.length) cambios.push(change);
+  });
+
+  if (!opts.dryRun) {
+    setStore('creditos', creditos);
+    setStore('pagos', pagos);
+    setStore('movimientos', movs);
+  }
+  return { totalCreditos: creditos.length, conCambios: cambios.length, cambios };
+}
+
+// ============================================================
 //  CAT — COSTO ANUAL TOTAL (Banxico Circular 21/2009)
 // ============================================================
 // Calcula el CAT como la TIR anualizada de los flujos del acreditado.

@@ -17,10 +17,16 @@ function renderCreditos() {
   document.getElementById('tbCreditos').innerHTML = pg.items.map(c => {
     const cli = getStore('clientes').find(cl => cl.id === c.clienteId);
     const esCC = c.esRevolvente || c.tipo === 'cuenta_corriente';
+    // FIX QA 2026-04-16: mostrar método de cálculo y CAT para transparencia
+    const esFlat = c.metodoCalculoInteres === 'flat' || c.tipo === 'arrendamiento' || c.tipo === 'arrendamiento_puro';
+    const metodoBadge = esFlat
+      ? '<small style="color:#D97706;font-weight:600" title="Interés constante sobre monto original (tasa flat)">flat</small>'
+      : '<small style="color:#059669;font-weight:600" title="Interés sobre saldo insoluto (francés)">s/saldo</small>';
+    const catStr = c.cat ? '<br><small style="color:#7C3AED" title="Costo Anual Total — Banxico Circular 21/2009">CAT ' + (c.cat * 100).toFixed(1) + '%</small>' : '';
     return `<tr>
       <td><strong>${esc(c.numero)}</strong></td><td>${cli ? esc(cli.nombre) : '-'}</td>
       <td><span class="badge badge-blue">${tipoLabel[c.tipo]}</span></td>
-      <td>${esCC ? fmt(c.limite || c.monto) + ' <small style="color:var(--gray-400)">(límite)</small>' : fmt(c.monto)}${c.moneda && c.moneda !== 'MXN' ? '<br><small style="color:#8B5CF6;font-weight:600">'+c.moneda+' ≈'+fmt(toMXN(c.monto,c.moneda))+'</small>' : ''}</td><td>${(c.tasa * 100).toFixed(2)}%</td><td>${c.plazo}m</td>
+      <td>${esCC ? fmt(c.limite || c.monto) + ' <small style="color:var(--gray-400)">(límite)</small>' : fmt(c.monto)}${c.moneda && c.moneda !== 'MXN' ? '<br><small style="color:#8B5CF6;font-weight:600">'+c.moneda+' ≈'+fmt(toMXN(c.monto,c.moneda))+'</small>' : ''}</td><td>${(c.tasa * 100).toFixed(2)}% ${metodoBadge}${catStr}</td><td>${c.plazo}m</td>
       <td>${esCC ? fmt(c.saldo) + ' <small style="color:var(--green)">/ ' + fmt(c.disponible || 0) + ' disp.</small>' : fmt(c.saldo)}</td>
       <td><span class="badge ${estadoBadge[c.estado]}">${c.estado}</span>${c.reestructurado?'<br><small style="color:#8B5CF6;font-weight:600">🔄 REST×'+(c.numReestructuras||1)+'</small>':''}${(function(){var gc=getCoberturaGarantias(c.id);return gc.count>0?'<br><small style="color:'+(gc.cobertura>=100?'var(--green)':gc.cobertura>=50?'var(--orange)':'var(--red)')+'">🛡 '+gc.cobertura.toFixed(0)+'%</small>':'';})()}${(function(){var rc=calcularRiesgoCredito(c.id);return '<br><small style="color:'+RIESGO_COLORS[rc.calificacion]+'">⬤ '+rc.calificacion+'</small>';})()}</td>
       <td>
