@@ -906,7 +906,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       <div class="card">
         <div class="table-wrapper">
           <table>
-            <thead><tr><th>No. Fondeo</th><th>Fondeador</th><th>Monto</th><th>Tasa</th><th>Plazo</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
+            <thead><tr><th>No. Fondeo</th><th>Fondeador</th><th>Tipo</th><th>Monto</th><th>Tasa</th><th>Plazo</th><th>Saldo</th><th>Estado</th><th>Acciones</th></tr></thead>
             <tbody id="tbFondeos"></tbody>
           </table>
         </div>
@@ -2606,10 +2606,26 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
   <div class="modal">
     <div class="modal-header"><h3>Nuevo Fondeo</h3><button class="modal-close" onclick="closeModal('modalFondeo')">&times;</button></div>
     <div class="modal-body">
-      <div class="form-row">
+      <div class="form-row-3">
         <div class="form-group"><label class="form-label">Fondeador *</label><input type="text" class="form-input" id="fondNombre"></div>
-        <div class="form-group"><label class="form-label">Tipo</label>
-          <select class="form-select" id="fondTipo"><option value="banco">Banco</option><option value="sofom">SOFOM</option><option value="fondo">Fondo</option><option value="inversionista">Inversionista</option><option value="linea_credito">Línea de Crédito</option><option value="cuenta_corriente">Cuenta Corriente</option></select>
+        <div class="form-group"><label class="form-label">Tipo de Fondeador</label>
+          <select class="form-select" id="fondTipoFondeador">
+            <option value="banco">Banco</option>
+            <option value="sofom">SOFOM</option>
+            <option value="fondo">Fondo de Inversión</option>
+            <option value="inversionista">Inversionista (persona física)</option>
+            <option value="relacionada">Empresa relacionada</option>
+            <option value="otro">Otro</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Tipo de Fondeo</label>
+          <select class="form-select" id="fondTipo">
+            <option value="prestamo_simple">Préstamo Simple</option>
+            <option value="linea_credito">Línea de Crédito</option>
+            <option value="cuenta_corriente">Cuenta Corriente (Revolvente)</option>
+            <option value="factoraje">Factoraje</option>
+            <option value="arrendamiento_financiero">Arrendamiento Financiero</option>
+          </select>
         </div>
       </div>
       <div class="form-row-3">
@@ -3581,10 +3597,10 @@ function initData() {
   }
   if (getStore('fondeos').length === 0) {
     setStore('fondeos', [
-      { id: 1, numero: 'FD-001', fondeador: 'Banco Nacional de México', tipo: 'linea_credito', monto: 5000000, saldo: 5000000, tasa: 0.12, plazo: 36, periodicidad: 'mensual', fechaInicio: '2025-01-01', fechaVencimiento: addMonths(new Date('2025-01-01'), 36), estado: 'vigente', garantia: 'Cartera crediticia', moneda: 'MXN', notas: 'Línea revolvente' },
-      { id: 2, numero: 'FD-002', fondeador: 'Inversionista Privado A', tipo: 'prestamo', monto: 2000000, saldo: 2000000, tasa: 0.15, plazo: 24, periodicidad: 'mensual', fechaInicio: '2025-02-01', fechaVencimiento: addMonths(new Date('2025-02-01'), 24), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: '' },
-      { id: 3, numero: 'FD-003', fondeador: 'Banco Mercantil del Norte', tipo: 'linea_credito', monto: 1000000, saldo: 1000000, tasa: 0.1475, plazo: 60, periodicidad: 'mensual', fechaInicio: '2023-07-15', fechaVencimiento: addMonths(new Date('2023-07-15'), 60), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: 'Amortizable tasa fija' },
-      { id: 4, numero: 'FD-004', fondeador: 'MULTISERVICIOS DUAL SA DE CV', tipo: 'cuenta_corriente', monto: 2900000, saldo: 2900000, tasa: 0.12, plazo: 24, periodicidad: 'mensual', fechaInicio: '2025-05-05', fechaVencimiento: addMonths(new Date('2025-05-05'), 24), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: 'Revolvente tasa fija' }
+      { id: 1, numero: 'FD-001', fondeador: 'Banco Nacional de México',    tipo: 'linea_credito',     tipoFondeador: 'banco',         monto: 5000000, saldo: 5000000, tasa: 0.12,   plazo: 36, periodicidad: 'mensual', fechaInicio: '2025-01-01', fechaVencimiento: addMonths(new Date('2025-01-01'), 36), estado: 'vigente', garantia: 'Cartera crediticia', moneda: 'MXN', notas: 'Línea revolvente' },
+      { id: 2, numero: 'FD-002', fondeador: 'Inversionista Privado A',     tipo: 'prestamo_simple',   tipoFondeador: 'inversionista', monto: 2000000, saldo: 2000000, tasa: 0.15,   plazo: 24, periodicidad: 'mensual', fechaInicio: '2025-02-01', fechaVencimiento: addMonths(new Date('2025-02-01'), 24), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: '' },
+      { id: 3, numero: 'FD-003', fondeador: 'Banco Mercantil del Norte',   tipo: 'linea_credito',     tipoFondeador: 'banco',         monto: 1000000, saldo: 1000000, tasa: 0.1475, plazo: 60, periodicidad: 'mensual', fechaInicio: '2023-07-15', fechaVencimiento: addMonths(new Date('2023-07-15'), 60), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: 'Amortizable tasa fija' },
+      { id: 4, numero: 'FD-004', fondeador: 'MULTISERVICIOS DUAL SA DE CV', tipo: 'cuenta_corriente', tipoFondeador: 'relacionada',   monto: 2900000, saldo: 2900000, tasa: 0.12,   plazo: 24, periodicidad: 'mensual', fechaInicio: '2025-05-05', fechaVencimiento: addMonths(new Date('2025-05-05'), 24), estado: 'vigente', garantia: 'Pagaré', moneda: 'MXN', notas: 'Revolvente tasa fija' }
     ]);
   }
   if (getStore('tiie_historico').length === 0) {
@@ -5011,6 +5027,10 @@ const fmt = n => new Intl.NumberFormat('es-MX', { style: 'currency', currency: '
 const fmtPct = n => (n * 100).toFixed(2) + '%';
 const fmtDate = d => { if (!d) return '-'; var s = String(d); if (s.includes('T')) return new Date(s).toLocaleDateString('es-MX'); return new Date(s + 'T12:00:00').toLocaleDateString('es-MX'); };
 const tipoLabel = { credito_simple: 'Crédito Simple', arrendamiento: 'Arrendamiento', arrendamiento_puro: 'Arrend. Puro', nomina: 'Nómina', cuenta_corriente: 'Cta. Corriente' };
+const tipoFondeoLabel = { prestamo_simple: 'Préstamo Simple', linea_credito: 'Línea de Crédito', cuenta_corriente: 'Cta. Corriente (Revolvente)', factoraje: 'Factoraje', arrendamiento_financiero: 'Arrend. Financiero' };
+const tipoFondeadorLabel = { banco: 'Banco', sofom: 'SOFOM', fondo: 'Fondo de Inversión', inversionista: 'Inversionista (PF)', relacionada: 'Empresa relacionada', otro: 'Otro' };
+function labelTipoFondeo(t) { return tipoFondeoLabel[t] || t || '-'; }
+function labelTipoFondeador(t) { return tipoFondeadorLabel[t] || t || '-'; }
 const estadoBadge = { vigente: 'badge-green', vencido: 'badge-red', liquidado: 'badge-gray', castigado: 'badge-red', reestructurado: 'badge-yellow' };
 const contaTipoLabel = { ingreso_intereses: 'Ingreso Intereses', ingreso_arrendamiento: 'Ingreso Arrendamiento', pago_recibido: 'Pago Recibido', colocacion: 'Colocación', pago_fondeo: 'Pago Fondeo', comision: 'Comisión', gasto_operativo: 'Gasto Operativo', quita_reestructura: 'Quita Reestructura', reversa_pago: 'Reversa Pago', liquidacion_credito: 'Liquidación Crédito', iva_trasladado: 'IVA Trasladado', devengo_intereses: 'Devengo Intereses', cobro_devengo: 'Cobro Devengo', provision_cartera: 'Provisión Cartera', otro: 'Otro' };
 
@@ -9506,7 +9526,7 @@ function renderFondeos() {
   document.getElementById('tbFondeos').innerHTML = pg.items.map(f => {
     const esCC = f.tipo === 'cuenta_corriente';
     return `<tr>
-    <td><strong>${esc(f.numero)}</strong></td><td>${esc(f.fondeador)}</td><td>${esCC ? fmt(f.limite || f.monto) + ' <small style="color:var(--gray-400)">(límite)</small>' : fmt(f.monto)}${f.moneda && f.moneda !== 'MXN' ? '<br><small style="color:#8B5CF6;font-weight:600">'+f.moneda+'</small>' : ''}</td>
+    <td><strong>${esc(f.numero)}</strong></td><td>${esc(f.fondeador)}<br><small style="color:var(--gray-400)">${esc(labelTipoFondeador(f.tipoFondeador))}</small></td><td><small>${esc(labelTipoFondeo(f.tipo))}</small></td><td>${esCC ? fmt(f.limite || f.monto) + ' <small style="color:var(--gray-400)">(límite)</small>' : fmt(f.monto)}${f.moneda && f.moneda !== 'MXN' ? '<br><small style="color:#8B5CF6;font-weight:600">'+f.moneda+'</small>' : ''}</td>
     <td>${(f.tasa * 100).toFixed(2)}%</td><td>${f.plazo}m</td><td>${esCC ? fmt(f.saldoDispuesto || 0) + ' <small style="color:var(--green)">/ ' + fmt(f.disponibleFondeo || f.monto) + ' disp.</small>' : fmt(f.saldo)}</td>
     <td><span class="badge ${estadoBadge[f.estado]}">${f.estado}</span></td>
     <td>
@@ -9523,7 +9543,8 @@ var _editandoFondeoId = null;
 function abrirNuevoFondeo() {
   _editandoFondeoId = null;
   document.getElementById('fondNombre').value = '';
-  document.getElementById('fondTipo').value = 'banco';
+  document.getElementById('fondTipo').value = 'prestamo_simple';
+  document.getElementById('fondTipoFondeador').value = 'banco';
   document.getElementById('fondMonto').value = '';
   document.getElementById('fondMoneda').value = 'MXN';
   document.getElementById('fondTasa').value = '';
@@ -9551,7 +9572,8 @@ function editarFondeo(id) {
   if (!hasPermiso('fondeos', 'editar')) return toast('Sin permiso para editar fondeos', 'error');
   _editandoFondeoId = id;
   document.getElementById('fondNombre').value = f.fondeador || '';
-  document.getElementById('fondTipo').value = f.tipo || 'banco';
+  document.getElementById('fondTipo').value = f.tipo || 'prestamo_simple';
+  document.getElementById('fondTipoFondeador').value = f.tipoFondeador || 'banco';
   document.getElementById('fondMonto').value = (f.monto || 0).toLocaleString('es-MX');
   document.getElementById('fondMoneda').value = f.moneda || 'MXN';
   document.getElementById('fondTasa').value = ((f.tasa || 0) * 100).toFixed(2);
@@ -9612,6 +9634,7 @@ function guardarFondeo() {
       var datosAntes = JSON.parse(JSON.stringify(f));
       f.fondeador = fondeador;
       f.tipo = document.getElementById('fondTipo').value;
+      f.tipoFondeador = document.getElementById('fondTipoFondeador').value;
       // Ajustar saldo proporcionalmente si el monto cambia
       var montoNuevo = parseFloat(montoVal);
       var montoAnterior = f.monto || montoNuevo;
@@ -9668,6 +9691,7 @@ function guardarFondeo() {
       numero: 'FD-' + String(fondeoId).padStart(3, '0'),
       fondeador: fondeador,
       tipo: document.getElementById('fondTipo').value,
+      tipoFondeador: document.getElementById('fondTipoFondeador').value,
       monto: parseFloat(montoVal),
       saldo: parseFloat(montoVal),
       tasa: parseFloat(tasaVal) / 100,
@@ -9792,7 +9816,8 @@ function verFondeo(id) {
     <div class="detail-panel-body">
       ${kpisHTML}
       <table style="margin-top:16px"><tbody>
-        <tr><td><strong>Tipo fondeador:</strong></td><td>${f.tipo ? esc(f.tipo) : '-'}</td><td><strong>Periodicidad:</strong></td><td>${f.periodicidad ? esc(f.periodicidad) : '-'}</td></tr>
+        <tr><td><strong>Tipo de fondeador:</strong></td><td>${esc(labelTipoFondeador(f.tipoFondeador))}</td><td><strong>Tipo de fondeo:</strong></td><td>${esc(labelTipoFondeo(f.tipo))}</td></tr>
+        <tr><td><strong>Periodicidad:</strong></td><td>${f.periodicidad ? esc(f.periodicidad) : '-'}</td><td><strong>Moneda:</strong></td><td>${esc(f.moneda || 'MXN')}</td></tr>
         <tr><td><strong>Fecha inicio:</strong></td><td>${fmtDate(f.fechaInicio)}</td><td><strong>Vencimiento:</strong></td><td>${fmtDate(f.fechaVencimiento)}</td></tr>
         <tr><td><strong>Plazo:</strong></td><td>${f.plazo} meses</td><td><strong>Garantía:</strong></td><td>${f.garantia ? esc(f.garantia) : 'Sin garantía'}</td></tr>
         <tr><td><strong>Estado:</strong></td><td><span class="badge ${estadoBadge[f.estado]}">${f.estado}</span></td><td><strong>Notas:</strong></td><td>${f.notas ? esc(f.notas) : '-'}</td></tr>
@@ -15045,7 +15070,8 @@ function ejecutarImport() {
         id: id,
         numero: 'FD-' + String(id).padStart(3, '0'),
         fondeador: row.fondeador,
-        tipo: row.tipo || 'banco',
+        tipo: row.tipo || 'prestamo_simple',
+        tipoFondeador: row.tipo_fondeador || 'banco',
         monto: row.monto,
         saldo: row.monto,
         tasa: row.tasa / 100,
@@ -15109,10 +15135,11 @@ function descargarPlantilla(tipo) {
     ];
     sheetName = 'Créditos';
   } else if (tipo === 'fondeos') {
-    headers = ['fondeador', 'monto', 'tasa', 'plazo', 'fecha_inicio', 'tipo', 'periodicidad', 'garantia', 'notas'];
+    headers = ['fondeador', 'tipo_fondeador', 'monto', 'tasa', 'plazo', 'fecha_inicio', 'tipo', 'periodicidad', 'garantia', 'notas'];
     sampleData = [
-      ['Banco Nacional de México', 5000000, 12, 36, '2025-01-01', 'linea_credito', 'mensual', 'Cartera crediticia', 'Línea revolvente'],
-      ['Inversionista Privado A', 2000000, 15, 24, '2025-02-01', 'prestamo', 'mensual', 'Pagaré', '']
+      ['Banco Nacional de México', 'banco',         5000000, 12, 36, '2025-01-01', 'linea_credito',    'mensual', 'Cartera crediticia', 'Línea revolvente'],
+      ['Inversionista Privado A',  'inversionista', 2000000, 15, 24, '2025-02-01', 'prestamo_simple',  'mensual', 'Pagaré',             ''],
+      ['MULTISERVICIOS DUAL S.A. de C.V.', 'relacionada', 2900000, 12, 24, '2025-05-05', 'cuenta_corriente', 'mensual', 'Pagaré',         'Revolvente']
     ];
     sheetName = 'Fondeos';
   }
@@ -21366,9 +21393,42 @@ function sanarFondeos(opts) {
   var creditos = getStore('creditos') || [];
   var cambios = [];
   var conCambios = 0;
+  // MIG-2026-04-17: separar `tipo` (producto) vs `tipoFondeador` (entidad).
+  var ENTIDADES = { banco: 'banco', sofom: 'sofom', fondo: 'fondo', inversionista: 'inversionista' };
   fondeos.forEach(function(f) {
     var detalle = { numero: f.numero, tipo: f.tipo };
     var dirty = false;
+    // --- Migración tipo/tipoFondeador ---
+    if (!f.tipoFondeador) {
+      var tipoAntes = f.tipo;
+      if (ENTIDADES[f.tipo]) {
+        f.tipoFondeador = ENTIDADES[f.tipo];
+        f.tipo = 'prestamo_simple';
+      } else if (f.tipo === 'prestamo') {
+        f.tipoFondeador = 'inversionista';
+        f.tipo = 'prestamo_simple';
+      } else {
+        var nom = (f.fondeador || '').toLowerCase();
+        if (/\bbanco\b|banamex|banorte|bbva|santander|hsbc|bajío|bajio|banregio|multiva|inbursa|scotia/.test(nom)) f.tipoFondeador = 'banco';
+        else if (/sofom|crédito|credito\b.*(sa|s\.a\.)/.test(nom)) f.tipoFondeador = 'sofom';
+        else if (/fondo\b|fund\b/.test(nom)) f.tipoFondeador = 'fondo';
+        else if (/inversion|privado|persona física|persona fisica/.test(nom)) f.tipoFondeador = 'inversionista';
+        else if (/sa de cv|s\.a\. de c\.v\.|multiservicios/.test(nom)) f.tipoFondeador = 'relacionada';
+        else f.tipoFondeador = 'otro';
+      }
+      detalle.migTipoAntes = tipoAntes;
+      detalle.migTipoDespues = f.tipo;
+      detalle.migTipoFondeador = f.tipoFondeador;
+      dirty = true;
+    }
+    // Normalizar tipos de producto desconocidos → prestamo_simple
+    var TIPOS_VALIDOS = ['prestamo_simple', 'linea_credito', 'cuenta_corriente', 'factoraje', 'arrendamiento_financiero'];
+    if (TIPOS_VALIDOS.indexOf(f.tipo) === -1) {
+      detalle.tipoNormalizadoAntes = f.tipo;
+      f.tipo = 'prestamo_simple';
+      detalle.tipoNormalizadoDespues = f.tipo;
+      dirty = true;
+    }
     var disposiciones = Array.isArray(f.disposiciones) ? f.disposiciones : [];
     var sumDisp = disposiciones.reduce(function(s, d) { return s + (+d.monto || 0); }, 0);
     if (f.tipo === 'cuenta_corriente') {
@@ -21501,6 +21561,17 @@ function initApp() {
       }
     }
   } catch (eSanF) { console.warn('Sanación fondeos falló:', eSanF && eSanF.message); }
+  // MIG 2026-04-17: re-sanación de fondeos para separar tipo (producto) vs tipoFondeador (entidad)
+  try {
+    if (typeof sanarFondeos === 'function' && !localStorage.getItem('ap_sanacion_fondeos_v2_tipofondeador')) {
+      var resSanFonV2 = sanarFondeos();
+      localStorage.setItem('ap_sanacion_fondeos_v2_tipofondeador', new Date().toISOString());
+      if (resSanFonV2.conCambios > 0 && typeof console !== 'undefined') {
+        console.log('[MIG 2026-04-17] Fondeos migrados (tipo vs tipoFondeador):', resSanFonV2.conCambios, 'de', resSanFonV2.totalFondeos);
+        console.table(resSanFonV2.cambios);
+      }
+    }
+  } catch (eMigF) { console.warn('Migración fondeos v2 falló:', eMigF && eMigF.message); }
   // FIX QA 2026-04-16 (v2): seed default PLD config si no existe
   try {
     if (!localStorage.getItem('apf_pld_config')) {
