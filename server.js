@@ -49,21 +49,13 @@ async function initializeDatabase() {
       )
     `);
 
-    // Seed default admin user
-    const adminExists = await pool.query(
-      'SELECT * FROM users WHERE username = $1',
-      ['admin']
-    );
-
-    if (adminExists.rows.length === 0) {
-      const hashedPassword = await bcryptjs.hash('admin123', 10);
-      await pool.query(
-        `INSERT INTO users (username, password_hash, nombre, rol, email, activo)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        ['admin', hashedPassword, 'Administrador', 'admin', 'admin@apfondos.com', true]
-      );
-      console.log('Default admin user created (username: admin, password: admin123)');
-    }
+    // NOTA DE SEGURIDAD:
+    // Se eliminó el seed del usuario por default `admin / admin123`.
+    // Cualquier instalación nueva debe arrancar únicamente con los 5 usuarios
+    // nominales de abajo (cada uno con password temporal individual que DEBE
+    // cambiarse en el primer login). Para bases ya desplegadas que tengan el
+    // usuario `admin` histórico, se deja abajo una sanación opcional que lo
+    // desactiva si sigue con la contraseña por default.
 
     // Seed de los 5 usuarios nominales si no existen.
     // Cada uno trae una contraseña temporal que el usuario DEBE cambiar en su primer acceso.
@@ -86,6 +78,23 @@ async function initializeDatabase() {
         );
         console.log('Seeded user: ' + u.username + ' (nombre: ' + u.nombre + ', rol: ' + u.rol + ')');
       }
+    }
+
+    // Sanación: desactivar el usuario histórico `admin` si sigue con la
+    // contraseña por default `admin123`. No lo borramos para no perder
+    // referencias históricas en bitácora, solo lo marcamos inactivo.
+    try {
+      const adminRow = await pool.query('SELECT id, password_hash, activo FROM users WHERE username = $1', ['admin']);
+      if (adminRow.rows.length > 0) {
+        const row = adminRow.rows[0];
+        const sigueConDefault = await bcryptjs.compare('admin123', row.password_hash);
+        if (sigueConDefault && row.activo) {
+          await pool.query('UPDATE users SET activo = false WHERE id = $1', [row.id]);
+          console.log('[SECURITY] Usuario por default `admin` desactivado (aún tenía la contraseña admin123).');
+        }
+      }
+    } catch (e) {
+      console.warn('No se pudo revisar el usuario admin por default:', e.message);
     }
 
     // Initialize collection keys
