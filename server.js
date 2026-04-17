@@ -65,6 +65,29 @@ async function initializeDatabase() {
       console.log('Default admin user created (username: admin, password: admin123)');
     }
 
+    // Seed de los 5 usuarios nominales si no existen.
+    // Cada uno trae una contraseña temporal que el usuario DEBE cambiar en su primer acceso.
+    // (política: mín 12 chars, upper, lower, num, especial).
+    const seedUsers = [
+      { username: 'jlca',          tempPassword: 'Jlca2026!Temporal',     nombre: 'JLCA',             rol: 'admin',           email: 'jlcal100@gmail.com' },
+      { username: 'administrador', tempPassword: 'Admin2026!Temporal',    nombre: 'Administrador',    rol: 'admin_limitado',  email: 'administrador@apfondos.com' },
+      { username: 'operador',      tempPassword: 'Oper2026!Temporal',     nombre: 'Operador',         rol: 'operador',        email: 'operador@apfondos.com' },
+      { username: 'adriana',       tempPassword: 'Adri2026!Temporal',     nombre: 'Adriana Martinez', rol: 'admin_limitado',  email: 'adrianamartinez@corporativoap.com.mx' },
+      { username: 'aide',          tempPassword: 'Aide2026!Temporal',     nombre: 'Aide Reyes',       rol: 'analista',        email: 'apfondos@corporativoap.com.mx' }
+    ];
+    for (const u of seedUsers) {
+      const exists = await pool.query('SELECT id FROM users WHERE username = $1', [u.username]);
+      if (exists.rows.length === 0) {
+        const hash = await bcryptjs.hash(u.tempPassword, 10);
+        await pool.query(
+          `INSERT INTO users (username, password_hash, nombre, rol, email, activo)
+           VALUES ($1, $2, $3, $4, $5, true)`,
+          [u.username, hash, u.nombre, u.rol, u.email]
+        );
+        console.log('Seeded user: ' + u.username + ' (nombre: ' + u.nombre + ', rol: ' + u.rol + ')');
+      }
+    }
+
     // Initialize collection keys
     const validKeys = [
       'clientes', 'creditos', 'pagos', 'fondeos', 'cotizaciones',
@@ -244,13 +267,18 @@ app.post('/api/auth/login', async (req, res) => {
   }
 });
 
-// POST /api/auth/register
-app.post('/api/auth/register', async (req, res) => {
+// POST /api/auth/register (admin only — crear nuevos usuarios requiere sesión admin activa)
+app.post('/api/auth/register', authenticateToken, requireAdmin, async (req, res) => {
   try {
     const { username, password, nombre, rol = 'analista', email } = req.body;
 
     if (!username || !password) {
       return res.status(400).json({ error: 'Username and password required' });
+    }
+
+    // Política mínima de password (misma que en el frontend)
+    if (password.length < 12) {
+      return res.status(400).json({ error: 'La contraseña debe tener al menos 12 caracteres' });
     }
 
     const hashedPassword = await bcryptjs.hash(password, 10);
@@ -263,16 +291,8 @@ app.post('/api/auth/register', async (req, res) => {
     );
 
     const user = result.rows[0];
-    const token = jwt.sign(
-      { id: user.id, username: user.username, rol: user.rol, nombre: user.nombre },
-      JWT_SECRET,
-      { expiresIn: '24h' }
-    );
 
-    res.status(201).json({
-      token,
-      user
-    });
+    res.status(201).json({ user });
   } catch (error) {
     if (error.code === '23505') {
       return res.status(400).json({ error: 'Username already exists' });

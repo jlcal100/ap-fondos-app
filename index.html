@@ -599,7 +599,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         </div>
         <div id="notifList" style="max-height:400px;overflow-y:auto;padding:8px"></div>
       </div>
-      <div class="topbar-user" style="cursor:pointer" onclick="showLoginSelector()">
+      <div class="topbar-user" style="cursor:pointer" onclick="abrirMenuUsuario()" title="Opciones de sesión">
         <div class="avatar" id="currentUserAvatar">AD</div>
         <span id="currentUserName">Admin</span>
         <small style="font-size:10px;color:var(--gray-400)">▼</small>
@@ -2770,16 +2770,20 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
 </div>
 
 
-<!-- MODAL: Login Selector -->
+<!-- MODAL: Menú de usuario (sesión) -->
 <div class="modal-overlay" id="modalLogin">
-  <div class="modal" style="max-width:420px">
-    <div class="modal-header"><h3>Seleccionar Usuario</h3><button class="modal-close" onclick="closeModal('modalLogin')">&times;</button></div>
+  <div class="modal" style="max-width:380px">
+    <div class="modal-header"><h3>Mi sesión</h3><button class="modal-close" onclick="closeModal('modalLogin')">&times;</button></div>
     <div class="modal-body">
-      <p style="color:var(--gray-400);margin-bottom:12px;font-size:13px">Inicia sesión como uno de los usuarios activos:</p>
-      <div id="loginUserList"></div>
-      <hr style="margin:16px 0;border:none;border-top:1px solid var(--gray-200)">
-      <button class="btn btn-outline" style="width:100%;justify-content:flex-start" onclick="closeModal('modalLogin');abrirCambiarPassword()">
+      <div id="sessionInfo" style="padding:12px 14px;background:var(--gray-50,#F8FAFC);border-radius:8px;margin-bottom:14px;font-size:13px">
+        <div><strong id="sessionUserName">—</strong></div>
+        <div style="color:var(--text-muted);font-size:12px;margin-top:2px" id="sessionUserRol">—</div>
+      </div>
+      <button class="btn btn-outline" style="width:100%;justify-content:flex-start;margin-bottom:8px" onclick="closeModal('modalLogin');abrirCambiarPassword()">
         🔑 <span style="margin-left:8px">Cambiar mi contraseña</span>
+      </button>
+      <button class="btn btn-danger" style="width:100%;justify-content:flex-start" onclick="cerrarSesion()">
+        🚪 <span style="margin-left:8px">Cerrar sesión</span>
       </button>
     </div>
   </div>
@@ -3792,14 +3796,50 @@ function loginAs(userId) {
 }
 
 function logoutUser() {
-  // Bug #47: Log de seguridad
-  if (currentUser) {
-    logSecurityEvent('logout', 'Cierre de sesión: ' + currentUser.nombre);
-    addAudit('Logout', 'Seguridad', currentUser.nombre);
+  cerrarSesion();
+}
+
+// Abre el menú de sesión del usuario (mostrado al hacer clic en el avatar del topbar)
+function abrirMenuUsuario() {
+  var _rolLabels = { admin: 'Admin General', admin_limitado: 'Administrador', analista: 'Analista', operador: 'Operador', capturista: 'Capturista', viewer: 'Solo Lectura', soporte: 'Soporte' };
+  var u = currentUser || (typeof window !== 'undefined' ? window.currentUser : null);
+  var nameEl = document.getElementById('sessionUserName');
+  var rolEl = document.getElementById('sessionUserRol');
+  if (u) {
+    if (nameEl) nameEl.textContent = u.nombre || u.username || '—';
+    if (rolEl) rolEl.textContent = 'Rol: ' + (_rolLabels[u.rol] || u.rol || '—');
+  } else {
+    if (nameEl) nameEl.textContent = 'Sin sesión activa';
+    if (rolEl) rolEl.textContent = '—';
   }
+  openModal('modalLogin');
+}
+
+// Cierra la sesión del usuario actual y vuelve a la pantalla de login
+function cerrarSesion() {
+  try {
+    if (currentUser) {
+      if (typeof logSecurityEvent === 'function') logSecurityEvent('logout', 'Cierre de sesión: ' + currentUser.nombre);
+      if (typeof addAudit === 'function') addAudit('Logout', 'Seguridad', currentUser.nombre);
+    }
+  } catch (e) { console.warn('logout audit error', e); }
+
   currentUser = null;
-  localStorage.removeItem('ap_currentUser');
-  showLoginSelector();
+  try { localStorage.removeItem('ap_currentUser'); } catch (e) {}
+  try { closeModal('modalLogin'); } catch (e) {}
+
+  if (typeof ApiClient !== 'undefined' && typeof ApiClient.logout === 'function') {
+    // ApiClient.logout limpia token y llama a showLoginScreen()
+    ApiClient.logout();
+  } else {
+    try { localStorage.removeItem('ap_auth_token'); } catch (e) {}
+    try { localStorage.removeItem('ap_auth_user'); } catch (e) {}
+    if (typeof showLoginScreen === 'function') {
+      showLoginScreen();
+    } else {
+      location.reload();
+    }
+  }
 }
 
 // ============================================================
@@ -3958,17 +3998,11 @@ function updateUserUI() {
   });
 }
 
+// OBSOLETO: el selector visual sin contraseña fue reemplazado por la pantalla
+// de login real (usuario + password). Mantenemos la función como alias a
+// abrirMenuUsuario() por si quedara algún onclick legado que la invoque.
 function showLoginSelector() {
-  var _rolLabels = { admin: 'Admin General', admin_limitado: 'Administrador', analista: 'Analista', operador: 'Operador', capturista: 'Capturista', viewer: 'Solo Lectura', soporte: 'Soporte' };
-  const users = getStore('usuarios').filter(u => u.activo);
-  const html = users.map(u =>
-    `<button class="btn btn-outline" style="width:100%;margin-bottom:8px;justify-content:flex-start" onclick="loginAs(${u.id});closeModal('modalLogin')">
-      <span class="avatar" style="width:32px;height:32px;background:var(--navy);color:white;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:600">${esc(u.nombre.substring(0,2).toUpperCase())}</span>
-      <span>${esc(u.nombre)} <small style="color:var(--gray-400)">— ${esc(_rolLabels[u.rol] || u.rol)}</small></span>
-    </button>`
-  ).join('');
-  document.getElementById('loginUserList').innerHTML = html || '<p style="color:var(--gray-400)">No hay usuarios activos</p>';
-  openModal('modalLogin');
+  abrirMenuUsuario();
 }
 
 // Verificar permiso
