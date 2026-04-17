@@ -2623,8 +2623,7 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
             <option value="prestamo_simple">Préstamo Simple</option>
             <option value="linea_credito">Línea de Crédito</option>
             <option value="cuenta_corriente">Cuenta Corriente (Revolvente)</option>
-            <option value="factoraje">Factoraje</option>
-            <option value="arrendamiento_financiero">Arrendamiento Financiero</option>
+            <option value="prestamo_socios">Préstamo de Socios / Accionistas</option>
           </select>
         </div>
       </div>
@@ -5027,7 +5026,7 @@ const fmt = n => new Intl.NumberFormat('es-MX', { style: 'currency', currency: '
 const fmtPct = n => (n * 100).toFixed(2) + '%';
 const fmtDate = d => { if (!d) return '-'; var s = String(d); if (s.includes('T')) return new Date(s).toLocaleDateString('es-MX'); return new Date(s + 'T12:00:00').toLocaleDateString('es-MX'); };
 const tipoLabel = { credito_simple: 'Crédito Simple', arrendamiento: 'Arrendamiento', arrendamiento_puro: 'Arrend. Puro', nomina: 'Nómina', cuenta_corriente: 'Cta. Corriente' };
-const tipoFondeoLabel = { prestamo_simple: 'Préstamo Simple', linea_credito: 'Línea de Crédito', cuenta_corriente: 'Cta. Corriente (Revolvente)', factoraje: 'Factoraje', arrendamiento_financiero: 'Arrend. Financiero' };
+const tipoFondeoLabel = { prestamo_simple: 'Préstamo Simple', linea_credito: 'Línea de Crédito', cuenta_corriente: 'Cta. Corriente (Revolvente)', prestamo_socios: 'Préstamo de Socios' };
 const tipoFondeadorLabel = { banco: 'Banco', sofom: 'SOFOM', fondo: 'Fondo de Inversión', inversionista: 'Inversionista (PF)', relacionada: 'Empresa relacionada', otro: 'Otro' };
 function labelTipoFondeo(t) { return tipoFondeoLabel[t] || t || '-'; }
 function labelTipoFondeador(t) { return tipoFondeadorLabel[t] || t || '-'; }
@@ -21422,7 +21421,7 @@ function sanarFondeos(opts) {
       dirty = true;
     }
     // Normalizar tipos de producto desconocidos → prestamo_simple
-    var TIPOS_VALIDOS = ['prestamo_simple', 'linea_credito', 'cuenta_corriente', 'factoraje', 'arrendamiento_financiero'];
+    var TIPOS_VALIDOS = ['prestamo_simple', 'linea_credito', 'cuenta_corriente', 'prestamo_socios'];
     if (TIPOS_VALIDOS.indexOf(f.tipo) === -1) {
       detalle.tipoNormalizadoAntes = f.tipo;
       f.tipo = 'prestamo_simple';
