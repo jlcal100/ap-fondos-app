@@ -97,6 +97,47 @@ async function initializeDatabase() {
       console.warn('No se pudo revisar el usuario admin por default:', e.message);
     }
 
+    // BOOTSTRAP ADMIN RESET
+    // Mecanismo de recuperación para casos de lockout: si no queda ningún
+    // usuario seed con acceso (p.ej. jlca tenía un password distinto y nadie
+    // lo recuerda), se puede setear la env var AP_BOOTSTRAP_RESET_USER con
+    // el username de uno de los seedUsers. Al arranque, se resetea su
+    // password al tempPassword documentado y se marca activo=true.
+    //
+    // USO:
+    //   1) Setear AP_BOOTSTRAP_RESET_USER=jlca en Railway → Variables
+    //   2) Redeploy (o Restart)
+    //   3) Login con el tempPassword del seed
+    //   4) QUITAR la env var y redeploy nuevamente para evitar reset en cada arranque
+    const bootstrapUser = process.env.AP_BOOTSTRAP_RESET_USER;
+    if (bootstrapUser) {
+      const target = seedUsers.find(u => u.username === bootstrapUser);
+      if (!target) {
+        console.warn('[BOOTSTRAP] AP_BOOTSTRAP_RESET_USER=' + bootstrapUser + ' no coincide con ningún seed user. Ignorando.');
+      } else {
+        try {
+          const hash = await bcryptjs.hash(target.tempPassword, 10);
+          const upd = await pool.query(
+            'UPDATE users SET password_hash = $1, activo = true WHERE username = $2 RETURNING id',
+            [hash, target.username]
+          );
+          if (upd.rows.length > 0) {
+            console.log('[BOOTSTRAP] Password de `' + target.username + '` reseteado al valor temporal del seed y activo=true. Id=' + upd.rows[0].id);
+          } else {
+            await pool.query(
+              `INSERT INTO users (username, password_hash, nombre, rol, email, activo)
+               VALUES ($1, $2, $3, $4, $5, true)`,
+              [target.username, hash, target.nombre, target.rol, target.email]
+            );
+            console.log('[BOOTSTRAP] `' + target.username + '` no existía; insertado con la password temporal del seed.');
+          }
+          console.warn('[BOOTSTRAP] IMPORTANTE: quita la env var AP_BOOTSTRAP_RESET_USER en Railway y redeploy para que el reset no se repita en cada arranque.');
+        } catch (e) {
+          console.error('[BOOTSTRAP] Falló el reset:', e.message);
+        }
+      }
+    }
+
     // Initialize collection keys
     const validKeys = [
       'clientes', 'creditos', 'pagos', 'fondeos', 'cotizaciones',
