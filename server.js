@@ -253,6 +253,12 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Rechazar usuarios desactivados (p. ej. admin por default sanitizado).
+    // Se responde con 401 genérico para no revelar el estado del usuario.
+    if (user.activo === false) {
+      return res.status(401).json({ error: 'Invalid credentials' });
+    }
+
     const token = jwt.sign(
       { id: user.id, username: user.username, rol: user.rol, nombre: user.nombre },
       JWT_SECRET,
