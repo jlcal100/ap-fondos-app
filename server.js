@@ -11,7 +11,13 @@ const mailer = require('./server/mailer');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
-const JWT_SECRET = process.env.JWT_SECRET || 'ap-fondos-secret-key-2026';
+// SEGURIDAD: no usar un secreto público hardcodeado. Si falta la variable de
+// entorno, se genera uno aleatorio temporal (las sesiones se invalidan al
+// reiniciar). Define JWT_SECRET en Railway para producción.
+const JWT_SECRET = process.env.JWT_SECRET || (() => {
+  console.warn('[SEGURIDAD] JWT_SECRET no definido: usando secreto aleatorio temporal. Define JWT_SECRET en variables de entorno para producción.');
+  return require('crypto').randomBytes(48).toString('hex');
+})();
 
 // Database setup
 const pool = new Pool({
@@ -19,8 +25,43 @@ const pool = new Pool({
 });
 
 // Middleware
-app.use(cors());
+// SEGURIDAD: CORS restringido al dominio de producción. Las llamadas same-origin del
+// propio frontend NO se ven afectadas; solo se bloquea el uso cross-origin no autorizado.
+// Ajusta ALLOWED_ORIGINS (separadas por coma) en variables de entorno si usas otro dominio.
+const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS || 'https://ap-fondos-app.up.railway.app').split(',').map(s => s.trim());
+app.use(cors({
+  origin: function (origin, cb) {
+    if (!origin || ALLOWED_ORIGINS.includes(origin)) return cb(null, true);
+    return cb(null, false);
+  },
+  credentials: true
+}));
+// SEGURIDAD: cabeceras básicas de seguridad (sin dependencias externas)
+app.use((req, res, next) => {
+  res.set('X-Content-Type-Options', 'nosniff');
+  res.set('X-Frame-Options', 'SAMEORIGIN');
+  res.set('Referrer-Policy', 'strict-origin-when-cross-origin');
+  res.set('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
+  next();
+});
 app.use(express.json({ limit: '50mb' }));
+
+// SEGURIDAD: rate limiting en memoria para el login (anti fuerza bruta), sin dependencias.
+const _loginHits = new Map();
+function rateLimitLogin(req, res, next) {
+  const ip = (req.headers['x-forwarded-for'] || req.ip || 'unknown').toString().split(',')[0].trim();
+  const now = Date.now();
+  const windowMs = 15 * 60 * 1000; // ventana de 15 minutos
+  const maxIntentos = 20;
+  const rec = _loginHits.get(ip) || { count: 0, start: now };
+  if (now - rec.start > windowMs) { rec.count = 0; rec.start = now; }
+  rec.count++;
+  _loginHits.set(ip, rec);
+  if (rec.count > maxIntentos) {
+    return res.status(429).json({ error: 'Demasiados intentos de inicio de sesión. Intenta de nuevo en unos minutos.' });
+  }
+  next();
+}
 
 // Database initialization
 async function initializeDatabase() {
@@ -270,7 +311,7 @@ function requireAdmin(req, res, next) {
 // ============ AUTH ROUTES ============
 
 // POST /api/auth/login
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', rateLimitLogin, async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -1283,6 +1324,17 @@ app.use((req, res, next) => {
 app.use((req, res, next) => {
   if (req.path.endsWith('.js') || req.path.endsWith('.html')) {
     res.set('Cache-Control', 'no-cache, no-store, must-revalidate');
+  }
+  next();
+});
+
+// SEGURIDAD: bloquear el acceso público a archivos sensibles del backend
+// (código de servidor, secretos, certificados, control de versiones) antes de
+// servir los estáticos. Sin esto, express.static(__dirname) los expone.
+app.use((req, res, next) => {
+  const blocked = [/^\/server\.js$/i, /^\/server\//i, /^\/\.env/i, /^\/package(-lock)?\.json$/i, /^\/\.git/i, /\.key$/i, /\.cer$/i];
+  if (blocked.some((re) => re.test(req.path))) {
+    return res.status(404).send('Not found');
   }
   next();
 });
