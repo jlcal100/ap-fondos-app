@@ -2949,6 +2949,17 @@ function doLogin() {
       document.getElementById('loginScreen').style.display = 'none';
       document.getElementById('appContainer').style.display = '';
       window.currentUser = userData;
+      // FIX: sincronizar la sesión local con el usuario autenticado.
+      // Sin esto, loadSession() restaura el usuario anterior de localStorage
+      // y todos los logins actúan como el mismo usuario (bloqueaba aprobaciones).
+      try {
+        var _allUsers = (typeof getStore === 'function' ? getStore('usuarios') : []) || [];
+        var _matched = _allUsers.find(function(u) {
+          return String(u.id) === String(userData.id) ||
+            (u.username && userData.username && String(u.username).toLowerCase() === String(userData.username).toLowerCase());
+        });
+        localStorage.setItem('ap_currentUser', JSON.stringify(_matched ? _matched.id : userData.id));
+      } catch (e) { console.warn('No se pudo sincronizar sesión:', e && e.message); }
       if (typeof initApp === 'function') initApp();
       if (typeof toast === 'function') toast('Bienvenido, ' + userData.nombre, 'success');
     });
@@ -4014,8 +4025,8 @@ function guardarResetPassword() {
 function loadSession() {
   const savedId = JSON.parse(localStorage.getItem('ap_currentUser') || 'null');
   const users = getStore('usuarios');
-  if (savedId) {
-    currentUser = users.find(u => u.id === savedId && u.activo);
+  if (savedId !== null && savedId !== undefined) {
+    currentUser = users.find(u => String(u.id) === String(savedId) && u.activo);
   }
   if (!currentUser && users.length > 0) {
     // Auto-login como primer admin activo
@@ -20593,7 +20604,7 @@ function aprobarSolicitud(id) {
   if (sol.estado !== 'pendiente') return toast('Esta solicitud ya fue resuelta', 'error');
 
   // No puede aprobar su propia solicitud
-  if (currentUser && sol.solicitanteId === currentUser.id) {
+  if (currentUser && String(sol.solicitanteId) === String(currentUser.id)) {
     return toast('No puede aprobar su propia solicitud', 'error');
   }
 

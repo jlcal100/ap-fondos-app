@@ -363,6 +363,17 @@ function doLogin() {
         if (typeof window !== 'undefined') {
           window.currentUser = userData;
         }
+        // FIX: sincronizar la sesión local con el usuario autenticado.
+        // Sin esto, loadSession() restaura el usuario anterior de localStorage
+        // y todos los logins actúan como el mismo usuario (bloqueaba aprobaciones).
+        try {
+          var _allUsers = (typeof getStore === 'function' ? getStore('usuarios') : []) || [];
+          var _matched = _allUsers.find(function(u) {
+            return String(u.id) === String(userData.id) ||
+              (u.username && userData.username && String(u.username).toLowerCase() === String(userData.username).toLowerCase());
+          });
+          localStorage.setItem('ap_currentUser', JSON.stringify(_matched ? _matched.id : userData.id));
+        } catch (e) { console.warn('No se pudo sincronizar sesión:', e && e.message); }
         // Initialize full app (initData + dashboard + everything)
         if (typeof initApp === 'function') {
           initApp();

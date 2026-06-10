@@ -37,7 +37,7 @@ function aprobarSolicitud(id) {
   if (sol.estado !== 'pendiente') return toast('Esta solicitud ya fue resuelta', 'error');
 
   // No puede aprobar su propia solicitud
-  if (currentUser && sol.solicitanteId === currentUser.id) {
+  if (currentUser && String(sol.solicitanteId) === String(currentUser.id)) {
     return toast('No puede aprobar su propia solicitud', 'error');
   }
 

@@ -90,8 +90,8 @@ function logoutUser() {
 function loadSession() {
   const savedId = JSON.parse(localStorage.getItem('ap_currentUser') || 'null');
   const users = getStore('usuarios');
-  if (savedId) {
-    currentUser = users.find(u => u.id === savedId && u.activo);
+  if (savedId !== null && savedId !== undefined) {
+    currentUser = users.find(u => String(u.id) === String(savedId) && u.activo);
   }
   if (!currentUser && users.length > 0) {
     // Auto-login como primer admin activo
