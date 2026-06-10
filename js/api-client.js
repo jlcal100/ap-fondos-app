@@ -10,7 +10,7 @@ var ApiClient = (function() {
   var _syncing = false;
 
   // Valid collection keys
-  var VALID_KEYS = ['clientes','creditos','pagos','fondeos','cotizaciones','contabilidad','usuarios','auditoria','valuaciones','aprobaciones','garantias','conciliaciones','bitacora','tiie_historico'];
+  var VALID_KEYS = ['clientes','creditos','pagos','fondeos','cotizaciones','contabilidad','usuarios','auditoria','valuaciones','aprobaciones','garantias','conciliaciones','bitacora','tiie_historico','productos'];
 
   function getToken() { return localStorage.getItem(TOKEN_KEY); }
   function setToken(t) { localStorage.setItem(TOKEN_KEY, t); }

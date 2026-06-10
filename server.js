@@ -184,7 +184,7 @@ async function initializeDatabase() {
       'clientes', 'creditos', 'pagos', 'fondeos', 'cotizaciones',
       'contabilidad', 'usuarios', 'auditoria', 'valuaciones',
       'aprobaciones', 'garantias', 'conciliaciones', 'bitacora',
-      'tiie_historico'
+      'tiie_historico', 'productos'
     ];
 
     for (const key of validKeys) {

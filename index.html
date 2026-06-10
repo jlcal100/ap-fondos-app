@@ -526,6 +526,10 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
       Cotizador
     </div>
+    <div class="nav-item" onclick="showPage('productos')" data-page="productos">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.83z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
+      Productos
+    </div>
     <div class="nav-item" onclick="showPage('fondeos')" data-page="fondeos">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
       Fondeos
@@ -761,6 +765,12 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
           <div class="tab" onclick="setCotizadorTab('escenarios')" style="border-left:2px solid var(--border);margin-left:8px;padding-left:16px">📊 Simulador Escenarios</div>
         </div>
         <div class="form-row-3">
+          <div class="form-group" style="grid-column:1/-1">
+            <label class="form-label">Producto (opcional)</label>
+            <select class="form-select" id="cotProducto" onchange="aplicarProductoCotizador()"><option value="">— Sin producto / captura libre —</option></select>
+          </div>
+        </div>
+        <div class="form-row-3">
           <div class="form-group">
             <label class="form-label">Monto ($)</label>
             <div class="input-prefix"><span class="prefix">$</span><input type="text" class="form-input" id="cotMonto" value="500,000" inputmode="numeric" oninput="formatMiles(this)" onfocus="this.select()"></div>
@@ -891,6 +901,16 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
     </div>
 
     <!-- ===================== FONDEOS ===================== -->
+    <div class="page" id="page-productos">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Catálogo de Productos de Crédito</span>
+          <button class="btn btn-primary" onclick="abrirModalProducto()">+ Nuevo Producto</button>
+        </div>
+        <p style="color:var(--text-muted);font-size:13px;margin-bottom:12px">Define las características de cada producto (amortización, tipo de pago, comisión, IVA). Al cotizar o dar de alta un crédito podrás elegir el producto y los campos se llenarán automáticamente.</p>
+        <div id="productosLista"></div>
+      </div>
+    </div>
     <div class="page" id="page-fondeos">
       <div class="search-bar">
         <input type="text" class="form-input" placeholder="Buscar por fondeador, número..." id="searchFondeos" oninput="pageState.fondeos=1;renderFondeos()" style="flex:1">
@@ -2501,6 +2521,9 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
   <div class="modal">
     <div class="modal-header"><h3>Nuevo Crédito</h3><button class="modal-close" onclick="closeModal('modalCredito')">&times;</button></div>
     <div class="modal-body">
+      <div class="form-group"><label class="form-label">Producto (opcional — llena los campos automáticamente)</label>
+        <select class="form-select" id="credProducto" onchange="aplicarProductoCredito()"><option value="">— Captura libre —</option></select>
+      </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Cliente *</label><select class="form-select" id="credCliente"></select></div>
         <div class="form-group"><label class="form-label">Tipo Producto *</label>
@@ -2839,6 +2862,71 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
     <div class="modal-footer">
       <button class="btn btn-outline" onclick="closeModal('modalResetPassword')">Cancelar</button>
       <button class="btn btn-primary" id="rpBtnGuardar" onclick="guardarResetPassword()">Resetear</button>
+    </div>
+  </div>
+</div>
+
+<!-- MODAL: Producto de Crédito -->
+<div class="modal-overlay" id="modalProducto">
+  <div class="modal" style="max-width:760px">
+    <div class="modal-header"><h3 id="productoModalTitle">Nuevo Producto</h3><button class="modal-close" onclick="closeModal('modalProducto')">&times;</button></div>
+    <div class="modal-body">
+      <input type="hidden" id="prodId" value="">
+      <div class="form-row">
+        <div class="form-group"><label class="form-label">Nombre del Producto *</label><input type="text" class="form-input" id="prodNombre" placeholder="Ej: Nómina Quincenal 36%"></div>
+        <div class="form-group"><label class="form-label">Tipo de Crédito *</label>
+          <select class="form-select" id="prodTipoCredito">
+            <option value="credito_simple">Crédito Simple</option>
+            <option value="nomina">Crédito Nómina</option>
+            <option value="arrendamiento">Arrendamiento Financiero</option>
+            <option value="arrendamiento_puro">Arrendamiento Puro</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Tipo de Amortización *</label>
+          <select class="form-select" id="prodTipoAmortizacion">
+            <option value="frances">Francés (pago fijo)</option>
+            <option value="capital_fijo">Capital fijo (decreciente)</option>
+            <option value="flat">Interés global (flat)</option>
+            <option value="bullet">Pago único al vencimiento</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Tipo de Pago *</label>
+          <select class="form-select" id="prodPeriodicidad">
+            <option value="mensual">Mensual</option>
+            <option value="quincenal">Quincenal</option>
+            <option value="semanal">Semanal</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Plazo sugerido (meses)</label><input type="number" class="form-input" id="prodPlazo" value="12" min="1" max="360"></div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Tasa Anual *</label><div class="input-suffix"><input type="number" class="form-input" id="prodTasa" min="0" step="0.01"><span class="suffix">%</span></div></div>
+        <div class="form-group"><label class="form-label">Tasa Moratoria</label><div class="input-suffix"><input type="number" class="form-input" id="prodTasaMora" value="0" min="0" step="0.01"><span class="suffix">%</span></div></div>
+        <div class="form-group"><label class="form-label">IVA sobre intereses</label>
+          <select class="form-select" id="prodIVA"><option value="16">16% (con impuesto)</option><option value="0">Sin impuesto</option></select>
+        </div>
+      </div>
+      <div class="form-row-3">
+        <div class="form-group"><label class="form-label">Comisión por Apertura</label>
+          <select class="form-select" id="prodComisionTipo" onchange="toggleProdComision()">
+            <option value="porcentaje">Tasa (% del monto)</option>
+            <option value="monto">Monto fijo ($)</option>
+          </select>
+        </div>
+        <div class="form-group"><label class="form-label">Valor de la comisión</label>
+          <div class="input-suffix"><input type="number" class="form-input" id="prodComisionValor" value="0" min="0" step="0.01"><span class="suffix" id="prodComisionSuffix">%</span></div>
+        </div>
+        <div class="form-group"><label class="form-label">Estado</label>
+          <select class="form-select" id="prodActivo"><option value="1">Activo</option><option value="0">Inactivo</option></select>
+        </div>
+      </div>
+      <div class="form-group"><label class="form-label">Notas</label><input type="text" class="form-input" id="prodNotas" placeholder="Condiciones, requisitos, observaciones…"></div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('modalProducto')">Cancelar</button>
+      <button class="btn btn-primary" onclick="guardarProducto()">Guardar Producto</button>
     </div>
   </div>
 </div>
@@ -3339,7 +3427,7 @@ function renderPagination(module, totalPages, currentPage, totalItems) {
 //  DATA STORE (localStorage)
 // ============================================================
 
-const STORE_KEYS = ['clientes','creditos','pagos','fondeos','contabilidad','usuarios','auditoria','cotizaciones','valuaciones','aprobaciones','garantias','conciliaciones','bitacora','pld','tiie_historico','security_log'];
+const STORE_KEYS = ['clientes','creditos','pagos','fondeos','contabilidad','usuarios','auditoria','cotizaciones','valuaciones','aprobaciones','garantias','conciliaciones','bitacora','pld','tiie_historico','security_log','productos'];
 
 // Fecha local YYYY-MM-DD (evita el bug de toISOString que da fecha UTC)
 function hoyLocal() {
@@ -4046,7 +4134,7 @@ function updateUserUI() {
   // Ocultar sidebar items sin permiso de 'ver'
   document.querySelectorAll('.nav-item[data-page]').forEach(nav => {
     const page = nav.getAttribute('data-page');
-    nav.style.display = hasPermiso(page, 'ver') ? '' : 'none';
+    nav.style.display = hasPermiso(page === 'productos' ? 'creditos' : page, 'ver') ? '' : 'none';
   });
   // Botones solo para admin general
   var esAdminGral = currentUser && currentUser.rol === 'admin';
@@ -4497,7 +4585,7 @@ function avanzarFechaPeriodo(fecha, periodicidad, diaOriginal) {
 }
 
 // tipoCredito: opcional, si es 'arrendamiento' usa lógica flat
-function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaInicio, valorResidualPct = 0, ivaPct = 0, tipoCredito = '', graciaConfig = null) {
+function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaInicio, valorResidualPct = 0, ivaPct = 0, tipoCredito = '', graciaConfig = null, tipoAmortizacion = '') {
   // graciaConfig: { meses: N, tipo: 'capital'|'total' } o null
   const periodosGracia = graciaConfig && graciaConfig.meses > 0 ? getPeriodos(graciaConfig.meses, periodicidad) : 0;
   const tipoGracia = graciaConfig ? graciaConfig.tipo : 'capital';
@@ -4513,8 +4601,25 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
   let fecha = new Date(fechaInicio);
   const diaOriginal = fecha.getDate();
 
-  // ARRENDAMIENTO FINANCIERO Y PURO:
-  if (tipoCredito === 'arrendamiento' || tipoCredito === 'arrendamiento_puro') {
+  // Tipo de amortización: '' → francés (o flat si es arrendamiento)
+  const tipoAmort = tipoAmortizacion || ((tipoCredito === 'arrendamiento' || tipoCredito === 'arrendamiento_puro') ? 'flat' : 'frances');
+
+  // PAGO ÚNICO AL VENCIMIENTO (bullet): capital + intereses acumulados en un solo pago
+  if (tipoAmort === 'bullet') {
+    for (let i = 1; i <= totalPeriodos; i++) fecha = avanzarFechaPeriodo(fecha, periodicidad, diaOriginal);
+    const interesTotal = +(monto * tasaPeriodica * totalPeriodos).toFixed(2);
+    const ivaBullet = +(interesTotal * (ivaPct / 100)).toFixed(2);
+    return [{
+      numero: 1, fecha: fecha.toISOString().split('T')[0],
+      saldoInicial: +monto.toFixed(2), capital: +monto.toFixed(2),
+      interes: interesTotal, iva: ivaBullet,
+      pagoTotal: +(monto + interesTotal + ivaBullet).toFixed(2),
+      saldoFinal: 0, pagado: false
+    }];
+  }
+
+  // INTERÉS GLOBAL (FLAT) — arrendamientos y productos con interés sobre monto original:
+  if (tipoAmort === 'flat') {
     const interesFlat = +(monto * tasaPeriodica).toFixed(2);
     const capitalFijo = +((monto - vr) / periodos).toFixed(2); // capital solo en periodos normales
 
@@ -4596,19 +4701,35 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
   }
 
   // Ahora generar periodos normales con el saldo post-gracia
-  const pago = calcPago(saldo, tasaAnual, plazoMeses, periodicidad, valorResidualPct);
+  // NÓMINA (francés): pago TOTAL nivelado con IVA — el descuento es idéntico cada periodo
+  const nivelarIVA = tipoCredito === 'nomina' && tipoAmort === 'frances' && ivaPct > 0;
+  let pago;
+  if (nivelarIVA) {
+    const tasaNiv = tasaPeriodica * (1 + ivaPct / 100);
+    const montoFinNiv = saldo - vr / Math.pow(1 + tasaNiv, periodos);
+    pago = tasaNiv === 0 ? montoFinNiv / periodos
+      : montoFinNiv * (tasaNiv * Math.pow(1 + tasaNiv, periodos)) / (Math.pow(1 + tasaNiv, periodos) - 1);
+  } else {
+    pago = calcPago(saldo, tasaAnual, plazoMeses, periodicidad, valorResidualPct);
+  }
+  // CAPITAL FIJO (decreciente): misma amortización de capital cada periodo
+  const capFijoStd = +(((saldo - vr) / periodos)).toFixed(2);
 
   for (let i = 1; i <= periodos; i++) {
     fecha = avanzarFechaPeriodo(fecha, periodicidad, diaOriginal);
 
     const interes = +(saldo * tasaPeriodica).toFixed(2);
+    const ivaInteres = +(interes * (ivaPct / 100)).toFixed(2);
     let capital;
     if (i === periodos) {
       capital = +(saldo - vr).toFixed(2);
+    } else if (tipoAmort === 'capital_fijo') {
+      capital = capFijoStd;
+    } else if (nivelarIVA) {
+      capital = +(pago - interes - ivaInteres).toFixed(2);
     } else {
       capital = +(pago - interes).toFixed(2);
     }
-    const ivaInteres = +(interes * (ivaPct / 100)).toFixed(2);
     const pagoTotal = +(capital + interes + ivaInteres).toFixed(2);
     const saldoFinal = +(saldo - capital).toFixed(2);
 
@@ -4628,13 +4749,13 @@ function generarAmortizacion(monto, tasaAnual, plazoMeses, periodicidad, fechaIn
   return tabla;
 }
 
-function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision, graciaConfig) {
-  // IVA 16% estándar sobre intereses para todos los tipos de crédito en México
-  const amort = generarAmortizacion(monto, tasa, plazo, periodicidad, fechaInicio, vrPct, 16, tipo, graciaConfig || null);
+function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPct, valorEquipo, comision, graciaConfig, tipoAmortizacion = '', ivaPctCred = 16) {
+  // IVA estándar 16% sobre intereses (configurable por producto)
+  const amort = generarAmortizacion(monto, tasa, plazo, periodicidad, fechaInicio, vrPct, ivaPctCred, tipo, graciaConfig || null, tipoAmortizacion || '');
   const fechaVenc = amort.length > 0 ? amort[amort.length - 1].fecha : fechaInicio;
   // FIX QA 2026-04-16: persistir método de cálculo de interés y CAT (Banxico).
   const esArrendamiento = tipo === 'arrendamiento' || tipo === 'arrendamiento_puro';
-  const metodoCalculoInteres = esArrendamiento ? 'flat' : 'saldo_insoluto';
+  const metodoCalculoInteres = (esArrendamiento || tipoAmortizacion === 'flat') ? 'flat' : 'saldo_insoluto';
   var cat = 0;
   try {
     if (typeof calcularCAT === 'function' && amort.length > 0) {
@@ -4645,7 +4766,10 @@ function crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, pla
   return {
     id, numero, clienteId, tipo, monto, saldo: monto, tasa, tasaMoratoria: tasaMora,
     plazo, periodicidad, fechaInicio, fechaVencimiento: fechaVenc,
-    pago: calcPago(monto, tasa, plazo, periodicidad, vrPct, tipo),
+    pago: (tipoAmortizacion && tipoAmortizacion !== 'frances' && amort.length > 0)
+      ? +(amort[0].capital + amort[0].interes).toFixed(2)
+      : calcPago(monto, tasa, plazo, periodicidad, vrPct, tipo),
+    tipoAmortizacion: tipoAmortizacion || (esArrendamiento ? 'flat' : 'frances'),
     estado: 'vigente', diasMora: 0, valorResidual: vrPct, valorEquipo, comision,
     fondeoId: null, notas: '', amortizacion: amort,
     graciaConfig: graciaConfig || null,
@@ -5128,6 +5252,186 @@ function getCuentaNombre(codigo) {
 // ============================================================
 //  NAVIGATION
 // ============================================================
+// ============================================================
+//  CATÁLOGO DE PRODUCTOS DE CRÉDITO
+// ============================================================
+var PROD_AMORT_LABELS = { frances: 'Francés (pago fijo)', capital_fijo: 'Capital fijo', flat: 'Interés global (flat)', bullet: 'Pago único' };
+var PROD_TIPO_LABELS = { credito_simple: 'Crédito Simple', nomina: 'Nómina', arrendamiento: 'Arrend. Financiero', arrendamiento_puro: 'Arrend. Puro' };
+
+function renderProductos() {
+  var productos = getStore('productos');
+  var cont = document.getElementById('productosLista');
+  if (!cont) return;
+  if (productos.length === 0) {
+    cont.innerHTML = '<div style="text-align:center;padding:40px;color:var(--gray)">No hay productos registrados. Crea el primero con "+ Nuevo Producto".</div>';
+    return;
+  }
+  var html = '<div class="table-wrapper"><table class="table"><thead><tr>' +
+    '<th>Nombre</th><th>Tipo</th><th>Amortización</th><th>Pago</th><th>Tasa</th><th>Mora</th><th>Plazo</th><th>Comisión</th><th>IVA</th><th>Estado</th><th>Acciones</th>' +
+    '</tr></thead><tbody>';
+  productos.forEach(function(p) {
+    var comLabel = p.comisionTipo === 'monto' ? fmt(p.comisionValor || 0) : ((p.comisionValor || 0) + '%');
+    html += '<tr>' +
+      '<td><strong>' + esc(p.nombre) + '</strong>' + (p.notas ? '<br><small style="color:var(--gray)">' + esc(p.notas) + '</small>' : '') + '</td>' +
+      '<td><span class="badge badge-blue">' + esc(PROD_TIPO_LABELS[p.tipoCredito] || p.tipoCredito) + '</span></td>' +
+      '<td>' + esc(PROD_AMORT_LABELS[p.tipoAmortizacion] || p.tipoAmortizacion) + '</td>' +
+      '<td>' + esc(p.periodicidad) + '</td>' +
+      '<td>' + (p.tasaPct || 0) + '%</td>' +
+      '<td>' + (p.tasaMoraPct || 0) + '%</td>' +
+      '<td>' + (p.plazoMeses || 0) + ' m</td>' +
+      '<td>' + comLabel + '</td>' +
+      '<td>' + (p.ivaPct > 0 ? p.ivaPct + '%' : 'Sin IVA') + '</td>' +
+      '<td><span class="badge badge-' + (p.activo ? 'green' : 'red') + '">' + (p.activo ? 'Activo' : 'Inactivo') + '</span></td>' +
+      '<td><button class="btn btn-outline btn-sm" onclick="abrirModalProducto(' + p.id + ')">Editar</button> ' +
+      '<button class="btn btn-danger btn-sm" onclick="eliminarProducto(' + p.id + ')">Eliminar</button></td>' +
+      '</tr>';
+  });
+  html += '</tbody></table></div>';
+  cont.innerHTML = html;
+}
+
+function toggleProdComision() {
+  var tipo = document.getElementById('prodComisionTipo').value;
+  var sufijo = document.getElementById('prodComisionSuffix');
+  var input = document.getElementById('prodComisionValor');
+  if (sufijo) sufijo.textContent = tipo === 'monto' ? '$' : '%';
+  if (input) { input.step = tipo === 'monto' ? '1' : '0.01'; }
+}
+
+function abrirModalProducto(id) {
+  if (!hasPermiso('creditos', id ? 'editar' : 'crear')) return toast('Sin permiso para gestionar productos', 'error');
+  var p = id ? getStore('productos').find(function(x) { return x.id === id; }) : null;
+  document.getElementById('productoModalTitle').textContent = p ? 'Editar Producto' : 'Nuevo Producto';
+  document.getElementById('prodId').value = p ? p.id : '';
+  document.getElementById('prodNombre').value = p ? p.nombre : '';
+  document.getElementById('prodTipoCredito').value = p ? p.tipoCredito : 'credito_simple';
+  document.getElementById('prodTipoAmortizacion').value = p ? p.tipoAmortizacion : 'frances';
+  document.getElementById('prodPeriodicidad').value = p ? p.periodicidad : 'mensual';
+  document.getElementById('prodPlazo').value = p ? p.plazoMeses : 12;
+  document.getElementById('prodTasa').value = p ? p.tasaPct : '';
+  document.getElementById('prodTasaMora').value = p ? (p.tasaMoraPct || 0) : 0;
+  document.getElementById('prodIVA').value = p ? String(p.ivaPct) : '16';
+  document.getElementById('prodComisionTipo').value = p ? (p.comisionTipo || 'porcentaje') : 'porcentaje';
+  document.getElementById('prodComisionValor').value = p ? (p.comisionValor || 0) : 0;
+  document.getElementById('prodActivo').value = p ? (p.activo ? '1' : '0') : '1';
+  document.getElementById('prodNotas').value = p ? (p.notas || '') : '';
+  toggleProdComision();
+  openModal('modalProducto');
+}
+
+function guardarProducto() {
+  if (!guardSave('producto')) return;
+  var id = parseInt(document.getElementById('prodId').value) || 0;
+  if (!hasPermiso('creditos', id ? 'editar' : 'crear')) return toast('Sin permiso para gestionar productos', 'error');
+  var nombre = document.getElementById('prodNombre').value.trim();
+  var tasaPct = parseFloat(document.getElementById('prodTasa').value);
+  var plazoMeses = parseInt(document.getElementById('prodPlazo').value);
+  if (!nombre) return toast('El nombre del producto es obligatorio', 'error');
+  if (!(tasaPct > 0) || tasaPct > 200) return toast('Tasa anual inválida', 'error');
+  if (!(plazoMeses >= 1) || plazoMeses > 360) return toast('Plazo inválido (1 a 360 meses)', 'error');
+  var comisionValor = parseFloat(document.getElementById('prodComisionValor').value) || 0;
+  var comisionTipo = document.getElementById('prodComisionTipo').value;
+  if (comisionTipo === 'porcentaje' && comisionValor > 100) return toast('Comisión % no puede ser mayor a 100', 'error');
+  if (comisionValor < 0) return toast('Comisión no puede ser negativa', 'error');
+
+  var productos = getStore('productos');
+  var dup = productos.find(function(x) { return x.nombre.toLowerCase() === nombre.toLowerCase() && x.id !== id; });
+  if (dup) return toast('Ya existe un producto con ese nombre', 'error');
+
+  var datos = {
+    nombre: nombre,
+    tipoCredito: document.getElementById('prodTipoCredito').value,
+    tipoAmortizacion: document.getElementById('prodTipoAmortizacion').value,
+    periodicidad: document.getElementById('prodPeriodicidad').value,
+    plazoMeses: plazoMeses,
+    tasaPct: tasaPct,
+    tasaMoraPct: parseFloat(document.getElementById('prodTasaMora').value) || 0,
+    ivaPct: parseInt(document.getElementById('prodIVA').value) || 0,
+    comisionTipo: comisionTipo,
+    comisionValor: comisionValor,
+    activo: document.getElementById('prodActivo').value === '1',
+    notas: document.getElementById('prodNotas').value.trim()
+  };
+
+  if (id) {
+    productos = productos.map(function(x) { return x.id === id ? Object.assign({}, x, datos, { updatedAt: new Date().toISOString() }) : x; });
+    addAudit('Editar', 'Productos', nombre);
+  } else {
+    datos.id = nextId('productos');
+    datos.createdAt = new Date().toISOString();
+    productos.push(datos);
+    addAudit('Crear', 'Productos', nombre);
+  }
+  setStore('productos', productos);
+  closeModal('modalProducto');
+  toast('Producto "' + nombre + '" guardado', 'success');
+  renderProductos();
+}
+
+function eliminarProducto(id) {
+  if (!hasPermiso('creditos', 'eliminar')) return toast('Sin permiso para eliminar productos', 'error');
+  var productos = getStore('productos');
+  var p = productos.find(function(x) { return x.id === id; });
+  if (!p) return;
+  if (!confirm('¿Eliminar el producto "' + p.nombre + '"?\n\nLos créditos ya creados con este producto no se modifican.')) return;
+  setStore('productos', productos.filter(function(x) { return x.id !== id; }));
+  addAudit('Eliminar', 'Productos', p.nombre);
+  toast('Producto eliminado', 'info');
+  renderProductos();
+}
+
+function populateProductoSelects() {
+  var activos = getStore('productos').filter(function(p) { return p.activo; });
+  var opts = '<option value="">— Sin producto / captura libre —</option>' +
+    activos.map(function(p) { return '<option value="' + p.id + '">' + esc(p.nombre) + ' (' + esc(PROD_TIPO_LABELS[p.tipoCredito] || p.tipoCredito) + ')</option>'; }).join('');
+  var selCot = document.getElementById('cotProducto');
+  if (selCot) { var prev = selCot.value; selCot.innerHTML = opts; selCot.value = prev || ''; }
+  var selCred = document.getElementById('credProducto');
+  if (selCred) { selCred.innerHTML = opts; }
+}
+
+function aplicarProductoCotizador() {
+  var pid = parseInt(document.getElementById('cotProducto').value) || 0;
+  window._cotProducto = null;
+  if (!pid) return;
+  var p = getStore('productos').find(function(x) { return x.id === pid; });
+  if (!p) return;
+  window._cotProducto = p;
+  cotizadorTipo = p.tipoCredito || 'credito_simple';
+  document.querySelectorAll('#page-cotizador .tab').forEach(function(t) { t.classList.remove('active'); });
+  document.getElementById('cotVRGroup').style.display = (cotizadorTipo.indexOf('arrendamiento') === 0) ? 'block' : 'none';
+  document.getElementById('cotTasa').value = p.tasaPct;
+  document.getElementById('cotPlazo').value = p.plazoMeses;
+  document.getElementById('cotPeriodicidad').value = p.periodicidad;
+  document.getElementById('cotIVA').value = String(p.ivaPct);
+  document.getElementById('cotComision').value = p.comisionTipo === 'porcentaje' ? (p.comisionValor || 0) : 0;
+  toast('Producto "' + p.nombre + '" aplicado — ' + (PROD_AMORT_LABELS[p.tipoAmortizacion] || ''), 'info');
+}
+
+function aplicarProductoCredito() {
+  var pid = parseInt(document.getElementById('credProducto').value) || 0;
+  window._credProducto = null;
+  if (!pid) { toggleCreditoFields(); return; }
+  var p = getStore('productos').find(function(x) { return x.id === pid; });
+  if (!p) return;
+  window._credProducto = p;
+  document.getElementById('credTipo').value = p.tipoCredito || 'credito_simple';
+  toggleCreditoFields();
+  document.getElementById('credTasa').value = p.tasaPct;
+  document.getElementById('credTasaMora').value = p.tasaMoraPct || 0;
+  document.getElementById('credPlazo').value = p.plazoMeses || 12;
+  document.getElementById('credPeriodicidad').value = p.periodicidad || 'mensual';
+  var comInput = document.getElementById('credComision');
+  if (comInput) {
+    if (p.comisionTipo === 'monto' || p.tipoCredito === 'nomina') {
+      if (typeof setInputMiles === 'function' && comInput.type === 'text') setInputMiles('credComision', p.comisionTipo === 'monto' ? (p.comisionValor || 0) : 0);
+      else comInput.value = p.comisionTipo === 'monto' ? (p.comisionValor || 0) : 0;
+    } else {
+      comInput.value = p.comisionValor || 0;
+    }
+  }
+}
+
 function showPage(page) {
   // Mejora 9: Verificar formularios abiertos con cambios sin guardar
   for (var mi = 0; mi < _MODALES_RASTREADOS.length; mi++) {
@@ -5143,13 +5447,14 @@ function showPage(page) {
   if (currentUser && currentUser.rol === 'soporte' && page !== 'admin') {
     return toast('Acceso restringido — Solo módulo de Administración disponible para Soporte Técnico', 'error');
   }
-  if (!hasPermiso(page, 'ver')) return toast('Sin permiso para acceder a ' + (PERMISOS_MODULOS[page]?.label || page), 'error');
+  var _permPage = page === 'productos' ? 'creditos' : page; // Productos se gobierna con permisos de Créditos
+  if (!hasPermiso(_permPage, 'ver')) return toast('Sin permiso para acceder a ' + (PERMISOS_MODULOS[_permPage]?.label || page), 'error');
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   document.getElementById('page-' + page).classList.add('active');
   document.querySelector(`[data-page="${page}"]`).classList.add('active');
 
-  const titles = { dashboard: 'Dashboard — Valuación Diaria', clientes: 'Expediente de Clientes', creditos: 'Gestión de Créditos', pagos: 'Registro de Pagos', cotizador: 'Cotizador Financiero', fondeos: 'Control de Fondeos', contabilidad: 'Contabilidad y Estados Financieros', reportes: 'Reportes Avanzados', calendario: 'Calendario de Cobranza', aprobaciones: 'Flujos de Aprobación', conciliacion: 'Conciliación Bancaria', scoring: 'Scoring Crediticio — Evaluación de Riesgo', pld: 'PLD/FT — Prevención de Lavado de Dinero (LFPIORPI)', fiscal: 'Fiscal — Obligaciones SAT', admin: 'Administración' };
+  const titles = { dashboard: 'Dashboard — Valuación Diaria', clientes: 'Expediente de Clientes', creditos: 'Gestión de Créditos', pagos: 'Registro de Pagos', cotizador: 'Cotizador Financiero', productos: 'Catálogo de Productos de Crédito', fondeos: 'Control de Fondeos', contabilidad: 'Contabilidad y Estados Financieros', reportes: 'Reportes Avanzados', calendario: 'Calendario de Cobranza', aprobaciones: 'Flujos de Aprobación', conciliacion: 'Conciliación Bancaria', scoring: 'Scoring Crediticio — Evaluación de Riesgo', pld: 'PLD/FT — Prevención de Lavado de Dinero (LFPIORPI)', fiscal: 'Fiscal — Obligaciones SAT', admin: 'Administración' };
   document.getElementById('pageTitle').textContent = titles[page] || page;
 
   if (page === 'dashboard') renderDashboard();
@@ -5160,6 +5465,8 @@ function showPage(page) {
   else if (page === 'contabilidad') renderContabilidad();
   else if (page === 'reportes') renderReporteCartera();
   else if (page === 'calendario') renderCalendario();
+  else if (page === 'productos') renderProductos();
+  else if (page === 'cotizador') populateProductoSelects();
   else if (page === 'aprobaciones') renderAprobaciones();
   else if (page === 'conciliacion') renderConciliacion();
   else if (page === 'scoring') { refreshScoringClientes(); setScoringTab('nueva'); }
@@ -5923,6 +6230,9 @@ function openModalCredito() {
   const fondeos = getStore('fondeos').filter(f => f.estado === 'vigente');
   document.getElementById('credFondeo').innerHTML = '<option value="">Ninguno</option>' + fondeos.map(f => `<option value="${f.id}">${esc(f.numero)} - ${esc(f.fondeador)}</option>`).join('');
   document.getElementById('credFechaInicio').value = hoyLocal();
+  window._credProducto = null;
+  var _selCredProd = document.getElementById('credProducto');
+  if (_selCredProd) { populateProductoSelects(); _selCredProd.value = ''; }
   openModal('modalCredito');
 }
 
@@ -5956,8 +6266,9 @@ function toggleCreditoFields() {
   var comInput = document.getElementById('credComision');
   var comSuffix = document.getElementById('credComisionSuffix');
   var comWrapper = document.getElementById('credComisionWrapper');
+  var prodComMonto = window._credProducto && window._credProducto.comisionTipo === 'monto';
   if (comInput && comWrapper) {
-    if (isNomina) {
+    if (isNomina || prodComMonto) {
       // Nómina: monto fijo en pesos
       comWrapper.className = 'input-prefix';
       if (comSuffix) { comSuffix.className = 'prefix'; comSuffix.textContent = '$'; }
@@ -6063,7 +6374,9 @@ function guardarCredito() {
   const vrPctVal = (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') ? document.getElementById('credVR').value : '0';
   const valorEquipoVal = (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') ? String(parseMiles('credValorEquipo')) : '0';
   const esNomina = tipo === 'nomina';
-  const comisionRaw = esNomina ? String(parseMiles('credComision')) : document.getElementById('credComision').value;
+  const _prodCred = window._credProducto || null;
+  const esComisionMonto = esNomina || (_prodCred && _prodCred.comisionTipo === 'monto');
+  const comisionRaw = esComisionMonto ? String(parseMiles('credComision')) : document.getElementById('credComision').value;
 
   // Validaciones
   var ok = true;
@@ -6085,7 +6398,7 @@ function guardarCredito() {
     ok = V.check('credValorEquipo', V.positiveNum(valorEquipoVal), 'Valor del equipo obligatorio para arrendamiento') && ok;
   }
   ok = V.check('credComision', V.nonNegNum(comisionRaw || '0'), 'Comisión no puede ser negativa') && ok;
-  if (!esNomina) {
+  if (!esComisionMonto) {
     ok = V.check('credComision', parseFloat(comisionRaw || '0') <= 100, 'Comisión no puede ser mayor a 100%') && ok;
   }
 
@@ -6106,9 +6419,9 @@ function guardarCredito() {
   const plazo = parseInt(plazoVal);
   const vrPct = parseFloat(vrPctVal) || 0;
   const valorEquipo = parseFloat(valorEquipoVal) || 0;
-  // Nómina: comisión es monto fijo. Créditos/Arrendamientos: comisión es % del monto
+  // Nómina o producto con comisión de monto fijo: $. Resto: % del monto
   var comision;
-  if (esNomina) {
+  if (esComisionMonto) {
     comision = parseFloat(comisionRaw) || 0;
   } else {
     var comisionPct = parseFloat(comisionRaw) || 0;
@@ -6144,7 +6457,10 @@ function guardarCredito() {
     var graciaTipo = document.getElementById('credGraciaTipo').value || 'capital';
     var graciaConfig = graciaMeses > 0 ? { meses: graciaMeses, tipo: graciaTipo } : null;
 
-    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPctFinal, valorEquipo, comision, graciaConfig);
+    var _tipoAmortProd = _prodCred ? (_prodCred.tipoAmortizacion || '') : '';
+    var _ivaProd = _prodCred ? (typeof _prodCred.ivaPct === 'number' ? _prodCred.ivaPct : 16) : 16;
+    credito = crearCreditoObj(id, numero, clienteId, tipo, monto, tasa, tasaMora, plazo, periodicidad, fechaInicio, vrPctFinal, valorEquipo, comision, graciaConfig, _tipoAmortProd, _ivaProd);
+    if (_prodCred) { credito.productoId = _prodCred.id; credito.productoNombre = _prodCred.nombre; }
   }
   const fondeoId = document.getElementById('credFondeo').value;
   if (fondeoId) credito.fondeoId = parseInt(fondeoId);
@@ -7310,6 +7626,9 @@ let lastCotizacion = null;
 
 function setCotizadorTab(tipo) {
   cotizadorTipo = tipo;
+  window._cotProducto = null;
+  var _selProd = document.getElementById('cotProducto');
+  if (_selProd) _selProd.value = '';
   document.querySelectorAll('#page-cotizador .tab').forEach(t => t.classList.remove('active'));
   if (typeof event !== 'undefined' && event && event.target) event.target.classList.add('active');
   // Sprint S: toggle entre cotizador normal y escenarios
@@ -7352,12 +7671,19 @@ function calcularCotizacion() {
   const ivaInput = parseInt(document.getElementById('cotIVA').value);
   const ivaPct = (Number.isFinite(ivaInput) && ivaInput >= 0) ? ivaInput : 16;
   // Bug #20: Comisión de apertura
-  const comisionPct = parseFloat(document.getElementById('cotComision').value) || 0;
-  const comisionApertura = +(monto * (comisionPct / 100)).toFixed(2);
+  var comisionPct = parseFloat(document.getElementById('cotComision').value) || 0;
+  var comisionApertura = +(monto * (comisionPct / 100)).toFixed(2);
+  // Producto seleccionado: comisión de monto fijo y tipo de amortización
+  var _prodCot = window._cotProducto || null;
+  var tipoAmortCot = _prodCot ? (_prodCot.tipoAmortizacion || '') : '';
+  if (_prodCot && _prodCot.comisionTipo === 'monto') {
+    comisionApertura = +(parseFloat(_prodCot.comisionValor) || 0).toFixed(2);
+    comisionPct = 0;
+  }
 
   if (!monto || !tasa || !plazo) return toast('Complete todos los campos', 'error');
 
-  const tabla = generarAmortizacion(monto, tasa, plazo, periodicidad, hoyLocal(), vrPct, ivaPct, cotizadorTipo);
+  const tabla = generarAmortizacion(monto, tasa, plazo, periodicidad, hoyLocal(), vrPct, ivaPct, cotizadorTipo, null, tipoAmortCot);
   const pagoP = tabla[0]?.pagoTotal || 0;
   const totalIntereses = tabla.reduce((s, r) => s + r.interes, 0);
   const totalIVA = tabla.reduce((s, r) => s + r.iva, 0);
@@ -7375,7 +7701,7 @@ function calcularCotizacion() {
   const cat = calcularCAT(monto, tabla, fechaHoy, comisionApertura, catOpciones);
   const catPct = (cat * 100).toFixed(1);
 
-  lastCotizacion = { tipo: cotizadorTipo, monto, tasa, plazo, periodicidad, vrPct, tabla, pagoP, totalIntereses, totalIVA, costoTotal, comisionApertura, comisionPct, cat, catPct };
+  lastCotizacion = { tipo: cotizadorTipo, monto, tasa, plazo, periodicidad, vrPct, tabla, pagoP, totalIntereses, totalIVA, costoTotal, comisionApertura, comisionPct, cat, catPct, tipoAmortizacion: tipoAmortCot, productoId: _prodCot ? _prodCot.id : null, productoNombre: _prodCot ? _prodCot.nombre : '' };
 
   document.getElementById('cotResultado').style.display = 'block';
   document.getElementById('cotResumen').innerHTML = `
