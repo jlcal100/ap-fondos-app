@@ -31,6 +31,10 @@ var ApiClient = (function() {
     if (body !== undefined) opts.body = JSON.stringify(body);
     return fetch(url, opts).then(function(r) {
       if (r.status === 401) {
+        // 401 en el login = credenciales incorrectas (no sesión expirada)
+        if (url.indexOf('/api/auth/login') !== -1) {
+          throw new Error('Usuario o contraseña incorrectos (o el usuario está desactivado)');
+        }
         clearToken();
         showLoginScreen();
         throw new Error('Sesión expirada');
