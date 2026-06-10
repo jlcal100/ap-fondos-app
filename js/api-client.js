@@ -367,17 +367,33 @@ function doLogin() {
         if (typeof window !== 'undefined') {
           window.currentUser = userData;
         }
-        // FIX: sincronizar la sesión local con el usuario autenticado.
-        // Sin esto, loadSession() restaura el usuario anterior de localStorage
-        // y todos los logins actúan como el mismo usuario (bloqueaba aprobaciones).
-        try {
-          var _allUsers = (typeof getStore === 'function' ? getStore('usuarios') : []) || [];
-          var _matched = _allUsers.find(function(u) {
-            return String(u.id) === String(userData.id) ||
-              (u.username && userData.username && String(u.username).toLowerCase() === String(userData.username).toLowerCase());
-          });
-          localStorage.setItem('ap_currentUser', JSON.stringify(_matched ? _matched.id : userData.id));
-        } catch (e) { console.warn('No se pudo sincronizar sesión:', e && e.message); }
+      // FIX v2: sincronizar la sesión local con el usuario autenticado.
+      // Empata por username/email/nombre (NO por id: los ids del login y del
+      // catálogo interno no coinciden). Si no existe, crea el registro espejo.
+      try {
+        var _allUsers = (typeof getStore === 'function' ? getStore('usuarios') : []) || [];
+        var _norm = function(x) { return String(x || '').trim().toLowerCase(); };
+        var _matched = _allUsers.find(function(u) {
+          return (u.username && userData.username && _norm(u.username) === _norm(userData.username)) ||
+                 (u.email && userData.email && _norm(u.email) === _norm(userData.email)) ||
+                 (u.nombre && userData.nombre && _norm(u.nombre) === _norm(userData.nombre));
+        });
+        if (!_matched) {
+          _matched = {
+            id: (typeof nextId === 'function' ? nextId('usuarios') : (_allUsers.length + 1)),
+            username: userData.username, nombre: userData.nombre || userData.username,
+            email: userData.email || '', rol: userData.rol || 'viewer',
+            activo: true, createdAt: new Date().toISOString()
+          };
+          _allUsers.push(_matched);
+          setStore('usuarios', _allUsers);
+        } else if (!_matched.activo || !_matched.username) {
+          var _mid = _matched.id;
+          _allUsers = _allUsers.map(function(u) { return u.id === _mid ? Object.assign({}, u, { username: u.username || userData.username, activo: true }) : u; });
+          setStore('usuarios', _allUsers);
+        }
+        localStorage.setItem('ap_currentUser', JSON.stringify(_matched.id));
+      } catch (e) { console.warn('No se pudo sincronizar sesión:', e && e.message); }
         // Initialize full app (initData + dashboard + everything)
         if (typeof initApp === 'function') {
           initApp();
