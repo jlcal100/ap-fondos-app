@@ -816,7 +816,13 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
           </div>
           <div class="form-group" id="cotComisionGroup">
             <label class="form-label">Comisión Apertura</label>
-            <div class="input-suffix"><input type="number" class="form-input" id="cotComision" value="0" min="0" max="10" step="0.5"><span class="suffix">%</span></div>
+            <div style="display:flex;gap:6px">
+              <select class="form-select" id="cotComisionTipo" style="max-width:45%" onchange="toggleCotComision()">
+                <option value="porcentaje">Tasa (%)</option>
+                <option value="monto">Monto fijo ($)</option>
+              </select>
+              <div class="input-suffix" style="flex:1"><input type="number" class="form-input" id="cotComision" value="0" min="0" step="0.5"><span class="suffix" id="cotComisionSuffix">%</span></div>
+            </div>
           </div>
           <div class="form-group" style="grid-column:1/-1">
             <label class="form-label">Empresa / Cliente destinatario (opcional)</label>
@@ -2596,7 +2602,15 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
             <option value="total">Total (no paga nada)</option>
           </select>
         </div>
-        <div class="form-group" id="credComisionGroup"><label class="form-label">Comisión Apertura</label><div id="credComisionWrapper" class="input-suffix"><input type="number" class="form-input" id="credComision" value="0" min="0" max="100" step="0.5"><span class="suffix" id="credComisionSuffix">%</span></div></div>
+        <div class="form-group" id="credComisionGroup"><label class="form-label">Comisión Apertura</label>
+          <div style="display:flex;gap:6px">
+            <select class="form-select" id="credComisionTipo" style="max-width:45%" onchange="aplicarModoComisionCredito(this.value)">
+              <option value="porcentaje">Tasa (%)</option>
+              <option value="monto">Monto fijo ($)</option>
+            </select>
+            <div id="credComisionWrapper" class="input-suffix" style="flex:1"><input type="number" class="form-input" id="credComision" value="0" min="0" max="100" step="0.5"><span class="suffix" id="credComisionSuffix">%</span></div>
+          </div>
+        </div>
       </div>
       <div class="form-row">
         <div class="form-group"><label class="form-label">Fondeo Asociado</label><select class="form-select" id="credFondeo"><option value="">Ninguno</option></select></div>
@@ -5577,7 +5591,9 @@ function aplicarProductoCotizador() {
   document.getElementById('cotPlazo').value = p.plazoMeses;
   document.getElementById('cotPeriodicidad').value = p.periodicidad;
   document.getElementById('cotIVA').value = String(p.ivaPct);
-  document.getElementById('cotComision').value = p.comisionTipo === 'porcentaje' ? (p.comisionValor || 0) : 0;
+  var _ctcProd = document.getElementById('cotComisionTipo');
+  if (_ctcProd) { _ctcProd.value = p.comisionTipo === 'monto' ? 'monto' : 'porcentaje'; toggleCotComision(); }
+  document.getElementById('cotComision').value = p.comisionValor || 0;
   var _selAmCot = document.getElementById('cotTipoAmortizacion');
   if (_selAmCot) _selAmCot.value = p.tipoAmortizacion || '';
   toast('Producto "' + p.nombre + '" aplicado — ' + (PROD_AMORT_LABELS[p.tipoAmortizacion] || ''), 'info');
@@ -5598,14 +5614,12 @@ function aplicarProductoCredito() {
   document.getElementById('credPeriodicidad').value = p.periodicidad || 'mensual';
   var _selAmCred = document.getElementById('credTipoAmortizacion');
   if (_selAmCred) _selAmCred.value = p.tipoAmortizacion || '';
+  var _selComProd = document.getElementById('credComisionTipo');
+  if (_selComProd) { _selComProd.value = p.comisionTipo === 'monto' ? 'monto' : 'porcentaje'; aplicarModoComisionCredito(_selComProd.value); }
   var comInput = document.getElementById('credComision');
   if (comInput) {
-    if (p.comisionTipo === 'monto' || p.tipoCredito === 'nomina') {
-      if (typeof setInputMiles === 'function' && comInput.type === 'text') setInputMiles('credComision', p.comisionTipo === 'monto' ? (p.comisionValor || 0) : 0);
-      else comInput.value = p.comisionTipo === 'monto' ? (p.comisionValor || 0) : 0;
-    } else {
-      comInput.value = p.comisionValor || 0;
-    }
+    if (comInput.type === 'text' && typeof setInputMiles === 'function') setInputMiles('credComision', p.comisionTipo === 'monto' ? (p.comisionValor || 0) : 0);
+    else comInput.value = p.comisionValor || 0;
   }
 }
 
@@ -6441,31 +6455,35 @@ function toggleCreditoFields() {
       document.getElementById('credGraciaMeses').value = '0';
     }
   }
-  // Comisión: monto ($) para nómina, porcentaje (%) para créditos y arrendamientos
+  // Comisión: el selector manda; nómina y producto de monto fijo lo pre-seleccionan en $
+  var prodComMonto = window._credProducto && window._credProducto.comisionTipo === 'monto';
+  var selComTipo = document.getElementById('credComisionTipo');
+  var modoComision = (isNomina || prodComMonto) ? 'monto' : (selComTipo ? selComTipo.value : 'porcentaje');
+  if (selComTipo) selComTipo.value = modoComision;
+  aplicarModoComisionCredito(modoComision);
+}
+
+function aplicarModoComisionCredito(modo) {
   var comInput = document.getElementById('credComision');
   var comSuffix = document.getElementById('credComisionSuffix');
   var comWrapper = document.getElementById('credComisionWrapper');
-  var prodComMonto = window._credProducto && window._credProducto.comisionTipo === 'monto';
-  if (comInput && comWrapper) {
-    if (isNomina || prodComMonto) {
-      // Nómina: monto fijo en pesos
-      comWrapper.className = 'input-prefix';
-      if (comSuffix) { comSuffix.className = 'prefix'; comSuffix.textContent = '$'; }
-      comInput.removeAttribute('max');
-      comInput.step = '1';
-      comInput.type = 'text';
-      comInput.setAttribute('oninput', 'formatMiles(this)');
-      comInput.value = '0';
-    } else {
-      // Crédito simple, arrendamiento: porcentaje
-      comWrapper.className = 'input-suffix';
-      if (comSuffix) { comSuffix.className = 'suffix'; comSuffix.textContent = '%'; }
-      comInput.max = '100';
-      comInput.step = '0.5';
-      comInput.type = 'number';
-      comInput.removeAttribute('oninput');
-      comInput.value = '0';
-    }
+  if (!comInput || !comWrapper) return;
+  if (modo === 'monto') {
+    comWrapper.className = 'input-prefix';
+    if (comSuffix) { comSuffix.className = 'prefix'; comSuffix.textContent = '$'; }
+    comInput.removeAttribute('max');
+    comInput.step = '1';
+    comInput.type = 'text';
+    comInput.setAttribute('oninput', 'formatMiles(this)');
+    comInput.value = '0';
+  } else {
+    comWrapper.className = 'input-suffix';
+    if (comSuffix) { comSuffix.className = 'suffix'; comSuffix.textContent = '%'; }
+    comInput.max = '100';
+    comInput.step = '0.5';
+    comInput.type = 'number';
+    comInput.removeAttribute('oninput');
+    comInput.value = '0';
   }
 }
 
@@ -6554,7 +6572,8 @@ function guardarCredito() {
   const valorEquipoVal = (tipo === 'arrendamiento' || tipo === 'arrendamiento_puro') ? String(parseMiles('credValorEquipo')) : '0';
   const esNomina = tipo === 'nomina';
   const _prodCred = window._credProducto || null;
-  const esComisionMonto = esNomina || (_prodCred && _prodCred.comisionTipo === 'monto');
+  const _selComTipoCred = (document.getElementById('credComisionTipo') || { value: '' }).value;
+  const esComisionMonto = _selComTipoCred === 'monto' || (!_selComTipoCred && (esNomina || (_prodCred && _prodCred.comisionTipo === 'monto')));
   const comisionRaw = esComisionMonto ? String(parseMiles('credComision')) : document.getElementById('credComision').value;
 
   // Validaciones
@@ -7868,6 +7887,14 @@ function setInputMiles(id, val) {
 let cotizadorTipo = 'credito_simple';
 let lastCotizacion = null;
 
+function toggleCotComision() {
+  var tipo = (document.getElementById('cotComisionTipo') || { value: 'porcentaje' }).value;
+  var suf = document.getElementById('cotComisionSuffix');
+  var inp = document.getElementById('cotComision');
+  if (suf) suf.textContent = tipo === 'monto' ? '$' : '%';
+  if (inp) inp.step = tipo === 'monto' ? '1' : '0.5';
+}
+
 function setCotizadorTab(tipo) {
   cotizadorTipo = tipo;
   window._cotProducto = null;
@@ -7875,6 +7902,10 @@ function setCotizadorTab(tipo) {
   if (_selProd) _selProd.value = '';
   var _selAmTab = document.getElementById('cotTipoAmortizacion');
   if (_selAmTab) _selAmTab.value = '';
+  var _ctcTab = document.getElementById('cotComisionTipo');
+  if (_ctcTab) { _ctcTab.value = 'porcentaje'; toggleCotComision(); }
+  var _cInp = document.getElementById('cotComision');
+  if (_cInp) _cInp.value = '0';
   document.querySelectorAll('#page-cotizador .tab').forEach(t => t.classList.remove('active'));
   if (typeof event !== 'undefined' && event && event.target) event.target.classList.add('active');
   // Sprint S: toggle entre cotizador normal y escenarios
@@ -7916,17 +7947,15 @@ function calcularCotizacion() {
   // FIX QA 2026-04-16: default 16% (no 0) — alinea cotizador con crédito real (SA de CV grava intereses).
   const ivaInput = parseInt(document.getElementById('cotIVA').value);
   const ivaPct = (Number.isFinite(ivaInput) && ivaInput >= 0) ? ivaInput : 16;
-  // Bug #20: Comisión de apertura
-  var comisionPct = parseFloat(document.getElementById('cotComision').value) || 0;
-  var comisionApertura = +(monto * (comisionPct / 100)).toFixed(2);
+  // Bug #20: Comisión de apertura — tasa (%) o monto fijo ($)
+  var _comTipoCot = (document.getElementById('cotComisionTipo') || { value: 'porcentaje' }).value;
+  var _comValCot = parseFloat(document.getElementById('cotComision').value) || 0;
+  var comisionPct = _comTipoCot === 'porcentaje' ? _comValCot : 0;
+  var comisionApertura = _comTipoCot === 'monto' ? +_comValCot.toFixed(2) : +(monto * (comisionPct / 100)).toFixed(2);
   // Producto seleccionado: comisión de monto fijo y tipo de amortización
   var _prodCot = window._cotProducto || null;
   var _selAmortCot = (document.getElementById('cotTipoAmortizacion') || { value: '' }).value || '';
   var tipoAmortCot = _selAmortCot || (_prodCot ? (_prodCot.tipoAmortizacion || '') : '');
-  if (_prodCot && _prodCot.comisionTipo === 'monto') {
-    comisionApertura = +(parseFloat(_prodCot.comisionValor) || 0).toFixed(2);
-    comisionPct = 0;
-  }
   // Comisiones múltiples del producto (estilo SoftCrédito)
   var _comsCot = (_prodCot && Array.isArray(_prodCot.comisiones)) ? _prodCot.comisiones : [];
   var _comIniCot = _comsCot.find(function(cx) { return cx.tipo === 'inicial'; });
