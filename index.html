@@ -793,6 +793,16 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
               <option value="semanal">Semanal</option>
             </select>
           </div>
+          <div class="form-group">
+            <label class="form-label">Tipo de Amortización</label>
+            <select class="form-select" id="cotTipoAmortizacion">
+              <option value="">Automático (según tipo de crédito)</option>
+              <option value="frances">Pagos iguales (francés)</option>
+              <option value="capital_fijo">Decreciente (capital fijo)</option>
+              <option value="flat">Interés global (flat)</option>
+              <option value="bullet">Pago único al vencimiento</option>
+            </select>
+          </div>
           <div class="form-group" id="cotVRGroup" style="display:none">
             <label class="form-label">Valor Residual</label>
             <div class="input-suffix"><input type="number" class="form-input" id="cotVR" value="1" min="0" max="100" step="0.1"><span class="suffix">%</span></div>
@@ -2548,6 +2558,15 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
       </div>
       <div class="form-row-3">
         <div class="form-group"><label class="form-label">Tasa Moratoria</label><div class="input-suffix"><input type="number" class="form-input" id="credTasaMora" value="0" min="0" step="0.01"><span class="suffix">%</span></div></div>
+        <div class="form-group"><label class="form-label">Tipo de Amortización</label>
+          <select class="form-select" id="credTipoAmortizacion">
+            <option value="">Automático (según tipo de crédito)</option>
+            <option value="frances">Pagos iguales (francés)</option>
+            <option value="capital_fijo">Decreciente (capital fijo)</option>
+            <option value="flat">Interés global (flat)</option>
+            <option value="bullet">Pago único al vencimiento</option>
+          </select>
+        </div>
       </div>
       <div class="form-row-3" id="credVariableRateFields" style="display:none">
         <div class="form-group"><label class="form-label">Spread</label><div class="input-suffix"><input type="number" class="form-input" id="credSpread" min="0" step="0.01" oninput="calcularTasaEfectiva()"><span class="suffix">%</span></div></div>
@@ -5559,6 +5578,8 @@ function aplicarProductoCotizador() {
   document.getElementById('cotPeriodicidad').value = p.periodicidad;
   document.getElementById('cotIVA').value = String(p.ivaPct);
   document.getElementById('cotComision').value = p.comisionTipo === 'porcentaje' ? (p.comisionValor || 0) : 0;
+  var _selAmCot = document.getElementById('cotTipoAmortizacion');
+  if (_selAmCot) _selAmCot.value = p.tipoAmortizacion || '';
   toast('Producto "' + p.nombre + '" aplicado — ' + (PROD_AMORT_LABELS[p.tipoAmortizacion] || ''), 'info');
 }
 
@@ -5575,6 +5596,8 @@ function aplicarProductoCredito() {
   document.getElementById('credTasaMora').value = p.tasaMoraPct || 0;
   document.getElementById('credPlazo').value = p.plazoMeses || 12;
   document.getElementById('credPeriodicidad').value = p.periodicidad || 'mensual';
+  var _selAmCred = document.getElementById('credTipoAmortizacion');
+  if (_selAmCred) _selAmCred.value = p.tipoAmortizacion || '';
   var comInput = document.getElementById('credComision');
   if (comInput) {
     if (p.comisionTipo === 'monto' || p.tipoCredito === 'nomina') {
@@ -6387,6 +6410,8 @@ function openModalCredito() {
   window._credProducto = null;
   var _selCredProd = document.getElementById('credProducto');
   if (_selCredProd) { populateProductoSelects(); _selCredProd.value = ''; }
+  var _selAmNuevo = document.getElementById('credTipoAmortizacion');
+  if (_selAmNuevo) _selAmNuevo.value = '';
   openModal('modalCredito');
 }
 
@@ -6611,7 +6636,8 @@ function guardarCredito() {
     var graciaTipo = document.getElementById('credGraciaTipo').value || 'capital';
     var graciaConfig = graciaMeses > 0 ? { meses: graciaMeses, tipo: graciaTipo } : null;
 
-    var _tipoAmortProd = _prodCred ? (_prodCred.tipoAmortizacion || '') : '';
+    var _selAmortCred = (document.getElementById('credTipoAmortizacion') || { value: '' }).value || '';
+    var _tipoAmortProd = _selAmortCred || (_prodCred ? (_prodCred.tipoAmortizacion || '') : '');
     var _ivaProd = _prodCred ? (typeof _prodCred.ivaPct === 'number' ? _prodCred.ivaPct : 16) : 16;
     // Comisiones del producto (estilo SoftCrédito)
     var _prodComs = (_prodCred && Array.isArray(_prodCred.comisiones)) ? _prodCred.comisiones : [];
@@ -7847,6 +7873,8 @@ function setCotizadorTab(tipo) {
   window._cotProducto = null;
   var _selProd = document.getElementById('cotProducto');
   if (_selProd) _selProd.value = '';
+  var _selAmTab = document.getElementById('cotTipoAmortizacion');
+  if (_selAmTab) _selAmTab.value = '';
   document.querySelectorAll('#page-cotizador .tab').forEach(t => t.classList.remove('active'));
   if (typeof event !== 'undefined' && event && event.target) event.target.classList.add('active');
   // Sprint S: toggle entre cotizador normal y escenarios
@@ -7893,7 +7921,8 @@ function calcularCotizacion() {
   var comisionApertura = +(monto * (comisionPct / 100)).toFixed(2);
   // Producto seleccionado: comisión de monto fijo y tipo de amortización
   var _prodCot = window._cotProducto || null;
-  var tipoAmortCot = _prodCot ? (_prodCot.tipoAmortizacion || '') : '';
+  var _selAmortCot = (document.getElementById('cotTipoAmortizacion') || { value: '' }).value || '';
+  var tipoAmortCot = _selAmortCot || (_prodCot ? (_prodCot.tipoAmortizacion || '') : '');
   if (_prodCot && _prodCot.comisionTipo === 'monto') {
     comisionApertura = +(parseFloat(_prodCot.comisionValor) || 0).toFixed(2);
     comisionPct = 0;
