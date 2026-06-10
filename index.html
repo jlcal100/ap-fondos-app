@@ -2613,6 +2613,17 @@ body.dark-mode .scroll-top-btn { background:var(--blue-accent); }
         <div class="form-group"><label class="form-label">IVA (16% s/intereses)</label><input type="text" class="form-input" id="pagoIVA" readonly style="background:#f0f0f0;font-weight:bold"></div>
       </div>
       <div class="form-row">
+        <div class="form-group"><label class="form-label">Aplicación del pago *</label>
+          <select class="form-select" id="pagoAplicacion" onchange="hintAplicacionPago()">
+            <option value="auto">Automática (según los montos capturados)</option>
+            <option value="cuota">Cuota programada — marcar cuota, sin recalcular</option>
+            <option value="capital_plazo">Abono a capital — reducir PLAZO (pago igual)</option>
+            <option value="capital_pago">Abono a capital — reducir PAGO (mismo plazo)</option>
+            <option value="capital_sin_recalc">Abono a capital — NO modificar la tabla</option>
+            <option value="solo_interes">Solo intereses — no avanza cuota ni cambia la tabla</option>
+          </select>
+          <div id="pagoAplicacionHint" style="font-size:12px;color:var(--gray);margin-top:4px"></div>
+        </div>
         <div class="form-group"><label class="form-label">Referencia</label><input type="text" class="form-input" id="pagoRef"></div>
       </div>
       <div class="form-group"><label class="form-label">Notas</label><textarea class="form-textarea" id="pagoNotas"></textarea></div>
@@ -7214,6 +7225,8 @@ function openModalPago() {
   const c = getStore('creditos').find(cr => cr.id === credId);
   document.getElementById('pagoInfoCredito').innerHTML = `<strong>${esc(c.numero)}</strong> — Saldo: ${fmt(c.saldo)} — Pago sugerido: ${fmt(c.pago)}`;
   document.getElementById('pagoFecha').value = hoyLocal();
+  var _selAplic = document.getElementById('pagoAplicacion');
+  if (_selAplic) { _selAplic.value = 'auto'; hintAplicacionPago(); }
 
   // Sugerir desglose del próximo pago
   const nextPago = (c.amortizacion || []).find(a => !a.pagado);
@@ -7266,6 +7279,20 @@ function openModalPago() {
   openModal('modalPago');
 }
 
+var APLICACION_PAGO_HINTS = {
+  auto: 'El sistema decide: pago exacto marca la cuota; capital extra recalcula la tabla; solo intereses no avanza cuota.',
+  cuota: 'Marca la siguiente cuota como pagada aunque los montos difieran. La tabla no se recalcula.',
+  capital_plazo: 'El capital extra reduce el número de pagos restantes; el monto del pago se mantiene.',
+  capital_pago: 'El capital extra reduce el monto de los pagos restantes; el plazo se mantiene.',
+  capital_sin_recalc: 'Solo baja el saldo del crédito. La tabla de amortización queda exactamente igual.',
+  solo_interes: 'Registra intereses (y moratorios/comisiones). No marca cuota ni modifica la tabla. Capital debe ser 0.'
+};
+function hintAplicacionPago() {
+  var sel = document.getElementById('pagoAplicacion');
+  var hint = document.getElementById('pagoAplicacionHint');
+  if (sel && hint) hint.textContent = APLICACION_PAGO_HINTS[sel.value] || '';
+}
+
 function guardarPago() {
   if (!guardSave('pago')) return;
   if (!hasPermiso('pagos', 'crear')) return toast('Sin permiso para registrar pagos', 'error');
@@ -7285,6 +7312,7 @@ function guardarPago() {
   setInputMiles('pagoIVA', iva);
   const monto = capital + interes + moratorio + comision + iva;
   const fecha = document.getElementById('pagoFecha').value;
+  const aplicacion = (document.getElementById('pagoAplicacion') || { value: 'auto' }).value || 'auto';
 
   ok = V.check('pagoCapital', V.nonNegNum(capital), 'Capital no puede ser negativo') && ok;
   ok = V.check('pagoCapital', capital <= c.saldo + 0.01, 'Capital no puede exceder el saldo pendiente ' + fmt(c.saldo)) && ok;
@@ -7293,6 +7321,14 @@ function guardarPago() {
   ok = V.check('pagoCapital', monto > 0, 'El monto total del pago debe ser mayor a 0') && ok;
 
   if (!ok) return toast('Corrige los errores marcados en rojo', 'error');
+
+  // Validar coherencia de la aplicación elegida
+  if (aplicacion === 'solo_interes' && capital > 0.01) {
+    return toast('Aplicación "Solo intereses": el capital debe ser 0 (o elige otra aplicación)', 'error');
+  }
+  if ((aplicacion === 'capital_plazo' || aplicacion === 'capital_pago' || aplicacion === 'capital_sin_recalc') && capital < 0.01) {
+    return toast('La aplicación elegida es un abono a capital: captura un capital mayor a 0', 'error');
+  }
 
   // PLD: Verificar alertas pendientes del cliente antes de registrar pago
   var pldPagos = getStore('pld') || [];
@@ -7354,6 +7390,7 @@ function guardarPago() {
     id: nextId('pagos'), creditoId: credId, fecha, monto, capital, interes, moratorio, comision, iva,
     saldoAnterior, saldoNuevo, metodo: document.getElementById('pagoMetodo').value,
     referencia: document.getElementById('pagoRef').value, notas: document.getElementById('pagoNotas').value,
+    aplicacion: aplicacion,
     createdAt: new Date().toISOString()
   };
 
@@ -7402,7 +7439,7 @@ function guardarPago() {
       // Fix #5: Recálculo inteligente de amortización para pagos parciales, anticipados y sobre-pagos
       // IMPORTANTE: Detectar tipo de pago ANTES de marcar cuota como pagada
       const nextUnpaid = (cr.amortizacion || []).find(a => !a.pagado);
-      var esSoloIntereses = capital < 0.01 && interes > 0;
+      var esSoloIntereses = aplicacion === 'solo_interes' || (aplicacion === 'auto' && capital < 0.01 && interes > 0);
 
       if (saldoNuevo > 0.01 && cr.amortizacion && cr.tipo !== 'cuenta_corriente') {
         const pendientes = cr.amortizacion.filter(a => !a.pagado);
@@ -7418,7 +7455,12 @@ function guardarPago() {
           var esExacto = diffPago < 1;
           var esAnticipado = capital > (nextAmort ? nextAmort.capital : 0) + 0.01;
 
-          if (esExacto) {
+          if (aplicacion === 'cuota') {
+            // Forzado por el usuario: marcar cuota pagada, sin recalcular
+            if (nextUnpaid) nextUnpaid.pagado = true;
+          } else if (aplicacion === 'capital_sin_recalc') {
+            // Abono a capital sin tocar la tabla: solo baja el saldo
+          } else if (esExacto && aplicacion === 'auto') {
             // Pago exacto: marcar como pagado, no recalcular
             if (nextUnpaid) nextUnpaid.pagado = true;
           } else if (esSoloIntereses) {
@@ -7436,7 +7478,8 @@ function guardarPago() {
             // Arrendamiento: recalcular con interés FLAT (no francés)
             var esArrendRecalc = cr.tipo === 'arrendamiento' || cr.tipo === 'arrendamiento_puro';
 
-            if (!esArrendRecalc && esAnticipado && cr.pagoAnticipadoReducePlazo !== false) {
+            var _reducePlazoSel = aplicacion === 'capital_plazo' || (aplicacion === 'auto' && esAnticipado && cr.pagoAnticipadoReducePlazo !== false);
+            if (!esArrendRecalc && _reducePlazoSel) {
               if (tasaPeriodica > 0) {
                 var pagoActual = cr.pago || pagoEsperado;
                 if (pagoActual > 0) {
@@ -21237,7 +21280,8 @@ function ejecutarPagoAprobado(sol) {
     }
 
     // Detectar tipo de pago ANTES de marcar cuota
-    var esSoloInteresesAp = capital < 0.01 && interes > 0;
+    var _aplicAp = pago.aplicacion || 'auto';
+    var esSoloInteresesAp = _aplicAp === 'solo_interes' || (_aplicAp === 'auto' && capital < 0.01 && interes > 0);
     var nextUnpaidAp = (cr.amortizacion || []).find(function(a) { return !a.pagado; });
     var pendientesAp = (cr.amortizacion || []).filter(function(a) { return !a.pagado; });
     var periodosRestAp = pendientesAp.length;
@@ -21250,7 +21294,11 @@ function ejecutarPagoAprobado(sol) {
       var esExactoAp = diffPagoAp < 1;
       var esAnticipadoAp = capital > (nextUnpaidAp ? nextUnpaidAp.capital : 0) + 0.01;
 
-      if (esExactoAp) {
+      if (_aplicAp === 'cuota') {
+        if (nextUnpaidAp) nextUnpaidAp.pagado = true;
+      } else if (_aplicAp === 'capital_sin_recalc') {
+        // Abono a capital sin tocar la tabla
+      } else if (esExactoAp && _aplicAp === 'auto') {
         if (nextUnpaidAp) nextUnpaidAp.pagado = true;
       } else if (esSoloInteresesAp) {
         // NO marcar cuota como pagada
@@ -21265,7 +21313,8 @@ function ejecutarPagoAprobado(sol) {
 
         var esArrendRecalcAp = cr.tipo === 'arrendamiento' || cr.tipo === 'arrendamiento_puro';
 
-        if (!esArrendRecalcAp && esAnticipadoAp && cr.pagoAnticipadoReducePlazo !== false) {
+        var _reducePlazoAp = _aplicAp === 'capital_plazo' || (_aplicAp === 'auto' && esAnticipadoAp && cr.pagoAnticipadoReducePlazo !== false);
+      if (!esArrendRecalcAp && _reducePlazoAp) {
           if (tasaPerAp > 0) {
             var pagoActAp = cr.pago || pagoEsperadoAp;
             if (pagoActAp > 0) {
