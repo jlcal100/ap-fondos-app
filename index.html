@@ -3134,6 +3134,7 @@ function doLogin() {
         }
         localStorage.setItem('ap_currentUser', JSON.stringify(_matched.id));
       } catch (e) { console.warn('No se pudo sincronizar sesión:', e && e.message); }
+      try { localStorage.setItem('ap_last_seen', String(Date.now())); } catch (e) {}
       if (typeof initApp === 'function') initApp();
       if (typeof toast === 'function') toast('Bienvenido, ' + userData.nombre, 'success');
     });
@@ -15090,7 +15091,14 @@ if (window.top !== window.self) {
 const SESSION_TIMEOUT_MIN = 30; // minutos de inactividad
 let _lastActivity = Date.now();
 
-function resetActivityTimer() { _lastActivity = Date.now(); }
+function resetActivityTimer() {
+  _lastActivity = Date.now();
+  // Persistir último uso para reanudar sesión tras recargar la página
+  if (!window._lastSeenSaved || Date.now() - window._lastSeenSaved > 30000) {
+    window._lastSeenSaved = Date.now();
+    try { localStorage.setItem('ap_last_seen', String(Date.now())); } catch (e) {}
+  }
+}
 
 ['click', 'keypress', 'mousemove', 'scroll', 'touchstart'].forEach(evt => {
   document.addEventListener(evt, resetActivityTimer, { passive: true });
@@ -22319,13 +22327,32 @@ function consultarTIIEBanxico() {
   });
 }
 
-// Always require login on page load — clear stored session
+// Reanudar sesión sin pedir contraseña si el último uso fue hace menos de
+// SESSION_TIMEOUT_MIN minutos (el servidor valida el token de todas formas).
 if (typeof ApiClient !== 'undefined') {
-  ApiClient.logout = ApiClient.logout; // ensure available
-  // Clear any stored token so user must authenticate every time
-  localStorage.removeItem('ap_auth_token');
-  localStorage.removeItem('ap_auth_user');
-  showLoginScreen();
+  var _tokenCarga = localStorage.getItem('ap_auth_token');
+  var _ultimoUso = parseInt(localStorage.getItem('ap_last_seen') || '0', 10);
+  var _ventanaMs = (typeof SESSION_TIMEOUT_MIN !== 'undefined' ? SESSION_TIMEOUT_MIN : 30) * 60000;
+  if (_tokenCarga && _ultimoUso && (Date.now() - _ultimoUso) < _ventanaMs) {
+    ApiClient.loadAllData().then(function() {
+      var _uCarga = ApiClient.getUser();
+      if (_uCarga) window.currentUser = _uCarga;
+      var _ls = document.getElementById('loginScreen');
+      if (_ls) _ls.style.display = 'none';
+      var _ac = document.getElementById('appContainer');
+      if (_ac) _ac.style.display = '';
+      if (typeof initApp === 'function') initApp();
+    }).catch(function() {
+      localStorage.removeItem('ap_auth_token');
+      localStorage.removeItem('ap_auth_user');
+      showLoginScreen();
+    });
+  } else {
+    // Sesión vieja o inexistente: pedir contraseña
+    localStorage.removeItem('ap_auth_token');
+    localStorage.removeItem('ap_auth_user');
+    showLoginScreen();
+  }
 } else {
   // ApiClient not available — fallback to localStorage mode
   initApp();
