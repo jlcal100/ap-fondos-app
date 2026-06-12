@@ -21576,6 +21576,26 @@ function ejecutarReestructuraAprobada(sol) {
   addAudit('Reestructurar', 'Créditos', 'Reestructura aprobada #' + sol.id + ' — Crédito #' + creditoId + ' — Saldo: ' + fmt(nuevoSaldo) + (quita > 0 ? ', Quita: ' + fmt(quita) : ''));
 }
 
+// Eliminar una solicitud de aprobación (solo admin) — p. ej. pruebas
+function eliminarSolicitudAprobacion(id) {
+  if (!currentUser || currentUser.rol !== 'admin') return toast('Solo un administrador puede eliminar solicitudes', 'error');
+  var aprobaciones = getStore('aprobaciones');
+  var sol = aprobaciones.find(function(a) { return a.id === id; });
+  if (!sol) return toast('Solicitud no encontrada', 'error');
+  var aviso = '¿Eliminar la solicitud #' + id + ' (' + (sol.descripcion || sol.tipo) + ')?';
+  if (sol.estado === 'aprobado') {
+    aviso += '\n\n⚠️ OJO: esta solicitud ya fue APROBADA y ejecutada. Eliminarla solo borra el registro de la solicitud; NO deshace el crédito/pago creado.';
+  }
+  aviso += '\n\nEsta acción quedará en la bitácora de auditoría.';
+  if (!confirm(aviso)) return;
+  setStore('aprobaciones', aprobaciones.filter(function(a) { return a.id !== id; }));
+  addAudit('Eliminar', 'Aprobaciones', 'Solicitud #' + id + ' (' + sol.estado + ') eliminada por ' + currentUser.nombre);
+  toast('Solicitud #' + id + ' eliminada', 'info');
+  updateApprovalsBadge();
+  renderAprobaciones();
+  refreshNotifications();
+}
+
 function updateApprovalsBadge() {
   var aprobaciones = getStore('aprobaciones');
   var pendientes = aprobaciones.filter(function(a) { return a.estado === 'pendiente'; }).length;
@@ -21627,15 +21647,19 @@ function renderAprobaciones() {
         '<td>' + fmtDate(a.fechaSolicitud) + '</td>' +
         '<td><span class="badge badge-' + estadoClass + '">' + estadoLabel + '</span></td>';
 
+      var esAdminAprob = currentUser && currentUser.rol === 'admin';
+      var btnEliminarAprob = esAdminAprob ? ' <button class="btn btn-outline btn-sm" onclick="eliminarSolicitudAprobacion(' + a.id + ')" title="Eliminar solicitud (solo admin)" style="color:var(--red)">🗑</button>' : '';
       if (mostrarAcciones) {
         html += '<td>' +
           '<button class="btn btn-success btn-sm" onclick="aprobarSolicitud(' + a.id + ')" title="Aprobar">✓ Aprobar</button> ' +
           '<button class="btn btn-danger btn-sm" onclick="iniciarRechazo(' + a.id + ')" title="Rechazar">✗ Rechazar</button>' +
+          btnEliminarAprob +
           '</td>';
       } else {
         html += '<td>' + esc(a.aprobador || '—') +
           (a.fechaResolucion ? '<br><small>' + fmtDate(a.fechaResolucion) + '</small>' : '') +
           (a.motivoRechazo ? '<br><small style="color:var(--red)">Motivo: ' + esc(a.motivoRechazo) + '</small>' : '') +
+          btnEliminarAprob +
           '</td>';
       }
       html += '</tr>';
